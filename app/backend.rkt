@@ -45,6 +45,22 @@
 
 (define-enum TargetLanguage (zh zh-hant en ja ko fr de es))
 (define-enum SummarizeMode (page selection doc))
+(define-enum AISendAction (translate summarize chat))
+(define-enum AISendScope (selection page chapter document))
+
+;; A network request is never started by this RPC.  The native hosts use the
+;; returned, backend-counted values to present a native confirmation surface
+;; before they invoke translate-text, summarize-text or chat.  Counts are
+;; Unicode characters in the exact user-content strings that the subsequent
+;; RPC receives (Booklight's own provider instructions are intentionally not
+;; presented as document content).
+(define-record AISendPreview
+  ([action : AISendAction]
+   [scope : AISendScope]
+   [content-chars : Int64]
+   [history-chars : Int64]
+   [message-chars : Int64]
+   [total-chars : Int64]))
 
 (define-record ProviderPreset
   ([id : String]
@@ -270,6 +286,24 @@
         (lambda (e) (TestResult #f (exn-message e) (void)))])
     (define models (llm:list-models base-url api-key))
     (TestResult #t (void) models)))
+
+;; Describe the user-provided data that a host is about to send.  History is
+;; the same [role content] shape accepted by chat; only the content element is
+;; user data, while the role is transport metadata.
+(define-rpc (preview-ai-send [action : AISendAction]
+                             [scope : AISendScope]
+                             [content-text : String]
+                             [history : (List (List String))]
+                             [user-message : String]
+                             : AISendPreview)
+  (define content-chars (string-length content-text))
+  (define history-chars
+    (for/sum ([message (in-list history)]
+              #:when (and (pair? message) (pair? (cdr message))))
+      (string-length (cadr message))))
+  (define message-chars (string-length user-message))
+  (AISendPreview action scope content-chars history-chars message-chars
+                 (+ content-chars history-chars message-chars)))
 
 (define-rpc (translate-text [text : String]
                             [target : TargetLanguage]

@@ -443,6 +443,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   void StartCardStream(std::shared_ptr<StreamCardUi> card,
                        std::vector<std::shared_ptr<StreamCardUi>>& list,
                        std::function<rivet_app::StreamStart()> launch);
+  void ConfirmAISend(
+      rivet_app::AISendAction action, rivet_app::AISendScope scope,
+      std::string const& content,
+      std::vector<std::vector<std::string>> const& history,
+      std::string const& message, std::function<void()> on_continue);
   void StopCardAt(StreamCardUi* card);
   bool card_alive(std::shared_ptr<StreamCardUi> const& card) const;
   void LaunchTranslateCurrentPage();
@@ -454,7 +459,8 @@ struct MainWindow : MainWindowT<MainWindow> {
   void SendChat(std::wstring const& question);
   void DispatchChat(std::wstring const& question,
                     std::wstring const& context_text,
-                    std::wstring const& context_label);
+                    std::wstring const& context_label,
+                    rivet_app::AISendScope preview_scope);
   void FinishStream(std::int64_t request_id,
                     std::optional<std::wstring> const& error);
   void FinalizeChat(StreamCardUi& card);

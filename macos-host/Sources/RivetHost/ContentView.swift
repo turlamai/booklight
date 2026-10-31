@@ -370,6 +370,7 @@ struct ReaderWindowView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(active ? Theme.accent : Theme.textDim)
+        .accessibilityLabel(Text(verbatim: help))
         .help(help)
     }
 }

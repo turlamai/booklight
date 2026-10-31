@@ -3,6 +3,23 @@
   "enums": [
     {
       "cases": [
+        "translate",
+        "summarize",
+        "chat"
+      ],
+      "name": "AISendAction"
+    },
+    {
+      "cases": [
+        "selection",
+        "page",
+        "chapter",
+        "document"
+      ],
+      "name": "AISendScope"
+    },
+    {
+      "cases": [
         "system",
         "paper",
         "night",
@@ -58,6 +75,53 @@
   "format": "rivet-schema",
   "format-version": 1,
   "records": [
+    {
+      "fields": [
+        {
+          "name": "action",
+          "type": {
+            "kind": "record",
+            "name": "AISendAction"
+          }
+        },
+        {
+          "name": "scope",
+          "type": {
+            "kind": "record",
+            "name": "AISendScope"
+          }
+        },
+        {
+          "name": "content-chars",
+          "type": {
+            "kind": "scalar",
+            "name": "Int64"
+          }
+        },
+        {
+          "name": "history-chars",
+          "type": {
+            "kind": "scalar",
+            "name": "Int64"
+          }
+        },
+        {
+          "name": "message-chars",
+          "type": {
+            "kind": "scalar",
+            "name": "Int64"
+          }
+        },
+        {
+          "name": "total-chars",
+          "type": {
+            "kind": "scalar",
+            "name": "Int64"
+          }
+        }
+      ],
+      "name": "AISendPreview"
+    },
     {
       "fields": [
         {
@@ -1189,6 +1253,56 @@
       "result": {
         "kind": "record",
         "name": "AnnotationDocument"
+      }
+    },
+    {
+      "arguments": [
+        {
+          "name": "action",
+          "type": {
+            "kind": "record",
+            "name": "AISendAction"
+          }
+        },
+        {
+          "name": "scope",
+          "type": {
+            "kind": "record",
+            "name": "AISendScope"
+          }
+        },
+        {
+          "name": "content-text",
+          "type": {
+            "kind": "scalar",
+            "name": "String"
+          }
+        },
+        {
+          "name": "history",
+          "type": {
+            "element": {
+              "element": {
+                "kind": "scalar",
+                "name": "String"
+              },
+              "kind": "list"
+            },
+            "kind": "list"
+          }
+        },
+        {
+          "name": "user-message",
+          "type": {
+            "kind": "scalar",
+            "name": "String"
+          }
+        }
+      ],
+      "name": "preview-ai-send",
+      "result": {
+        "kind": "record",
+        "name": "AISendPreview"
       }
     },
     {

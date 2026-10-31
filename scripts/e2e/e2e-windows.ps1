@@ -80,6 +80,8 @@ try {
     $configDir = Join-Path $appData 'site.jrtx.booklight'
     & racket (Join-Path $repo 'scripts\acceptance\seed-annotation-recovery.rkt') $configDir $fixture
     if ($LASTEXITCODE -ne 0) { throw 'failed to seed annotation recovery fixture' }
+    & racket (Join-Path $repo 'scripts\acceptance\seed-ai-preview.rkt') $configDir
+    if ($LASTEXITCODE -ne 0) { throw 'failed to seed AI preview fixture' }
     $process = Start-Process -FilePath $executable.FullName -PassThru `
         -WorkingDirectory $repo `
         -RedirectStandardOutput (Join-Path $output 'application.stdout.log') `
@@ -105,6 +107,29 @@ try {
             (Contains-Text $window 'Export Annotations') -or (Contains-Text $window '导出批注')
         })
         [void](Wait-Until 'recovery fixture note' { Contains-Text $window 'Recovered fixture note' })
+        [void](Wait-Until 'translate current EPUB scope action' {
+            Invoke-NamedControl $window @('Translate Chapter','本章翻译','Translate page','本页翻译')
+        })
+        [void](Wait-Until 'AI send review dialog' {
+            (Contains-Text $window 'Review what will be sent') -or
+            (Contains-Text $window '核对即将发送的内容')
+        })
+        [void](Wait-Until 'AI send scope and exact count' {
+            ((Contains-Text $window 'Current chapter') -or
+             (Contains-Text $window '当前章')) -and
+            ((Contains-Text $window 'Total user content:') -or
+             (Contains-Text $window '用户内容合计：'))
+        })
+        [void](Wait-Until 'native AI send cancellation' {
+            Invoke-NamedControl $window @('Cancel','取消')
+        })
+        [void](Wait-Until 'AI send review dismissal' {
+            -not ((Contains-Text $window 'Review what will be sent') -or
+                  (Contains-Text $window '核对即将发送的内容'))
+        })
+        if ((Contains-Text $window 'Stop') -or (Contains-Text $window '停止')) {
+            throw 'cancelling the AI send review created a stream card'
+        }
     } catch {
         Save-Snapshot $window (Join-Path $output 'accessibility-failure.json')
         throw
@@ -113,8 +138,8 @@ try {
     [ordered]@{
         platform = 'windows'
         artifact = $executable.FullName
-        actions = @('launch:sample.epub','press:Annotations')
-        assertions = @('packaged WinUI window activated','sample EPUB crossed RVT1 into the embedded backend','native accessibility tree contains The Sample Book','native accessibility tree contains First Chapter','pending recovery crosses RVT1 on reopen','native Notes pane exposes recovered status and Retry Save','recovered annotation remains visible and exportable')
+        actions = @('launch:sample.epub','press:Annotations','press:Translate current EPUB scope','assert:AI send review','press:Cancel')
+        assertions = @('packaged WinUI window activated','sample EPUB crossed RVT1 into the embedded backend','native accessibility tree contains The Sample Book','native accessibility tree contains First Chapter','pending recovery crosses RVT1 on reopen','native Notes pane exposes recovered status and Retry Save','recovered annotation remains visible and exportable','native review exposes current-chapter scope and exact user-content total before provider launch','Cancel dismisses the review without starting the AI stream')
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output 'interaction-trace.json') -Encoding utf8
 
     $pattern = $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern)

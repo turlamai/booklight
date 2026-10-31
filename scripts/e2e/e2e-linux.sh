@@ -21,6 +21,7 @@ export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
 unset DISPLAY
 mkdir -p "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
 racket "$repo/scripts/acceptance/seed-annotation-recovery.rkt" "$XDG_CONFIG_HOME/site.jrtx.booklight" "$fixture"
+racket "$repo/scripts/acceptance/seed-ai-preview.rkt" "$XDG_CONFIG_HOME/site.jrtx.booklight"
 weston --backend=headless-backend.so --socket="$WAYLAND_DISPLAY" --idle-time=0 --debug --log="$output/weston.log" &
 weston_pid=$!; app_pid=""; atspi_pid=""
 stop_bounded() { local pid="$1"; kill -TERM "$pid" 2>/dev/null || true; for _ in $(seq 1 200); do kill -0 "$pid" 2>/dev/null || return 0; sleep 0.05; done; kill -KILL "$pid" 2>/dev/null || true; return 1; }

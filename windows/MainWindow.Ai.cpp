@@ -626,6 +626,73 @@ bool MainWindow::EnsureProviderConfigured(
   return ok;
 }
 
+void MainWindow::ConfirmAISend(
+    rivet_app::AISendAction action, rivet_app::AISendScope scope,
+    std::string const& content,
+    std::vector<std::vector<std::string>> const& history,
+    std::string const& message, std::function<void()> on_continue) {
+  if (!backend_) return;
+  auto const backend = backend_;
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+  std::thread([weak, dispatcher, backend, action, scope, content, history,
+               message, on_continue = std::move(on_continue)]() mutable {
+    std::optional<rivet_app::AISendPreview> preview;
+    std::string failure;
+    try {
+      rivet_app::API api(*backend);
+      preview = api.preview_ai_send(action, scope, content, history, message).get();
+    } catch (std::exception const& e) {
+      failure = e.what();
+    }
+    dispatcher.TryEnqueue(
+        [weak, preview = std::move(preview), failure = std::move(failure),
+         on_continue = std::move(on_continue)]() mutable {
+          auto window = weak.get();
+          if (!window) return;
+          if (!preview.has_value()) {
+            window->Alert(pdfgist::Trf("ui.ai-preview.failed",
+                                       to_wide(failure)));
+            return;
+          }
+          char const* action_key = "ui.ai-preview.action.chat";
+          switch (preview->action) {
+            case rivet_app::AISendAction::translate:
+              action_key = "ui.ai-preview.action.translate";
+              break;
+            case rivet_app::AISendAction::summarize:
+              action_key = "ui.ai-preview.action.summarize";
+              break;
+            case rivet_app::AISendAction::chat: break;
+          }
+          char const* scope_key = "ui.ai-preview.scope.page";
+          switch (preview->scope) {
+            case rivet_app::AISendScope::selection:
+              scope_key = "ui.ai-preview.scope.selection";
+              break;
+            case rivet_app::AISendScope::page: break;
+            case rivet_app::AISendScope::chapter:
+              scope_key = "ui.ai-preview.scope.chapter";
+              break;
+            case rivet_app::AISendScope::document:
+              scope_key = "ui.ai-preview.scope.document";
+              break;
+          }
+          auto const body = pdfgist::Trf(
+              "ui.ai-preview.body",
+              pdfgist::Tr(action_key), pdfgist::Tr(scope_key),
+              std::to_wstring(preview->content_chars),
+              std::to_wstring(preview->history_chars),
+              std::to_wstring(preview->message_chars),
+              std::to_wstring(preview->total_chars));
+          window->ShowDialog(
+              pdfgist::Tr("ui.ai-preview.title"), body,
+              pdfgist::Tr("ui.ai-preview.continue"),
+              pdfgist::Tr("ui.ai-preview.cancel"), std::move(on_continue));
+        });
+  }).detach();
+}
+
 // ---- translate --------------------------------------------------------------------------
 
 void MainWindow::LaunchTranslateCurrentPage() {
@@ -649,18 +716,30 @@ void MainWindow::LaunchTranslateCurrentPage() {
         to_utf8(L"以下是 PDF 第 " + std::to_wstring(page) + L" 页提取的文本：\n\n" +
                 text);
     auto const target = window->settings_.target_language;
-    auto card = std::make_shared<StreamCardUi>();
-    card->title =
-        window->epub_active_ && window->epub_
-            ? pdfgist::Trf("ui.epub.translate-title", std::to_wstring(page))
-            : pdfgist::Trf("ui.translate.page-title", std::to_wstring(page));
-    card->meta = L"→ " + lang;
-    card->source = text;
     auto const backend = window->backend_;
-    window->StartCardStream(
-        card, window->translate_cards_, [backend, payload_utf8, target]() {
-          rivet_app::API api(*backend);
-          return api.translate_text(payload_utf8, target).get();
+    auto const preview_scope = window->epub_active_ && window->epub_
+                                   ? rivet_app::AISendScope::chapter
+                                   : rivet_app::AISendScope::page;
+    window->ConfirmAISend(
+        rivet_app::AISendAction::translate, preview_scope, payload_utf8, {},
+        "", [weak, backend, payload_utf8, target, text, page, lang] {
+          auto confirmed = weak.get();
+          if (!confirmed) return;
+          auto card = std::make_shared<StreamCardUi>();
+          card->title =
+              confirmed->epub_active_ && confirmed->epub_
+                  ? pdfgist::Trf("ui.epub.translate-title",
+                                  std::to_wstring(page))
+                  : pdfgist::Trf("ui.translate.page-title",
+                                  std::to_wstring(page));
+          card->meta = L"→ " + lang;
+          card->source = text;
+          confirmed->StartCardStream(
+              card, confirmed->translate_cards_,
+              [backend, payload_utf8, target]() {
+                rivet_app::API api(*backend);
+                return api.translate_text(payload_utf8, target).get();
+              });
         });
   });
 }
@@ -677,18 +756,27 @@ void MainWindow::LaunchTranslateSelection() {
 
 void MainWindow::LaunchTranslateSelectionText(std::wstring const& text) {
   if (!ready_ || !api_ || !backend_) return;
+  if (!EnsureProviderConfigured(translate_cards_)) return;
   auto const lang = LanguageName(settings_.target_language);
   auto const payload = to_utf8(text);
   auto const target = settings_.target_language;
   auto const backend = backend_;
-  auto card = std::make_shared<StreamCardUi>();
-  card->title = pdfgist::Tr("ui.menu.translate");
-  card->meta = L"→ " + lang;
-  card->source = text;
-  StartCardStream(card, translate_cards_, [backend, payload, target]() {
-    rivet_app::API api(*backend);
-    return api.translate_text(payload, target).get();
-  });
+  auto const weak = get_weak();
+  ConfirmAISend(
+      rivet_app::AISendAction::translate, rivet_app::AISendScope::selection,
+      payload, {}, "", [weak, backend, payload, target, text, lang] {
+        auto window = weak.get();
+        if (!window) return;
+        auto card = std::make_shared<StreamCardUi>();
+        card->title = pdfgist::Tr("ui.menu.translate");
+        card->meta = L"→ " + lang;
+        card->source = text;
+        window->StartCardStream(
+            card, window->translate_cards_, [backend, payload, target]() {
+              rivet_app::API api(*backend);
+              return api.translate_text(payload, target).get();
+            });
+      });
 }
 
 // ---- summarize --------------------------------------------------------------------------
@@ -711,17 +799,30 @@ void MainWindow::LaunchSummarizePage() {
     auto const lang = window->LanguageName(window->settings_.target_language);
     auto const payload = to_utf8(text);
     auto const backend = window->backend_;
-    auto card = std::make_shared<StreamCardUi>();
-    card->title =
-        window->epub_active_ && window->epub_
-            ? pdfgist::Trf("ui.epub.summarize-title", std::to_wstring(page))
-            : pdfgist::Trf("ui.summarize.page-title", std::to_wstring(page));
-    card->meta = lang;
-    card->source = text;
-    window->StartCardStream(
-        card, window->summarize_cards_, [backend, payload]() {
-          rivet_app::API api(*backend);
-          return api.summarize_text(payload, rivet_app::SummarizeMode::page).get();
+    auto const preview_scope = window->epub_active_ && window->epub_
+                                   ? rivet_app::AISendScope::chapter
+                                   : rivet_app::AISendScope::page;
+    window->ConfirmAISend(
+        rivet_app::AISendAction::summarize, preview_scope, payload, {}, "",
+        [weak, backend, payload, text, page, lang] {
+          auto confirmed = weak.get();
+          if (!confirmed) return;
+          auto card = std::make_shared<StreamCardUi>();
+          card->title =
+              confirmed->epub_active_ && confirmed->epub_
+                  ? pdfgist::Trf("ui.epub.summarize-title",
+                                  std::to_wstring(page))
+                  : pdfgist::Trf("ui.summarize.page-title",
+                                  std::to_wstring(page));
+          card->meta = lang;
+          card->source = text;
+          confirmed->StartCardStream(
+              card, confirmed->summarize_cards_, [backend, payload]() {
+                rivet_app::API api(*backend);
+                return api.summarize_text(
+                           payload, rivet_app::SummarizeMode::page)
+                    .get();
+              });
         });
   });
 }
@@ -738,14 +839,25 @@ void MainWindow::LaunchSummarizeSelection() {
   auto const lang = LanguageName(settings_.target_language);
   auto const payload = to_utf8(text);
   auto const backend = backend_;
-  auto card = std::make_shared<StreamCardUi>();
-  card->title = pdfgist::Tr("ui.summarize.selection");
-  card->meta = lang;
-  card->source = text;
-  StartCardStream(card, summarize_cards_, [backend, payload]() {
-    rivet_app::API api(*backend);
-    return api.summarize_text(payload, rivet_app::SummarizeMode::selection).get();
-  });
+  auto const weak = get_weak();
+  ConfirmAISend(
+      rivet_app::AISendAction::summarize,
+      rivet_app::AISendScope::selection, payload, {}, "",
+      [weak, backend, payload, text, lang] {
+        auto window = weak.get();
+        if (!window) return;
+        auto card = std::make_shared<StreamCardUi>();
+        card->title = pdfgist::Tr("ui.summarize.selection");
+        card->meta = lang;
+        card->source = text;
+        window->StartCardStream(
+            card, window->summarize_cards_, [backend, payload]() {
+              rivet_app::API api(*backend);
+              return api.summarize_text(
+                         payload, rivet_app::SummarizeMode::selection)
+                  .get();
+            });
+      });
 }
 
 void MainWindow::LaunchSummarizeDoc() {
@@ -763,15 +875,25 @@ void MainWindow::LaunchSummarizeDoc() {
     auto const lang = window->LanguageName(window->settings_.target_language);
     auto const payload = to_utf8(text);
     auto const backend = window->backend_;
-    auto card = std::make_shared<StreamCardUi>();
-    card->title = pdfgist::Tr("ui.summarize.doc");
-    card->meta = lang + L" · " +
-                 pdfgist::Trf("ui.summarize.doc-meta", std::to_wstring(pages));
-    card->source = text;
-    window->StartCardStream(
-        card, window->summarize_cards_, [backend, payload]() {
-          rivet_app::API api(*backend);
-          return api.summarize_text(payload, rivet_app::SummarizeMode::doc).get();
+    window->ConfirmAISend(
+        rivet_app::AISendAction::summarize,
+        rivet_app::AISendScope::document, payload, {}, "",
+        [weak, backend, payload, text, pages, lang] {
+          auto confirmed = weak.get();
+          if (!confirmed) return;
+          auto card = std::make_shared<StreamCardUi>();
+          card->title = pdfgist::Tr("ui.summarize.doc");
+          card->meta = lang + L" · " + pdfgist::Trf(
+                                           "ui.summarize.doc-meta",
+                                           std::to_wstring(pages));
+          card->source = text;
+          confirmed->StartCardStream(
+              card, confirmed->summarize_cards_, [backend, payload]() {
+                rivet_app::API api(*backend);
+                return api.summarize_text(payload,
+                                          rivet_app::SummarizeMode::doc)
+                    .get();
+              });
         });
   });
 }
@@ -798,7 +920,9 @@ void MainWindow::SendChat(std::wstring const& raw_question) {
 
   auto const weak = get_weak();
   int const scope = chat_scope_;
-  auto dispatch = [weak, question, scope](std::wstring text, int pages) {
+  bool const epub_scope = epub_active_ && epub_;
+  auto dispatch = [weak, question, scope, epub_scope](std::wstring text,
+                                                      int pages) {
     auto window = weak.get();
     if (!window) return;
     std::wstring context;
@@ -826,7 +950,13 @@ void MainWindow::SendChat(std::wstring const& raw_question) {
       }
       context = L"第 " + std::to_wstring(pages) + L" 页：\n" + context;
     }
-    window->DispatchChat(question, context, label);
+    auto const preview_scope =
+        scope == 1
+            ? rivet_app::AISendScope::selection
+            : scope == 2 ? rivet_app::AISendScope::document
+                         : epub_scope ? rivet_app::AISendScope::chapter
+                                      : rivet_app::AISendScope::page;
+    window->DispatchChat(question, context, label, preview_scope);
   };
 
   if (scope == 1) {
@@ -841,61 +971,68 @@ void MainWindow::SendChat(std::wstring const& raw_question) {
 // The chat RPC itself: bubbles + stream card + registry (mac sendChat parity).
 void MainWindow::DispatchChat(std::wstring const& question,
                               std::wstring const& context_text,
-                              std::wstring const& context_label) {
-  ChatBubble user_bubble;
-  user_bubble.user = true;
-  user_bubble.text = question;
-  AppendChatBubble(user_bubble);
-
-  auto card = std::make_shared<StreamCardUi>();
-  card->title = L"chat";
-  card->meta = LanguageName(settings_.target_language);
-  ChatBubble assistant;
-  assistant.user = false;
-  assistant.card = card;
-  AppendChatBubble(assistant);
-
-  chat_busy_ = true;
-  ChatSend().Visibility(Visibility::Collapsed);
-  ChatStop().Visibility(Visibility::Visible);
-  chat_pending_question_ = question;
-
+                              std::wstring const& context_label,
+                              rivet_app::AISendScope preview_scope) {
   auto const history = chat_history_;
   auto const context = to_utf8(context_text);
   auto const label = to_utf8(context_label);
   auto const message = to_utf8(question);
   auto const backend = backend_;
-  auto const dispatcher = DispatcherQueue();
   auto const weak = get_weak();
+  ConfirmAISend(
+      rivet_app::AISendAction::chat, preview_scope, context, history, message,
+      [weak, backend, history, context, label, message, question]() mutable {
+        auto window = weak.get();
+        if (!window) return;
+        ChatBubble user_bubble;
+        user_bubble.user = true;
+        user_bubble.text = question;
+        window->AppendChatBubble(user_bubble);
 
-  std::thread([weak, dispatcher, backend, history, context, label,
-               message]() mutable {
-    std::string failure;
-    rivet_app::StreamStart start{-1};
-    try {
-      rivet_app::API api(*backend);
-      start = api.chat(context, label, history, message).get();
-    } catch (std::exception const& e) {
-      failure = e.what();
-    }
-    dispatcher.TryEnqueue([weak, start, failure = std::move(failure)]() mutable {
-      auto window = weak.get();
-      if (!window) return;
-      if (window->chat_bubbles_.empty()) return;
-      auto& last = window->chat_bubbles_.back();
-      if (!last.card) return;
-      auto card = last.card;
-      if (!failure.empty()) {
-        card->phase = StreamCardUi::Phase::Error;
-        card->failure = to_wide(failure);
-        window->UpdateCardBody(*card);
-        window->FinalizeChat(*card);
-        return;
-      }
-      card->request_id = start.request_id;
-      window->streams_[start.request_id] = card;
-    });
-  }).detach();
+        auto card = std::make_shared<StreamCardUi>();
+        card->title = L"chat";
+        card->meta = window->LanguageName(window->settings_.target_language);
+        ChatBubble assistant;
+        assistant.user = false;
+        assistant.card = card;
+        window->AppendChatBubble(assistant);
+
+        window->chat_busy_ = true;
+        window->ChatSend().Visibility(Visibility::Collapsed);
+        window->ChatStop().Visibility(Visibility::Visible);
+        window->chat_pending_question_ = question;
+        window->ChatInput().Text(L"");
+
+        auto const dispatcher = window->DispatcherQueue();
+        std::thread([weak, dispatcher, backend, history, context, label,
+                     message]() mutable {
+          std::string failure;
+          rivet_app::StreamStart start{-1};
+          try {
+            rivet_app::API api(*backend);
+            start = api.chat(context, label, history, message).get();
+          } catch (std::exception const& e) {
+            failure = e.what();
+          }
+          dispatcher.TryEnqueue(
+              [weak, start, failure = std::move(failure)]() mutable {
+                auto confirmed = weak.get();
+                if (!confirmed || confirmed->chat_bubbles_.empty()) return;
+                auto& last = confirmed->chat_bubbles_.back();
+                if (!last.card) return;
+                auto card = last.card;
+                if (!failure.empty()) {
+                  card->phase = StreamCardUi::Phase::Error;
+                  card->failure = to_wide(failure);
+                  confirmed->UpdateCardBody(*card);
+                  confirmed->FinalizeChat(*card);
+                  return;
+                }
+                card->request_id = start.request_id;
+                confirmed->streams_[start.request_id] = card;
+              });
+        }).detach();
+      });
 }
 
 void MainWindow::FinalizeChat(StreamCardUi& card) {

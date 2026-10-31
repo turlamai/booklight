@@ -1208,6 +1208,55 @@ final class ReaderModel: ObservableObject {
         self[keyPath: keyPath].insert(StreamCard.makeNotice(message), at: 0)
     }
 
+    /// Ask the shared backend to count the exact user-content strings, then
+    /// present an AppKit-native, keyboard-cancellable confirmation before any
+    /// provider RPC starts.  `onContinue` owns the already-captured payload,
+    /// so changing pages or selections while the sheet is open cannot swap in
+    /// another document's content.
+    private func confirmAISend(
+        action: RivetTypes.AISendAction,
+        scope: RivetTypes.AISendScope,
+        content: String,
+        history: [[String]] = [],
+        message: String = "",
+        onContinue: @escaping @MainActor () -> Void
+    ) {
+        guard let api = app?.api else {
+            alert(L10n.t("ui.backend-not-ready"))
+            return
+        }
+        Task { [weak self] in
+            do {
+                let preview = try await api.preview_ai_send(
+                    action: action, scope: scope, content_text: content,
+                    history: history, user_message: message)
+                guard let self else { return }
+                let actionName = L10n.t("ui.ai-preview.action.\(preview.action.rawValue)")
+                let scopeName = L10n.t("ui.ai-preview.scope.\(preview.scope.rawValue)")
+                let body = L10n.t(
+                    "ui.ai-preview.body", actionName, scopeName,
+                    "\(preview.content_chars)", "\(preview.history_chars)",
+                    "\(preview.message_chars)", "\(preview.total_chars)")
+                let panel = NSAlert()
+                panel.alertStyle = .informational
+                panel.messageText = L10n.t("ui.ai-preview.title")
+                panel.informativeText = body
+                panel.addButton(withTitle: L10n.t("ui.ai-preview.continue"))
+                panel.addButton(withTitle: L10n.t("ui.ai-preview.cancel"))
+                let handle: (NSApplication.ModalResponse) -> Void = { response in
+                    if response == .alertFirstButtonReturn { onContinue() }
+                }
+                if let window = NSApp.keyWindow {
+                    panel.beginSheetModal(for: window, completionHandler: handle)
+                } else {
+                    handle(panel.runModal())
+                }
+            } catch {
+                self?.alert(L10n.t("ui.ai-preview.failed", AppModel.cleanError(error)))
+            }
+        }
+    }
+
     func removeCard(_ card: StreamCard) {
         translateCards.removeAll { $0.id == card.id }
         summarizeCards.removeAll { $0.id == card.id }
@@ -1246,13 +1295,17 @@ final class ReaderModel: ObservableObject {
 
     func translateSelectionText(_ text: String) {
         guard let app else { return }
+        guard ensureProvider(for: \.translateCards) else { return }
         let lang = languageName(app.settings.target_language)
-        startCardStream(
-            card: StreamCard(
-                title: L10n.t("ui.menu.translate"), meta: "→ \(lang)",
-                sourceText: text),
-            list: \.translateCards) { [weak app] api in
-            try await api.translate_text(text: text, target: app?.settings.target_language ?? .zh)
+        let target = app.settings.target_language
+        confirmAISend(action: .translate, scope: .selection, content: text) { [weak self] in
+            self?.startCardStream(
+                card: StreamCard(
+                    title: L10n.t("ui.menu.translate"), meta: "→ \(lang)",
+                    sourceText: text),
+                list: \.translateCards) { api in
+                try await api.translate_text(text: text, target: target)
+            }
         }
     }
 
@@ -1265,26 +1318,34 @@ final class ReaderModel: ObservableObject {
         }
         let lang = languageName(app.settings.target_language)
         let payload = "以下是 PDF 第 \(source.page) 页提取的文本：\n\n\(source.text)"
-        startCardStream(
-            card: StreamCard(
-                title: epubActive ? L10n.t("ui.epub.translate-title", "\(source.page)")
-                                  : L10n.t("ui.translate.page-title", "\(source.page)"), meta: "→ \(lang)",
-                sourceText: source.text),
-            list: \.translateCards) { [weak app] api in
-            try await api.translate_text(text: payload, target: app?.settings.target_language ?? .zh)
+        let scope: RivetTypes.AISendScope = epubActive ? .chapter : .page
+        let target = app.settings.target_language
+        let title = epubActive ? L10n.t("ui.epub.translate-title", "\(source.page)")
+                               : L10n.t("ui.translate.page-title", "\(source.page)")
+        confirmAISend(action: .translate, scope: scope, content: payload) { [weak self] in
+            self?.startCardStream(
+                card: StreamCard(title: title, meta: "→ \(lang)", sourceText: source.text),
+                list: \.translateCards) { api in
+                try await api.translate_text(text: payload, target: target)
+            }
         }
     }
 
     // summarize ----------------------------------------------------------------
 
-    private func summarize(title: String, meta: String, text: String, mode: RivetTypes.SummarizeMode, list: ReferenceWritableKeyPath<ReaderModel, [StreamCard]>) {
+    private func summarize(title: String, meta: String, text: String,
+                           mode: RivetTypes.SummarizeMode,
+                           scope: RivetTypes.AISendScope,
+                           list: ReferenceWritableKeyPath<ReaderModel, [StreamCard]>) {
         guard let app else { return }
         guard ensureProvider(for: list) else { return }
         let lang = languageName(app.settings.target_language)
-        startCardStream(
-            card: StreamCard(title: title, meta: meta.isEmpty ? lang : "\(lang) · \(meta)", sourceText: text),
-            list: list) { [weak app] api in
-            try await api.summarize_text(text: text, mode: mode)
+        confirmAISend(action: .summarize, scope: scope, content: text) { [weak self] in
+            self?.startCardStream(
+                card: StreamCard(title: title, meta: meta.isEmpty ? lang : "\(lang) · \(meta)", sourceText: text),
+                list: list) { api in
+                try await api.summarize_text(text: text, mode: mode)
+            }
         }
     }
 
@@ -1296,7 +1357,8 @@ final class ReaderModel: ObservableObject {
         summarize(
             title: epubActive ? L10n.t("ui.epub.summarize-title", "\(source.page)")
                                   : L10n.t("ui.summarize.page-title", "\(source.page)"), meta: "",
-            text: source.text, mode: .page, list: \.summarizeCards)
+            text: source.text, mode: .page,
+            scope: epubActive ? .chapter : .page, list: \.summarizeCards)
     }
 
     func summarizeSelection() {
@@ -1304,7 +1366,8 @@ final class ReaderModel: ObservableObject {
             prependNotice(L10n.t("ui.need.selection"), to: \.summarizeCards)
             return
         }
-        summarize(title: L10n.t("ui.summarize.selection"), meta: "", text: text, mode: .selection, list: \.summarizeCards)
+        summarize(title: L10n.t("ui.summarize.selection"), meta: "", text: text,
+                  mode: .selection, scope: .selection, list: \.summarizeCards)
     }
 
     func summarizeDoc() {
@@ -1315,7 +1378,7 @@ final class ReaderModel: ObservableObject {
         summarize(
             title: L10n.t("ui.summarize.doc"),
             meta: L10n.t("ui.summarize.doc-meta", "\(source.pages)"),
-            text: source.text, mode: .doc, list: \.summarizeCards)
+            text: source.text, mode: .doc, scope: .document, list: \.summarizeCards)
     }
 
     // chat ---------------------------------------------------------------------
@@ -1355,31 +1418,37 @@ final class ReaderModel: ObservableObject {
             appendAssistantText(L10n.t("ui.settings.need-config"))
             return
         }
-        chatBubbles.append(ChatBubble.user(question))
-        let card = StreamCard(title: "chat", meta: languageName(app.settings.target_language))
-        chatBubbles.append(ChatBubble(isUser: false, text: "", dimmed: false, card: card))
-        chatLive = card
-        chatPendingQuestion = question
-        chatBusy = true
-        card.onFinish = { [weak self] finished in
-            MainActor.assumeIsolated { self?.finalizeChat(finished) }
-        }
-        guard let api = app.api else {
-            card.fail("backend not ready")
-            finalizeChat(card)
-            return
-        }
         let history = Array(chatHistory.suffix(12))
-        Task { [weak self] in
-            do {
-                let start = try await api.chat(
-                    context_text: context.text, context_label: context.label,
-                    history: history, user_message: question)
-                card.requestId = start.request_id
-                self?.app?.streamRegistry[start.request_id] = card
-            } catch {
-                card.fail(String(describing: error))
-                self?.finalizeChat(card)
+        let previewScope: RivetTypes.AISendScope = switch chatScope {
+        case 1: .selection
+        case 2: .document
+        default: epubActive ? .chapter : .page
+        }
+        confirmAISend(
+            action: .chat, scope: previewScope, content: context.text,
+            history: history, message: question
+        ) { [weak self] in
+            guard let self, let api = self.app?.api else { return }
+            self.chatBubbles.append(ChatBubble.user(question))
+            let card = StreamCard(title: "chat", meta: languageName(app.settings.target_language))
+            self.chatBubbles.append(ChatBubble(isUser: false, text: "", dimmed: false, card: card))
+            self.chatLive = card
+            self.chatPendingQuestion = question
+            self.chatBusy = true
+            card.onFinish = { [weak self] finished in
+                MainActor.assumeIsolated { self?.finalizeChat(finished) }
+            }
+            Task { [weak self] in
+                do {
+                    let start = try await api.chat(
+                        context_text: context.text, context_label: context.label,
+                        history: history, user_message: question)
+                    card.requestId = start.request_id
+                    self?.app?.streamRegistry[start.request_id] = card
+                } catch {
+                    card.fail(String(describing: error))
+                    self?.finalizeChat(card)
+                }
             }
         }
     }

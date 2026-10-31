@@ -35,6 +35,7 @@ struct PanelContext {
   std::function<std::string()> selection_text;        // "" when none
   std::function<std::optional<TextSource>()> page_text;   // current page
   std::function<std::optional<TextSource>()> doc_text;    // first-12-pages cap
+  std::function<bool()> epub_active;                      // page means chapter
   std::string ui_language{"system"};                      // host pref mirror
   double tts_rate{1.0};                                   // host pref mirror
 };
@@ -110,6 +111,11 @@ class AiPanel {
   static std::string describe_error(std::exception_ptr error);
   std::string language_name(rivet_app::TargetLanguage code) const;
   bool ensure_provider(GtkListBox* notice_list);
+  void confirm_ai_send(
+      rivet_app::AISendAction action, rivet_app::AISendScope scope,
+      std::string const& content,
+      std::vector<std::vector<std::string>> const& history,
+      std::string const& message, std::function<void()> on_continue);
 
  private:
   PanelContext* ctx_;

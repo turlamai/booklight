@@ -14,6 +14,19 @@ public enum RivetGeneratedConfig {
 }
 
 public enum RivetTypes {
+    public enum AISendAction: String, Sendable {
+        case translate = "translate"
+        case summarize = "summarize"
+        case chat = "chat"
+    }
+
+    public enum AISendScope: String, Sendable {
+        case selection = "selection"
+        case page = "page"
+        case chapter = "chapter"
+        case document = "document"
+    }
+
     public enum ReadingTheme: String, Sendable {
         case system = "system"
         case paper = "paper"
@@ -36,6 +49,23 @@ public enum RivetTypes {
         case fr = "fr"
         case de = "de"
         case es = "es"
+    }
+
+    public struct AISendPreview: Sendable {
+        public let action: RivetTypes.AISendAction
+        public let scope: RivetTypes.AISendScope
+        public let content_chars: Int64
+        public let history_chars: Int64
+        public let message_chars: Int64
+        public let total_chars: Int64
+        public init(action: RivetTypes.AISendAction, scope: RivetTypes.AISendScope, content_chars: Int64, history_chars: Int64, message_chars: Int64, total_chars: Int64) {
+            self.action = action
+            self.scope = scope
+            self.content_chars = content_chars
+            self.history_chars = history_chars
+            self.message_chars = message_chars
+            self.total_chars = total_chars
+        }
     }
 
     public struct AnnotationDocument: Sendable {
@@ -248,6 +278,9 @@ private func encode_Void(_ v: Void) -> RivetValue { .null }
 private func encode_ProviderPreset(_ v: RivetTypes.ProviderPreset) -> RivetValue { .list([encode_String(v.id), encode_String(v.label), encode_String(v.base_url), encode_String(v.default_model), encode_Bool(v.needs_key)]) }
 private func encode__List_ProviderPreset_(_ v: [RivetTypes.ProviderPreset]) -> RivetValue { .list(v.map(encode_ProviderPreset)) }
 private func encode_AnnotationDocument(_ v: RivetTypes.AnnotationDocument) -> RivetValue { .list([encode_Bytes(v.data), encode_Bool(v.recovery_pending)]) }
+private func encode_AISendAction(_ v: RivetTypes.AISendAction) -> RivetValue { .string(v.rawValue) }
+private func encode_AISendScope(_ v: RivetTypes.AISendScope) -> RivetValue { .string(v.rawValue) }
+private func encode_AISendPreview(_ v: RivetTypes.AISendPreview) -> RivetValue { .list([encode_AISendAction(v.action), encode_AISendScope(v.scope), encode_Int64(v.content_chars), encode_Int64(v.history_chars), encode_Int64(v.message_chars), encode_Int64(v.total_chars)]) }
 private func encode_SettingsUpdate(_ v: RivetTypes.SettingsUpdate) -> RivetValue { .list([encode_String(v.provider), encode_String(v.base_url), encode_String(v.model), encode_TargetLanguage(v.target_language), encode_String(v.view_mode), encode_Bool(v.annotation_sidecar)]) }
 private func encode_SummarizeMode(_ v: RivetTypes.SummarizeMode) -> RivetValue { .string(v.rawValue) }
 private func encode__Optional_String_(_ v: String?) -> RivetValue { v.map(encode_String) ?? .null }
@@ -281,6 +314,9 @@ private func decode_Void(_ v: RivetValue) throws -> Void { guard case .null = v 
 private func decode_ProviderPreset(_ v: RivetValue) throws -> RivetTypes.ProviderPreset { guard case .list(let xs) = v, xs.count == 5 else { throw RivetGeneratedError.typeMismatch("ProviderPreset") }; return RivetTypes.ProviderPreset(id: try decode_String(xs[0]), label: try decode_String(xs[1]), base_url: try decode_String(xs[2]), default_model: try decode_String(xs[3]), needs_key: try decode_Bool(xs[4])) }
 private func decode__List_ProviderPreset_(_ v: RivetValue) throws -> [RivetTypes.ProviderPreset] { guard case .list(let xs) = v else { throw RivetGeneratedError.typeMismatch("(List ProviderPreset)") }; return try xs.map(decode_ProviderPreset) }
 private func decode_AnnotationDocument(_ v: RivetValue) throws -> RivetTypes.AnnotationDocument { guard case .list(let xs) = v, xs.count == 2 else { throw RivetGeneratedError.typeMismatch("AnnotationDocument") }; return RivetTypes.AnnotationDocument(data: try decode_Bytes(xs[0]), recovery_pending: try decode_Bool(xs[1])) }
+private func decode_AISendAction(_ v: RivetValue) throws -> RivetTypes.AISendAction { guard case .string(let x) = v, let result = RivetTypes.AISendAction(rawValue: x) else { throw RivetGeneratedError.typeMismatch("AISendAction") }; return result }
+private func decode_AISendScope(_ v: RivetValue) throws -> RivetTypes.AISendScope { guard case .string(let x) = v, let result = RivetTypes.AISendScope(rawValue: x) else { throw RivetGeneratedError.typeMismatch("AISendScope") }; return result }
+private func decode_AISendPreview(_ v: RivetValue) throws -> RivetTypes.AISendPreview { guard case .list(let xs) = v, xs.count == 6 else { throw RivetGeneratedError.typeMismatch("AISendPreview") }; return RivetTypes.AISendPreview(action: try decode_AISendAction(xs[0]), scope: try decode_AISendScope(xs[1]), content_chars: try decode_Int64(xs[2]), history_chars: try decode_Int64(xs[3]), message_chars: try decode_Int64(xs[4]), total_chars: try decode_Int64(xs[5])) }
 private func decode_SettingsUpdate(_ v: RivetValue) throws -> RivetTypes.SettingsUpdate { guard case .list(let xs) = v, xs.count == 6 else { throw RivetGeneratedError.typeMismatch("SettingsUpdate") }; return RivetTypes.SettingsUpdate(provider: try decode_String(xs[0]), base_url: try decode_String(xs[1]), model: try decode_String(xs[2]), target_language: try decode_TargetLanguage(xs[3]), view_mode: try decode_String(xs[4]), annotation_sidecar: try decode_Bool(xs[5])) }
 private func decode_SummarizeMode(_ v: RivetValue) throws -> RivetTypes.SummarizeMode { guard case .string(let x) = v, let result = RivetTypes.SummarizeMode(rawValue: x) else { throw RivetGeneratedError.typeMismatch("SummarizeMode") }; return result }
 private func decode__Optional_String_(_ v: RivetValue) throws -> String? { if case .null = v { return nil }; return try decode_String(v) }
@@ -424,6 +460,10 @@ public struct RivetAPI: Sendable {
     public func load_annotations(pdf_path: String, sidecar: Bool) async throws -> RivetTypes.AnnotationDocument {
         let rivetResult = try await client.call("load-annotations", arguments: [encode_String(pdf_path), encode_Bool(sidecar)])
         return try decode_AnnotationDocument(rivetResult)
+    }
+    public func preview_ai_send(action: RivetTypes.AISendAction, scope: RivetTypes.AISendScope, content_text: String, history: [[String]], user_message: String) async throws -> RivetTypes.AISendPreview {
+        let rivetResult = try await client.call("preview-ai-send", arguments: [encode_AISendAction(action), encode_AISendScope(scope), encode_String(content_text), encode__List_List_String_(history), encode_String(user_message)])
+        return try decode_AISendPreview(rivetResult)
     }
     public func save_api_key(key: String) async throws -> Void {
         let rivetResult = try await client.call("save-api-key", arguments: [encode_String(key)])

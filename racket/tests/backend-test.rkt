@@ -429,6 +429,21 @@
 (define-values (bad-response _e15) (read-terminal bad-id))
 (check-equal? (frame-type bad-response) message:error)
 
+;; ---- AI send preview: shared scope + Unicode character accounting ----
+
+;; This call is deliberately before every streaming test: preview-ai-send is
+;; a pure description RPC and must not contact the fake provider.  The record
+;; order follows AISendPreview in app/backend.rkt.
+(define requests-before-preview (length (unbox requests-log)))
+(define-values (preview _preview-events)
+  (call "preview-ai-send" "chat" "page" "第1页🙂"
+        (list (list "user" "历史")
+              (list "assistant" "answer")
+              (list "malformed"))
+        "问？"))
+(check-equal? preview (list "chat" "page" 4 8 2 14))
+(check-equal? (length (unbox requests-log)) requests-before-preview)
+
 ;; ---- streaming: translate-text ----
 
 (check-equal? (unbox server-mode) 'fast)

@@ -35,8 +35,18 @@ do {
     _ = try waitFor("retry action") { contains(window, "Retry Save") || contains(window, "重试保存") ? true : nil }
     _ = try waitFor("export action") { contains(window, "Export Annotations") || contains(window, "导出批注") ? true : nil }
     _ = try waitFor("recovery fixture note") { contains(window, "Recovered fixture note") ? true : nil }
+    _ = try waitFor("native AI inspector control") { pressNamed(window, ["AI Assistant", "AI 助手"]) ? true : nil }
+    _ = try waitFor("translate current EPUB scope action") { pressNamed(window, ["Translate Chapter", "本章翻译", "Translate page", "本页翻译"]) ? true : nil }
+    _ = try waitFor("AI send review dialog") { contains(window, "Review what will be sent") || contains(window, "核对即将发送的内容") ? true : nil }
+    _ = try waitFor("AI send scope and exact count") {
+        ((contains(window, "Current chapter") || contains(window, "当前章")) &&
+         (contains(window, "Total user content:") || contains(window, "用户内容合计："))) ? true : nil
+    }
+    _ = try waitFor("native AI send cancellation") { pressNamed(window, ["Cancel", "取消"]) ? true : nil }
+    _ = try waitFor("AI send review dismissal") { !contains(window, "Review what will be sent") && !contains(window, "核对即将发送的内容") ? true : nil }
+    if contains(window, "Stop") || contains(window, "停止") { throw DriverError.failure("cancelling the AI send review created a stream card") }
     try writeJSON(snapshot(application), to: output.appendingPathComponent("accessibility.json"))
-    try writeJSON(["platform": "macos", "actions": ["launch:sample.epub", "press:Annotations"], "assertions": ["packaged SwiftUI window activated", "sample EPUB crossed RVT1 into the embedded backend", "native accessibility tree contains The Sample Book", "native accessibility tree contains First Chapter", "pending recovery crosses RVT1 on reopen", "native Notes pane exposes recovered status and Retry Save", "recovered annotation remains visible and exportable"]], to: output.appendingPathComponent("interaction-trace.json"))
+    try writeJSON(["platform": "macos", "actions": ["launch:sample.epub", "press:Annotations", "press:AI Assistant", "press:Translate current EPUB scope", "assert:AI send review", "press:Cancel"], "assertions": ["packaged SwiftUI window activated", "sample EPUB crossed RVT1 into the embedded backend", "native accessibility tree contains The Sample Book", "native accessibility tree contains First Chapter", "pending recovery crosses RVT1 on reopen", "native Notes pane exposes recovered status and Retry Save", "recovered annotation remains visible and exportable", "native review exposes current-chapter scope and exact user-content total before provider launch", "Cancel dismisses the review without starting the AI stream"]], to: output.appendingPathComponent("interaction-trace.json"))
     guard let running = NSRunningApplication(processIdentifier: pid), running.terminate() else { throw DriverError.failure("native application rejected termination") }
 } catch {
     if let application = diagnosticApplication, let output = diagnosticOutput { try? writeJSON(snapshot(application), to: output.appendingPathComponent("accessibility-failure.json")) }

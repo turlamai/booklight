@@ -30,6 +30,8 @@ The Notes pane reports annotation saves that are still in progress or failed. If
 
 Reading is local. AI requests send selected text and conversation context to your chosen provider. Review the send scope and provider policy before processing confidential files; BYOK usage is billed by that provider.
 
+Before every translation, summary or chat request, Booklight shows a native review dialog with the action, the selected scope and exact Unicode-character counts for document content, conversation history, your question and their total. Only **Continue** starts the provider request; **Cancel** leaves the typed question and conversation unchanged. The displayed total covers your content, not Booklight's additional provider instructions.
+
 ## Known limits
 
 Damaged-book recovery and AI cancellation/secret storage remain release qualification work (#20). Annotation persistence recovery is implemented for the next release but remains subject to native-platform acceptance before release. A new multi-document research workbench is not delivered.

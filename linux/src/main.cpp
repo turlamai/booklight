@@ -4079,6 +4079,7 @@ void on_activate(GtkApplication* app, gpointer) {
   g_host.panel_ctx.selection_text = selection_text;
   g_host.panel_ctx.page_text = current_page_text;
   g_host.panel_ctx.doc_text = doc_text;
+  g_host.panel_ctx.epub_active = [] { return g_host.epub_active(); };
   g_host.ai_panel = std::make_unique<AiPanel>(&g_host.panel_ctx);
   g_host.right_sidebar = g_host.ai_panel->widget();
   gtk_widget_set_size_request(g_host.right_sidebar, kAiSidebarWidth, -1);
