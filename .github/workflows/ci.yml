@@ -20,6 +20,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify release version alignment (VERSION == rivet.rktd == updater)
         run: bash scripts/check-release-version.sh
+      - name: Release signing trust-root negative tests (no secrets)
+        run: python3 -m unittest discover -s scripts/tests -p 'test_release_signing.py'
       - name: Verify the WinUI i18n table matches shared/i18n
         run: node scripts/gen-win-strings.mjs --check
       - name: Verify the GTK i18n table matches shared/i18n
