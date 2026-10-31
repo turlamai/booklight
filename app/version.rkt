@@ -30,4 +30,4 @@
   "MCowBQYDK2VwAyEAglfp6BpekL4uFAh7mVR6hbnZJYe7hNX4QZujkUY2gxI=")
 
 (define default-update-base-url
-  "https://github.com/turinglambdaai/pdfgist/releases/latest/download")
+  "https://github.com/turlamai/booklight/releases/latest/download")
