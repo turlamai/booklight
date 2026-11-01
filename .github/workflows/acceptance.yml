@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # Run packaged native acceptance for stacked file-first/P0 fix PRs.
+    branches: [main, refactor/file-first-reader-20261029]
 
 permissions:
   contents: read
