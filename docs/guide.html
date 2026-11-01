@@ -145,7 +145,7 @@ var _hmt = _hmt || [];
     <div class="nav-links">
       <a href="index.html#features" data-en="Features" data-zh="功能">功能</a>
       <a href="guide.html" class="nav-manual" style="color:var(--accent)" data-en="Guide" data-zh="手册">手册</a>
-      <a href="https://github.com/turinglambdaai/booklight" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/turlamai/booklight" target="_blank" rel="noopener">GitHub</a>
       <div class="lang-dropdown-wrapper">
           <button class="lang-btn" type="button" aria-label="Switch language">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
@@ -164,7 +164,7 @@ var _hmt = _hmt || [];
 <section class="manual-hero container">
   <span class="eyebrow" data-en="User Guide" data-zh="用户手册">用户手册</span>
   <h1 data-en="Read, translate, and ask — in five minutes" data-zh="五分钟上手：读、译、问">五分钟上手：读、译、问</h1>
-<aside class="guide-status"><p class="reader-en " lang="en">Existing reading, annotation, light editing and single-document BYOK features remain free. No research Pro checkout is open.</p><p class="reader-zh " lang="zh">已有阅读、批注、轻量编辑和单文档 BYOK 功能保持免费；研究 Pro 尚未开售。</p><a class="reader-en" lang="en" href="https://github.com/turinglambdaai/booklight/blob/main/docs/USER-GUIDE.md">Current installation, privacy and recovery</a><a class="reader-zh" lang="zh" href="https://github.com/turinglambdaai/booklight/blob/main/docs/USER-GUIDE.zh-CN.md">当前安装、隐私与恢复</a></aside>
+<aside class="guide-status"><p class="reader-en " lang="en">Existing reading, annotation, light editing and single-document BYOK features remain free. No research Pro checkout is open.</p><p class="reader-zh " lang="zh">已有阅读、批注、轻量编辑和单文档 BYOK 功能保持免费；研究 Pro 尚未开售。</p><a class="reader-en" lang="en" href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.md">Current installation, privacy and recovery</a><a class="reader-zh" lang="zh" href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.zh-CN.md">当前安装、隐私与恢复</a></aside>
   <p class="lead" data-en="Install, open your first PDF, set your own model key, and go. Short sentences. Verb first." data-zh="安装、打开第一份 PDF、配好自己的模型 Key，开工。句子短，动词开头。">安装、打开第一份 PDF、配好自己的模型 Key，开工。句子短，动词开头。</p>
 </section>
 
@@ -191,8 +191,8 @@ var _hmt = _hmt || [];
       </h2>
       <p data-en="Download, open, translate one paragraph. That is the whole tutorial. Everything below is optional." data-zh="下载、打开、翻一段。教程到此结束。以下内容都是可选的。">下载、打开、翻一段。教程到此结束。以下内容都是可选的。</p>
       <ol>
-        <li data-en="<strong>Install.</strong> Grab the latest dmg from the <a href='https://github.com/turinglambdaai/booklight/releases/latest'>Releases</a> page. Drag Booklight into Applications. Launch it. macOS 14+ required; Apple silicon and Intel Macs are both supported."
-            data-zh="<strong>安装。</strong>到 <a href='https://github.com/turinglambdaai/booklight/releases/latest'>Releases</a> 页下载最新 dmg。把 Booklight 拖进「应用程序」。启动。需要 macOS 14+；Apple 芯片与 Intel 芯片都支持。">
+        <li data-en="<strong>Install.</strong> Grab the latest dmg from the <a href='https://github.com/turlamai/booklight/releases/latest'>Releases</a> page. Drag Booklight into Applications. Launch it. macOS 14+ required; Apple silicon and Intel Macs are both supported."
+            data-zh="<strong>安装。</strong>到 <a href='https://github.com/turlamai/booklight/releases/latest'>Releases</a> 页下载最新 dmg。把 Booklight 拖进「应用程序」。启动。需要 macOS 14+；Apple 芯片与 Intel 芯片都支持。">
           <strong>Install.</strong> Grab the latest dmg and drag Booklight into Applications.
         </li>
         <li data-en="<strong>Open a PDF.</strong> Click <em>Open PDF</em> (or press <kbd>⌘O</kbd>) and pick any PDF. It opens in a tab. The left sidebar shows recents, thumbnails and the outline; your page and scroll position are remembered for next time."
@@ -212,10 +212,9 @@ var _hmt = _hmt || [];
           <strong>Summarize.</strong> Summarize tab, pick scope, click once.
         </li>
       </ol>
-      <img class="manual-shot" src="assets/hero-light.png" alt="Booklight reading view on macOS"
-           data-alt-en="Booklight reading view on macOS: sidebar, document, AI panel"
-           data-alt-zh="Booklight 阅读界面（macOS）：左侧栏、文档与 AI 面板" />
-      <p class="manual-hint" data-en="The screenshot is the real macOS build." data-zh="截图为真实的 macOS 版本。">截图为真实的 macOS 版本。</p>
+      <p class="manual-hint"
+           data-en="Expected result: the document remains linked to its original location; notes and annotations should remain available after you reopen the document. If saving fails, use the recovery actions described in the user guide before closing."
+           data-zh="预期结果：文档仍引用原文件位置；关闭并重新打开后，笔记与批注应继续可见。若保存失败，关闭前请按用户指南说明使用恢复操作。">Expected result: reopen the file and confirm that annotations persist.</p>
     </section>
 
     <!-- =================== Reading =================== -->
@@ -343,7 +342,7 @@ var _hmt = _hmt || [];
 <footer>
   <div class="container foot-inner">
     <span>© 2026 TuringLambdaAI · Booklight is free software under AGPL-3.0</span>
-    <span><a href="index.html" data-en="Home" data-zh="首页">首页</a> · <a href="https://github.com/turinglambdaai/booklight" target="_blank" rel="noopener">GitHub</a></span>
+    <span><a href="index.html" data-en="Home" data-zh="首页">首页</a> · <a href="https://github.com/turlamai/booklight" target="_blank" rel="noopener">GitHub</a></span>
   </div>
 </footer>
 
