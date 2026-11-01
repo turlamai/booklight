@@ -162,6 +162,12 @@ void MainWindow::LoadEpubBook(std::shared_ptr<EpubBook> book) {
     std::string failure;
     rivet_app::EpubView view{};
     std::vector<std::pair<int, std::wstring>> sections;
+    // Worker threads never mutate EpubBook: the selected tab and its search
+    // cache are read on the UI thread while other EPUBs are still loading.
+    std::map<int, std::wstring> loaded_text;
+    std::string loaded_annotations;
+    bool annotations_loaded = false;
+    bool recovery_pending = false;
     try {
       rivet_app::API api(*backend);
       view = api.epub_open(path_utf8).get();
@@ -171,16 +177,15 @@ void MainWindow::LoadEpubBook(std::shared_ptr<EpubBook> book) {
         // sanitized UTF-8 chapter body; widen for NavigateToString
         sections.emplace_back(
             i, to_wide(std::string(body_bytes.begin(), body_bytes.end())));
-        if (book->text_cache.find(i) == book->text_cache.end()) {
-          book->text_cache[i] = to_wide(api.epub_chapter_text(path_utf8, i).get());
-        }
+        loaded_text.emplace(
+            i, to_wide(api.epub_chapter_text(path_utf8, i).get()));
       }
       // Annotations share the PDF store (same JSON shape; page = chapter).
       try {
         auto anno_bytes = api.get_annotations(path_utf8, sidecar).get();
-        book->doc_data_bytes.assign(anno_bytes.begin(), anno_bytes.end());
-        book->annotations_pending = true;
-        book->annotations_recovered =
+        loaded_annotations.assign(anno_bytes.begin(), anno_bytes.end());
+        annotations_loaded = true;
+        recovery_pending =
             api.annotation_recovery_pending(path_utf8, sidecar).get();
       } catch (...) {
       }
@@ -188,6 +193,9 @@ void MainWindow::LoadEpubBook(std::shared_ptr<EpubBook> book) {
       failure = e.what();
     }
     dispatcher.TryEnqueue([weak, book, view, sections = std::move(sections),
+                           loaded_text = std::move(loaded_text),
+                           loaded_annotations = std::move(loaded_annotations),
+                           annotations_loaded, recovery_pending,
                            failure = std::move(failure)]() mutable {
       auto window = weak.get();
       if (!window) return;
@@ -205,6 +213,12 @@ void MainWindow::LoadEpubBook(std::shared_ptr<EpubBook> book) {
       }
       book->chapters = static_cast<int>(view.chapters);
       book->toc = std::move(view.toc);
+      // Commit the complete snapshot on the UI thread only, after confirming
+      // this book still belongs to the window (it may have closed mid-load).
+      book->text_cache = std::move(loaded_text);
+      book->doc_data_bytes = std::move(loaded_annotations);
+      book->annotations_pending = annotations_loaded;
+      book->annotations_recovered = recovery_pending;
       book->text_ready = true;
       window->NavigateToEpubController(book, sections);
       window->ApplyEpubTheme(*book);
@@ -262,7 +276,13 @@ void MainWindow::NavigateToEpubController(
                               auto const& args) {
               if (auto current = weak.get()) {
                 if (auto current_book = weak_book.lock()) {
-                  current->OnEpubWebMessage(*current_book, args);
+                  // A WebView2 callback may outlive its closed native tab.
+                  // Never let that stale book schedule state updates.
+                  if (std::find(current->epubs_.begin(),
+                                current->epubs_.end(), current_book) !=
+                      current->epubs_.end()) {
+                    current->OnEpubWebMessage(*current_book, args);
+                  }
                 }
               }
             });
