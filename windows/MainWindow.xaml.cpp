@@ -439,9 +439,23 @@ void MainWindow::Bootstrap() {
         length = ::GetEnvironmentVariableW(L"PDFGIST_OPEN", buffer, 32768);
       }
       if (length > 0 && length < 32768) {
+        // BOOKLIGHT_OPEN also accepts newline-separated original paths.
+        // Windows file names cannot contain control characters, so this
+        // preserves the single-path contract while letting native acceptance
+        // exercise multiple document tabs without simulating a file picker.
         std::wstring const launch = buffer;
-        if (has_extension(launch, L".pdf") || has_extension(launch, L".epub")) {
-          window->OpenPath(launch);
+        std::size_t start = 0;
+        while (start < launch.size()) {
+          auto const end = launch.find(L'\n', start);
+          std::wstring path = launch.substr(start, end == std::wstring::npos
+                                                      ? std::wstring::npos
+                                                      : end - start);
+          if (!path.empty() && path.back() == L'\r') path.pop_back();
+          if (has_extension(path, L".pdf") || has_extension(path, L".epub")) {
+            window->OpenPath(path);
+          }
+          if (end == std::wstring::npos) break;
+          start = end + 1;
         }
       }
     });
