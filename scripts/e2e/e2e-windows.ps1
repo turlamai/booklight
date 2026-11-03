@@ -248,10 +248,19 @@ try {
         })
         [void](Wait-Until 'recovery fixture note' { Contains-Text $window 'Recovered fixture note' })
         Select-EpubTab $bookTabs[1]
+        # The left-panel mode is per window, not per document: the recovery
+        # steps above left the Notes pane selected, so return to the Outline
+        # pane before asserting the second book's own chapter navigation.
+        [void](Wait-Until 'outline mode for the second EPUB' {
+            Invoke-NamedControl $window @('Outline','大纲')
+        })
         [void](Wait-Until 'second EPUB still has its own native chapter navigation' {
             Contains-Text $window 'First Chapter'
         })
         Select-EpubTab $bookTabs[0]
+        [void](Wait-Until 'notes mode for the first EPUB' {
+            Invoke-NamedControl $window @('Annotations','批注')
+        })
         [void](Wait-Until 'first EPUB recovery status survives tab switching' {
             (Contains-Text $window 'Recovered fixture note') -and
             ((Contains-Text $window 'Retry Save') -or (Contains-Text $window '重试保存'))
