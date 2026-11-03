@@ -35,6 +35,76 @@ std::wstring tools_stem(std::wstring const& title) {
 
 // ---- tools menu handlers -------------------------------------------------------
 
+// The PDF export retains tab identity and reports the actual write outcome.
+// A failed/canceled save must leave the source tab's dirty state intact.
+void MainWindow::SaveEditedPdf(
+    std::shared_ptr<PdfTab> const& tab,
+    std::function<void(bool)> on_complete) {
+  if (!tab || !tab->doc) {
+    if (on_complete) on_complete(false);
+    return;
+  }
+  auto const doc = tab->doc;
+  auto const title = tab->title;
+  auto const path = tab->path;
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+  std::thread([weak, dispatcher, tab, doc, title, path,
+               on_complete = std::move(on_complete)]() mutable {
+    std::string failure;
+    std::vector<std::uint8_t> data;
+    try {
+      data = doc->SaveToBytes();
+    } catch (std::exception const& e) {
+      failure = e.what();
+    } catch (...) {
+      failure = "serialize PDF";
+    }
+    dispatcher.TryEnqueue(
+        [weak, tab, doc, title, path, data = std::move(data),
+         failure = std::move(failure),
+         on_complete = std::move(on_complete)]() mutable {
+          auto window = weak.get();
+          if (!window) return;
+          bool const still_open = std::find(window->tabs_.begin(),
+                                             window->tabs_.end(), tab) !=
+                                  window->tabs_.end();
+          if (!still_open || tab->doc != doc || !failure.empty() ||
+              data.empty()) {
+            if (!failure.empty()) {
+              window->Alert(pdfgist::Trf("ui.pages.save-failed",
+                                        to_wide(failure)));
+            }
+            if (on_complete) on_complete(false);
+            return;
+          }
+          window->SaveData(
+              std::move(data), tools_stem(title) + L"-edited.pdf", L"PDF",
+              L".pdf",
+              [weak, tab, doc, on_complete = std::move(on_complete)](bool saved) {
+                auto window = weak.get();
+                if (!window) return;
+                bool const current =
+                    std::find(window->tabs_.begin(), window->tabs_.end(), tab) !=
+                        window->tabs_.end() &&
+                    tab->doc == doc;
+                if (saved && current) {
+                  tab->pdf_edits_pending = false;
+                  window->UpdateChrome();
+                }
+                if (on_complete) on_complete(saved && current);
+              },
+              path);
+        });
+  }).detach();
+}
+
+void MainWindow::ToolsSavePdf_Click(
+    winrt::Windows::Foundation::IInspectable const&,
+    mux::RoutedEventArgs const&) {
+  SaveEditedPdf(epub_active_ ? nullptr : active_pdf_);
+}
+
 void MainWindow::ToolsWatermark_Click(
     winrt::Windows::Foundation::IInspectable const&,
     mux::RoutedEventArgs const&) {
@@ -290,7 +360,9 @@ void MainWindow::ExportDocumentText() {
 void MainWindow::SaveData(std::vector<std::uint8_t> data,
                           std::wstring const& default_name,
                           std::wstring const& type_label,
-                          std::wstring const& extension) {
+                          std::wstring const& extension,
+                          std::function<void(bool)> on_complete,
+                          std::wstring const& protected_original) {
   auto picker = winrt::Windows::Storage::Pickers::FileSavePicker();
   auto const window_native = try_as<::IWindowNative>();
   if (window_native) {
@@ -309,32 +381,63 @@ void MainWindow::SaveData(std::vector<std::uint8_t> data,
   auto const dispatcher = DispatcherQueue();
   auto const weak = get_weak();
   picker.PickSaveFileAsync().Completed(
-      [weak, dispatcher, data = std::move(data)](
+      [weak, dispatcher, data = std::move(data), protected_original,
+       on_complete = std::move(on_complete)](
           winrt::Windows::Foundation::IAsyncOperation<
               winrt::Windows::Storage::StorageFile> const& sender,
-          winrt::Windows::Foundation::AsyncStatus) mutable {
+          winrt::Windows::Foundation::AsyncStatus status) mutable {
+        auto report = [weak, dispatcher, on_complete](bool saved,
+                                                      std::wstring error) {
+          dispatcher.TryEnqueue([weak, on_complete, saved,
+                                 error = std::move(error)] {
+            if (auto window = weak.get()) {
+              if (!error.empty()) {
+                window->Alert(pdfgist::Trf("ui.export.failed", error));
+              }
+              if (on_complete) on_complete(saved);
+            }
+          });
+        };
+        if (status == winrt::Windows::Foundation::AsyncStatus::Canceled) {
+          report(false, L"");
+          return;
+        }
         try {
           auto const file = sender.GetResults();
-          if (file == nullptr) return;  // cancelled (mac saveData parity)
-          winrt::Windows::Storage::FileIO::WriteBytesAsync(file, data)
-              .Completed(
-                  [weak, dispatcher](auto const&,
-                                     winrt::Windows::Foundation::AsyncStatus
-                                         status) {
-                    if (status ==
-                        winrt::Windows::Foundation::AsyncStatus::Completed) {
-                      return;
-                    }
-                    dispatcher.TryEnqueue([weak]() {
-                      if (auto window = weak.get()) {
-                        window->Alert(pdfgist::Trf("ui.export.failed",
-                                                   L"write"));
-                      }
-                    });
-                  });
+          if (file == nullptr) {
+            report(false, L"");
+            return;
+          }
+          if (!protected_original.empty()) {
+            std::error_code ec;
+            auto const source = std::filesystem::path(protected_original);
+            auto const destination = std::filesystem::path(file.Path().c_str());
+            if (std::filesystem::equivalent(source, destination, ec)) {
+              report(false, pdfgist::Tr("ui.pdf.preserve-original"));
+              return;
+            }
+          }
+          winrt::Windows::Storage::FileIO::WriteBytesAsync(file, data).Completed(
+              [report](auto const& op,
+                       winrt::Windows::Foundation::AsyncStatus write_status) {
+                if (write_status ==
+                    winrt::Windows::Foundation::AsyncStatus::Completed) {
+                  try {
+                    op.GetResults();
+                    report(true, L"");
+                    return;
+                  } catch (...) {
+                  }
+                }
+                report(false, L"write");
+              });
+        } catch (std::exception const& e) {
+          report(false, to_wide(e.what()));
         } catch (...) {
+          report(false, L"file picker");
         }
       });
 }
+
 
 }  // namespace winrt::RivetHost::implementation

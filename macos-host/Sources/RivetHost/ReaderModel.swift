@@ -200,6 +200,9 @@ final class ReaderModel: ObservableObject {
     /// AppModel prevents one document's save result from appearing in another
     /// native window.
     @Published var annotationPersistence: AnnotationPersistenceState = .saved
+    /// Page surgery is kept in memory until the user explicitly exports PDF.
+    @Published var pdfEditsPending = false
+    private var pdfEditRevision: UInt64 = 0
 
     private var annotationRevision: UInt64 = 0
 
@@ -246,6 +249,7 @@ final class ReaderModel: ObservableObject {
     /// occupied window is either showing the same file (jump to the resume
     /// page) or the caller should have opened a new window instead.
     func openPath(_ path: String, resumePage: Int? = nil) async {
+        await app?.waitForBootstrap()
         if path.lowercased().hasSuffix(".epub") {
             await openEpub(path, resumeChapter: resumePage ?? app?.recentPage(path) ?? 1)
             return
@@ -270,6 +274,8 @@ final class ReaderModel: ObservableObject {
         let tab = PDFTab(path: path, title: title, document: doc, reader: self)
         annotationRevision = 0
         annotationPersistence = .saved
+        pdfEditsPending = false
+        pdfEditRevision = 0
         tab.resumePage = max(resumePage ?? app?.recentPage(path) ?? 1, 1)
         let surface = app?.readingSurface() ?? "light"
         tab.applyCanvasSurface(surface)
@@ -279,12 +285,13 @@ final class ReaderModel: ObservableObject {
         sidebarMode = 0
         loadDocData(tab)
         noteActivity(tab, immediate: true)
-        app?.importOpenedBook(path: path, doc: doc)
+        // Keep the source document in place; do not register it in a shelf.
     }
 
     // MARK: EPUB (one book per window)
 
     func openEpub(_ path: String, resumeChapter: Int = 1) async {
+        await app?.waitForBootstrap()
         if let existing = epub, existing.path == path {
             epubActive = true
             if resumeChapter > 1 { existing.goToChapter(resumeChapter) }
@@ -302,6 +309,8 @@ final class ReaderModel: ObservableObject {
         let tab = EpubTab(path: path, title: title, view: view, reader: self)
         annotationRevision = 0
         annotationPersistence = .saved
+        pdfEditsPending = false
+        pdfEditRevision = 0
         // Persisted typography: the stored scale rides in until the page
         // finishes loading (didFinish pushes it into the CSS variable).
         tab.fontScale = Double(app?.settings.reading_font_scale_permille ?? 1000) / 1000.0
@@ -316,7 +325,7 @@ final class ReaderModel: ObservableObject {
             tab.currentPage = resumeChapter
         }
         noteEpubActivity(tab, immediate: true)
-        app?.importOpenedEpub(path: path)
+        // Keep the source EPUB in place; no import or cover-cache write.
     }
 
     func noteEpubChapter(_ tab: EpubTab) {
@@ -535,7 +544,7 @@ final class ReaderModel: ObservableObject {
         let handle: (NSApplication.ModalResponse) -> Void = { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
             do {
-                try data.write(to: url)
+                try data.write(to: url, options: .atomic)
             } catch {
                 self?.alert(L10n.t("ui.export.failed", error.localizedDescription))
             }
@@ -622,6 +631,33 @@ final class ReaderModel: ObservableObject {
         tab.pageCount = newDoc.pageCount
         tab.goToPage(1)
         tab.refreshBookmarkFlag()
+        pdfEditRevision &+= 1
+        pdfEditsPending = true
+    }
+
+    /// Export the CURRENT in-memory PDF rather than rereading the original
+    /// path. The save panel makes the destination explicit; cancelled/failed
+    /// exports leave the edited state marked as unsaved.
+    func exportEditedPdf() {
+        Task { [weak self] in
+            _ = await self?.exportEditedPdfForClose(in: nil)
+        }
+    }
+
+    /// The close/quit guards await the user's destination choice. A canceled
+    /// export, disk error or a newer edit keeps the original window dirty.
+    func exportEditedPdfForClose(in window: NSWindow?) async -> Bool {
+        guard let tab = pdf, let data = tab.document?.dataRepresentation() else {
+            alert(L10n.t("ui.pages.save-failed", "unable to serialize PDF"))
+            return false
+        }
+        let name = URL(fileURLWithPath: tab.path)
+            .deletingPathExtension().lastPathComponent + "-edited.pdf"
+        let revision = pdfEditRevision
+        let saved = await saveEditResult(data, defaultName: name, in: window)
+        guard saved, revision == pdfEditRevision else { return false }
+        pdfEditsPending = false
+        return true
     }
 
     private func extractName(_ title: String) -> String {
@@ -630,16 +666,45 @@ final class ReaderModel: ObservableObject {
         return stem + L10n.t("ui.pages.extract-suffix") + ".pdf"
     }
 
-    func saveEditResult(_ data: Data, defaultName: String) async {
+    @discardableResult
+    func saveEditResult(_ data: Data, defaultName: String,
+                        in ownerWindow: NSWindow? = nil) async -> Bool {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = defaultName
-        let response = await panel.beginSheetModal(for: NSApp.mainWindow!)
-        guard response == .OK, let url = panel.url else { return }
+        let response: NSApplication.ModalResponse
+        if let window = ownerWindow ?? NSApp.keyWindow ?? NSApp.mainWindow {
+            response = await panel.beginSheetModal(for: window)
+        } else {
+            response = panel.runModal()
+        }
+        guard response == .OK, let url = panel.url else { return false }
+        // Never overwrite an opened original, even via a symbolic or hard link.
+        if let sourcePath = pdf?.path {
+            let source = URL(fileURLWithPath: sourcePath)
+            if source.resolvingSymlinksInPath().standardizedFileURL
+                == url.resolvingSymlinksInPath().standardizedFileURL {
+                alert(L10n.t("ui.pdf.preserve-original"))
+                return false
+            }
+            let manager = FileManager.default
+            if let original = try? manager.attributesOfItem(atPath: source.path),
+               let destination = try? manager.attributesOfItem(atPath: url.path),
+               let aDevice = original[.systemNumber] as? NSNumber,
+               let bDevice = destination[.systemNumber] as? NSNumber,
+               let aInode = original[.systemFileNumber] as? NSNumber,
+               let bInode = destination[.systemFileNumber] as? NSNumber,
+               aDevice == bDevice && aInode == bInode {
+                alert(L10n.t("ui.pdf.preserve-original"))
+                return false
+            }
+        }
         do {
-            try data.write(to: url)
+            try data.write(to: url, options: .atomic)
+            return true
         } catch {
             alert(L10n.t("ui.pages.save-failed", error.localizedDescription))
+            return false
         }
     }
 

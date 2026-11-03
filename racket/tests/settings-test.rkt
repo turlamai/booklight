@@ -15,6 +15,18 @@
 
 (define temp-root (make-temporary-file "pdfgist-settings-~a" 'directory))
 
+;; Existing PDFGist preferences and annotations stay in their original
+;; directory when no Booklight profile is present. No copy is created.
+(define preferred-root (build-path temp-root "site.jrtx.booklight"))
+(define legacy-root (build-path temp-root "site.jrtx.pdfgist"))
+(check-equal? (resolve-config-dir preferred-root) preferred-root)
+(make-directory legacy-root)
+(check-equal? (resolve-config-dir preferred-root) legacy-root)
+(check-false (directory-exists? preferred-root))
+(make-directory preferred-root)
+(check-equal? (resolve-config-dir preferred-root) preferred-root)
+
+
 (dynamic-wind
  void
  (lambda ()
@@ -30,7 +42,7 @@
      (check-equal? (settings-target-language defaults) "中文")
      (check-equal? (settings-recent-files defaults) '())
      (check-equal? (settings-view-mode defaults) "single")
-     (check-false (settings-annotation-sidecar defaults))
+     (check-true (settings-annotation-sidecar defaults))
      (check-equal? (settings-reading-theme defaults) "system")
      (check-equal? (settings-reading-font-scale defaults) 1.0)
 
@@ -51,7 +63,7 @@
         "  \"target_language\": \"中文\",\n"
         "  \"recent_files\": [],\n"
         "  \"view_mode\": \"single\",\n"
-        "  \"annotation_sidecar\": false,\n"
+        "  \"annotation_sidecar\": true,\n"
         "  \"reading_theme\": \"system\",\n"
         "  \"reading_font_scale\": 1.0"
         "\n}")))
@@ -109,6 +121,11 @@
      (check-equal? (provider-config-name (settings-provider parsed)) "deepseek")
      (check-equal? (provider-config-model (settings-provider parsed)) "kept-model")
      (check-equal? (settings-recent-files parsed) '())
+     ;; A *missing settings file* gets a sidecar default. A legacy file
+     ;; lacking this key must keep its pre-sidecar central annotation store.
+     (check-false (settings-annotation-sidecar parsed))
+     (check-false (settings-annotation-sidecar
+                   (storage->settings (hasheq 'annotation_sidecar #f))))
      (check-equal? (settings-reading-theme parsed) "system")
      (check-equal? (settings-reading-font-scale parsed) 1.0)
      (check-exn exn:fail? (lambda () (storage->settings "not-an-object")))

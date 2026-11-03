@@ -52,7 +52,7 @@ raco rivet acceptance --json # 当前平台的打包产品验收
 
 ## 契约（不要破坏）
 
-- **数据路径与格式与 v1 完全一致**（drop-in 迁移）：settings.json / annotations/<fnv1a64(path)>.json 或 sidecar <file>.booklight.json，目录 macOS ~/Library/Application Support/site.jrtx.booklight 等
+- **文件优先数据契约**：打开原路径；新安装默认写 <file>.booklight.json 批注 sidecar，旧安装尊重已有的 central/sidecar 选择；settings.json 仅保存必要偏好与最近文件；不会创建 library.json/covers 或自动复制旧配置树。详见 shared/spec/DATA-FORMAT.md
 - **i18n 单源**：`shared/i18n/{zh,en}.json`，平台副本必须逐字节一致；zh 为默认
 - **RPC 面**：`app/backend.rkt` 的 define-rpc 是宿主唯一数据通道；改签名 = 各端宿主 + 生成客户端同步改
 - **宿主只做渲染与交互**：业务一律走 RPC；定时器/调度/HTTP/存储/PDF 手术都在 Racket 后端
@@ -75,18 +75,15 @@ raco rivet acceptance --json # 当前平台的打包产品验收
 └── scripts/            gen-swift-strings / gen-win-strings / gen-linux-strings（i18n → 各宿主）、installer art
 ```
 
-## 组合定位（Portfolio placement）
+## 产品优先级与交付
 
-- 当前决策（2026-10-v2）：免费阅读器 + 研究工作台 Pro 买断。具体价格、免费/付费边界和开卖门禁以本仓 [PRICING.md](PRICING.md) 为唯一权威；旧版收费候选与早鸟方案已被替代。
-- 组合归属：[PORTFOLIO](https://github.com/turlamai/turlamai.github.io/blob/master/PORTFOLIO.md)。当前全部产品开发中、没有实际用户；目标定价不表示已经开卖，不因此立即给开发版加收费墙。
-- 免费产品不接商业激活；付费层先实现可验证价值，再接 Commerce/Permit。优先完成本仓既有产品审查 issue；不修改现行源码 LICENSE。
-
-## 产品交付与下一步（2026-10-23）
-
-- 家族[交付标准](https://github.com/turlamai/turlamai.github.io/blob/master/docs/PRODUCT-STANDARD.md)与[组合策略](https://github.com/turlamai/turlamai.github.io/blob/master/PORTFOLIO.md)是共用政策；本仓具体行为以 `README.md` 为准，不复制五库依赖图。
-- 当前执行入口：[产品审查 issue](https://github.com/turlamai/booklight/issues/20)。先验证批注/页编辑的保存、重开、导出和坏文件恢复，以及 AI 发送范围/取消/密钥存储。数据可迁移与原件保护先于移动端扩张。
-- 开工先检查干净工作树与远端，以 fast-forward-only 更新并记录 SHA；共享文件一次一个写入者，保留其他 checkout 的未提交工作。
-- 每次只完成一个可验收切片，记录 owned files、依赖 pin、命令/平台/产物证据和回滚。已实现、已发布、实机验收分别陈述；不修改 requirements 或复用旧证据来制造通过。
+- **P0**：PDF/EPUB 在原位打开；Win/macOS/Linux 原生欢迎页、拖放、最近文件、多文档、关闭/重开。
+- **P0**：批注保存/重试/恢复、PDF 轻编辑与明确导出，错误时不覆写原件。对只读文件和不存在路径给出真实错误。
+- **P1**：AI 发送范围可预览/取消，密钥安全、无隐式网络上传。
+- **P1**：所有平台真实打包验收；测试和文档与 file-first 设计一致。
+- **不做**：书库/收藏集/封面管理、阅读时长/目标/连读统计、独立研究工作台 Pro 与商业收费墙。
+- 旧 `library-*` RPC 只为生成客户端临时兼容，不能写数据；新的 schema 迁移应在三端客户端同步完成并经正式验收后移除。旧 `library.json` 与用户文件不可自动删除。
+- [Issue #20](https://github.com/turlamai/booklight/issues/20) 继续承载批注与 AI 的保存/隐私质量问题；此 PR 的方向与旧“书架保留”决策冲突时，以 2026-10-29 文件优先决策为准。
 
 ## Documentation languages
 

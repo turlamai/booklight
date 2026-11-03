@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Booklight — 跨平台书架与阅读器</title>
+<title>Booklight — 专注文件的 PDF / EPUB 阅读与轻编辑</title>
 <meta name="description" content="本地优先的 AI PDF 阅读器：划词翻译、段落对照、一键总结、与文档对话。兼容任意 OpenAI 协议端点（GLM Coding、Kimi Code、DeepSeek、Qwen、Ollama…），API Key 只存本机。开源，AGPL-3.0。" />
 <link rel="icon" type="image/png" href="assets/favicon.png" />
 <style>
@@ -196,9 +196,10 @@ html:lang(en) .reader-zh,html:lang(zh) .reader-en{display:none!important}@media(
 
 <header class="hero container">
   <div class="hero-badge" data-en="Open source · AGPL-3.0 · macOS 14+ · Windows 10+ · Linux" data-zh="开源 · AGPL-3.0 · macOS 14+ · Windows 10+ · Linux">开源 · AGPL-3.0 · macOS 14+ · Windows 10+ · Linux</div>
-  <h1 data-en='A calm bookshelf, <em>for every desktop</em>' data-zh='把安静的书架，带给<em>每个桌面</em>'>把安静的书架，带给<em>每个桌面</em></h1>
-<p class="reader-en product-availability" lang="en">Development preview. Existing reading, annotation, light editing and single-document BYOK features remain free. No research Pro checkout is open.</p><p class="reader-zh product-availability" lang="zh">开发预览。已有阅读、批注、轻量编辑和单文档 BYOK 功能保持免费；研究 Pro 尚未开售。</p>
-  <p class="sub" data-en="Launch into your shelf — covers, collections, continue-reading. PDF and EPUB reading with selection translation, paragraph-aligned bilingual reading, one-click summaries and document chat, streamed from any OpenAI-compatible endpoint you choose. Your books stay your files; your key never leaves your machine." data-zh="启动即书架——封面、收藏集、续读。PDF 与 EPUB 沉浸阅读，划词翻译、段落对照精读、一键总结、与文档对话——流式输出，接你选择的任意 OpenAI 协议端点。书永远是你的文件，API Key 只存本机。">启动即书架——封面、收藏集、续读。PDF 与 EPUB 沉浸阅读，划词翻译、段落对照精读、一键总结、与文档对话——流式输出，接你选择的任意 OpenAI 协议端点。书永远是你的文件，API Key 只存本机。</p>
+  <h1 data-en='Open a file. <em>Stay with the words.</em>' data-zh='打开文件，<em>专注阅读。</em>'>打开文件，<em>专注阅读。</em></h1>
+<p class="reader-en product-availability" lang="en">Development preview. Existing reading, annotation, light editing and single-document BYOK features remain free. No paid Booklight edition is planned for this refactor.</p><p class="reader-zh product-availability" lang="zh">开发预览。已有阅读、批注、轻量编辑和单文档 BYOK 功能保持免费；本次重构不包含付费版。</p>
+  <p class="sub" data-en="Your PDFs and EPUBs stay where they belong. Open a file, read beautifully, annotate and edit with care. No bookshelf database, copied books, reading timer, goals or streaks. Optional AI uses your chosen provider."
+  data-zh="PDF / EPUB 文件留在原来的位置。打开即阅读，可靠批注，需要时轻编辑；没有书库数据库、文件副本、阅读时长、目标或打卡。AI 可选，并由你选择服务商。">PDF / EPUB 文件留在原来的位置。打开即阅读，可靠批注，需要时轻编辑；没有书库数据库、文件副本、阅读时长、目标或打卡。AI 可选，并由你选择服务商。</p>
   <div class="hero-actions">
     <a class="btn btn-primary" href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="macos-arm64.dmg" data-en="Download for macOS" data-zh="下载 macOS 版">下载 macOS 版</a>
     <a class="btn btn-ghost" href="https://github.com/turlamai/booklight" target="_blank" rel="noopener" data-en="View on GitHub" data-zh="GitHub 源码">GitHub 源码</a>
@@ -337,7 +338,22 @@ html:lang(en) .reader-zh,html:lang(zh) .reader-en{display:none!important}@media(
 </section>
 
 <section id="start-here" class="product-start" aria-label="Get started / 开始使用">
-<h2 class="reader-en " lang="en">Start with one useful session.</h2><h2 class="reader-zh " lang="zh">从一次有效使用开始。</h2><p class="reader-en start-status" lang="en">Existing reading, annotation, light editing and single-document BYOK features remain free. No research Pro checkout is open.</p><p class="reader-zh start-status" lang="zh">已有阅读、批注、轻量编辑和单文档 BYOK 功能保持免费；研究 Pro 尚未开售。</p><p class="reader-en " lang="en">Desktop previews for macOS, Windows and Linux. Check the release for the architecture you need; mobile is not included.</p><p class="reader-zh " lang="zh">提供 macOS、Windows、Linux 桌面预览版。所需架构以发布附件为准；不包含移动端。</p><div class="product-start-grid"><article><h3 class="reader-en " lang="en">01</h3><h3 class="reader-zh " lang="zh">01</h3><p class="reader-en " lang="en">Open a copy of a small PDF or EPUB. Import references the file in place rather than making a second book copy.</p><p class="reader-zh " lang="zh">先打开一份小型 PDF 或 EPUB 副本。导入会引用原文件，不会额外复制一份书籍。</p></article><article><h3 class="reader-en " lang="en">02</h3><h3 class="reader-zh " lang="zh">02</h3><p class="reader-en " lang="en">Add an annotation, close and reopen the book, and confirm it persists before working on valuable material.</p><p class="reader-zh " lang="zh">添加批注，关闭并重新打开，确认批注保存后再处理重要材料。</p></article><article><h3 class="reader-en " lang="en">03</h3><h3 class="reader-zh " lang="zh">03</h3><p class="reader-en " lang="en">Try page editing or export only on a duplicate. Relink moved books instead of assuming the library copied them.</p><p class="reader-zh " lang="zh">页编辑或导出先在副本试用；文件移动后需重新关联，不要假定书库已复制原件。</p></article></div><p class="reader-en start-limits" lang="en">Save/reopen/export, damaged-file recovery and AI cancellation/secret storage remain release qualification work (<a href="https://github.com/turlamai/booklight/issues/20">#20</a>). A new multi-document research workbench is not delivered.</p><p class="reader-zh start-limits" lang="zh">保存、重开、导出、损坏文件恢复，以及 AI 取消和密钥存储仍需发行验收（<a href="https://github.com/turlamai/booklight/issues/20">#20</a>）。新增多文档研究工作台尚未交付。</p><div class="start-links"><a class="reader-en" lang="en" href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.md">Installation, privacy &amp; recovery</a><a class="reader-zh" lang="zh" href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.zh-CN.md">安装、隐私与恢复</a><a href="https://github.com/turlamai/booklight/issues"><span class="reader-en " lang="en">Get help</span><span class="reader-zh " lang="zh">反馈与帮助</span></a></div>
+  <h2 class="reader-en" lang="en">Open, read, edit.</h2>
+  <h2 class="reader-zh" lang="zh">打开、阅读、编辑。</h2>
+  <p class="reader-en" lang="en">Desktop previews for macOS, Windows and Linux; check the actual release assets for supported builds. No book import or managed catalog.</p>
+  <p class="reader-zh" lang="zh">提供 macOS、Windows、Linux 桌面预览版；具体以发布附件为准。无需导入书库，也没有强制编目。</p>
+  <div class="product-start-grid">
+    <article><h3>01</h3><p class="reader-en" lang="en">Open any PDF / EPUB from its original folder or drag it into the app.</p><p class="reader-zh" lang="zh">从原目录打开 PDF / EPUB，或者直接拖进应用。</p></article>
+    <article><h3>02</h3><p class="reader-en" lang="en">Read, search and annotate. Confirm a note is saved before relying on it.</p><p class="reader-zh" lang="zh">阅读、搜索、批注，重要笔记先确认已保存。</p></article>
+    <article><h3>03</h3><p class="reader-en" lang="en">Edit PDFs in a working view and export explicitly; your original must not be silently replaced.</p><p class="reader-zh" lang="zh">轻编辑 PDF，明确选择导出位置，不静默覆盖原文件。</p></article>
+  </div>
+  <p class="reader-en start-limits" lang="en">The file-first refactor is in development. Native cross-platform acceptance is required before a release claim.</p>
+  <p class="reader-zh start-limits" lang="zh">文件优先重构仍在开发中，发布前必须完成三端原生打包验收。</p>
+  <div class="start-links">
+    <a href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.md">English guide</a>
+    <a href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.zh-CN.md">中文使用指南</a>
+    <a href="https://github.com/turlamai/booklight/issues">反馈与帮助</a>
+  </div>
 </section>
 <footer>
   <div class="container foot-inner">

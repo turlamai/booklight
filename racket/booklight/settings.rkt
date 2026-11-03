@@ -31,7 +31,7 @@
 (provide current-config-dir
          config-dir-path
          settings-file-path
-         migrate-legacy-config!
+         resolve-config-dir
          pdfgist-settings
          pdfgist-settings?
          settings-provider
@@ -88,23 +88,26 @@
          (build-path xdg-config-home app-identifier)
          (build-path (find-system-path 'home-dir) ".config" app-identifier))]))
 
-(define current-config-dir (make-parameter (default-config-dir)))
+;; Prefer an existing Booklight profile. On the first launch after the
+;; old PDFGist rename, if ONLY the old profile exists, continue reading that
+;; same preferences/annotations folder in place. No directory clone or
+;; automatic change of storage mode occurs, so central notes remain visible.
+;; A user-created Booklight profile always wins over the old location.
+(define (resolve-config-dir preferred)
+  (define parent (path-only preferred))
+  (define legacy
+    (and parent (build-path parent "site.jrtx.pdfgist")))
+  (if (and legacy
+           (not (directory-exists? preferred))
+           (directory-exists? legacy))
+      legacy
+      preferred))
 
-;; The pre-booklight config dir (site.jrtx.pdfgist) holds settings,
-;; annotations and recents for the same user. When the new dir does not
-;; exist yet, copy the whole legacy dir over — one-time, non-destructive
-;; (the old dir stays as a backup; the shelf re-imports books separately).
-(define legacy-app-identifier "site.jrtx.pdfgist")
+(define current-config-dir
+  (make-parameter (resolve-config-dir (default-config-dir))))
 
-(define (migrate-legacy-config!)
-  (define new-dir (current-config-dir))
-  (if (directory-exists? new-dir)
-      (void)
-      (let ((parent (path-only new-dir)))
-        (when parent
-          (define old-dir (build-path parent legacy-app-identifier))
-          (when (directory-exists? old-dir)
-            (copy-directory/files old-dir new-dir))))))
+;; Existing files in a historical config directory remain owned by the user.
+;; Booklight never clones or deletes that directory during startup.
 
 (define (config-dir-path)
   (current-config-dir))
@@ -151,7 +154,7 @@
                     default-language
                     '()
                     "single"
-                    #f
+                    #t  ; new installs keep annotations beside their source
                     default-reading-theme
                     default-reading-font-scale))
 
@@ -254,6 +257,9 @@
    (string-or (settings-view-mode fallback)
               (hash-ref value 'view_mode #f))
    (bool-or (settings-annotation-sidecar fallback)
+            ;; Existing settings.json files with no sidecar key came from an era
+            ;; where central annotations were the default. Preserve that
+            ;; history; only truly fresh profiles default to sidecars.
             (hash-ref value 'annotation_sidecar #f))
    (let ((theme (string-or default-reading-theme
                            (hash-ref value 'reading_theme #f))))
@@ -315,9 +321,14 @@
                            (current-continuation-marks))))])
     (make-directory* (current-config-dir))
     (define data (json-value->bytes (settings->storage settings)))
-    (call-with-output-file path
-      (lambda (out) (write-bytes data out))
-      #:exists 'replace))
+    ;; Stage the complete new preferences file and atomically rename it.
+    ;; In particular, updating the last-open page must not truncate the
+    ;; provider settings or recents if the process crashes during a write.
+    (call-with-atomic-output-file
+     path
+     (lambda (out _temporary-path)
+       (write-bytes data out)
+       (flush-output out))))
   (void))
 
 ;; Read-modify-write under an in-process lock; callers sharing this module

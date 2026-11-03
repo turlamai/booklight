@@ -36,13 +36,6 @@ void save_pref(std::string const& key, std::string const& value);
 int pref_int(std::string const& key, int fallback);
 void save_pref_int(std::string const& key, int value);
 
-// Reading-time ledger, "reading" group in host.conf: live seconds per ISO
-// day ("YYYY-MM-DD"). Device-local on purpose — merging seconds across
-// devices through file sync would double-count reading time, so this group
-// is never mirrored anywhere (mac AppModel reading section parity).
-int reading_seconds(std::string const& day);
-void add_reading_seconds(std::string const& day, int seconds);
-
 // String formatting with {0} positional substitution (family i18n rule).
 std::string format_positional(std::string const& pattern,
                               std::string const& arg0);

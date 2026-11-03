@@ -84,8 +84,18 @@ class PdfDocument {
     return impl_ != nullptr && impl_->form_save(path, error);
   }
 
+  // PDFium's FPDF_LoadMemDocument BORROWS the input bytes. An edited
+  // document must retain them for its entire lifetime; callers may copy
+  // these bytes only when the user explicitly exports the changed PDF.
+  std::vector<std::uint8_t> const& memory_bytes() const {
+    return memory_bytes_;
+  }
+
  private:
   PdfDocument() = default;
+  // Declared before impl_: C++ destroys members in reverse order, so PDFium
+  // closes its document handle before the borrowed byte buffer is freed.
+  std::vector<std::uint8_t> memory_bytes_;
   std::unique_ptr<pdfium::Document> impl_;
   int page_count_{0};
   unsigned long last_error_{0};
@@ -156,6 +166,9 @@ class PdfTab {
   // (normal render + cream tray) or anything else (normal + light tray).
   void set_surface(std::string const& surface);
   void reload_document(std::shared_ptr<PdfDocument> doc);  // page edit
+  // Page edits are separate from annotation persistence; the original PDF
+  // remains unchanged until an explicit, successful Save As.
+  bool pdf_edits_pending{false};
 
   std::string selection_text();
   void clear_selection();

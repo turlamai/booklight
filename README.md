@@ -1,104 +1,48 @@
 # Booklight
 
-> A calm cross-platform bookshelf — PDF and EPUB reading with AI at your elbow.
+> Open a file. Read comfortably. Edit deliberately.
 
-**English** · [中文](README.zh-CN.md)
+**English** · [简体中文](README.zh-CN.md)
 
-[![release](https://img.shields.io/github/v/release/turlamai/booklight)](https://github.com/turlamai/booklight/releases/latest) ![platform](https://img.shields.io/badge/platform-macOS%2014%2B%20%7C%20Windows%2010%2B%20%7C%20Linux-lightgrey) ![built with](https://img.shields.io/badge/built%20with-Rivet-blue) [![CI](https://github.com/turlamai/booklight/actions/workflows/ci.yml/badge.svg)](https://github.com/turlamai/booklight/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[Releases](https://github.com/turlamai/booklight/releases) · [CI](https://github.com/turlamai/booklight/actions/workflows/ci.yml) · [License](LICENSE)
 
-Booklight focuses on local, file-first reading across desktop platforms. Open PDF and EPUB files in place, read without an intrusive interface, and use optional AI features with a provider you configure. Books are referenced in place. Reading stays local; AI requests, update checks and user-configured integrations have separate network destinations.
+Booklight is a native PDF / EPUB reader and light PDF editor for macOS, Windows and Linux. It is **not** an iBooks-style library manager. Your files stay in their original folders: there is no managed book catalog, cover library, reading-time tracking, goal, streak or database.
 
-## Start here
+## Start with a file
 
-Existing reading, annotation, light editing and single-document BYOK features remain free. No research Pro checkout is open. Desktop previews for macOS, Windows and Linux. Check the release for the architecture you need; mobile is not included.
+Open PDF / EPUB through File > Open, drag-and-drop, or the system file association. An empty window shows a simple Open action. Recent paths optionally help you return to the last page; they are not a separate book library.
 
-[Installation, first use, privacy, backup and recovery](docs/USER-GUIDE.md) · [简体中文](docs/USER-GUIDE.zh-CN.md)
+- **Read PDFs**: continuous / two-page view, zoom, thumbnails, outline, text search, print and bookmarks.
+- **Read EPUBs**: reflowed chapters, typography controls, table of contents, search and notes.
+- **Annotate**: highlights, notes and bookmarks with explicit save and failure/recovery behavior.
+- **Edit PDFs lightly**: rotate, remove, insert, extract or merge pages, fill forms and export; no silent replacement of the original.
+- **Optional AI**: translate, summarize or chat about selected document content with your own provider. AI requests may send that content to the chosen provider.
 
-## The shelf
+## Files remain yours
 
-- Launch straight into your bookshelf — covers, collections, search, reading progress
-- Books are cataloged **in place**: import references your files, it never
-  copies them; move a file and the shelf marks it missing until you relink it
-- Reading progress joins the shelf automatically; closing a book returns to it
-- The shelf file (`library.json`) is a single documented, stable file you can
-  drop into your sync drive — see [DATA-FORMAT](shared/spec/DATA-FORMAT.md)
+There is no book import step. New profiles prefer annotation sidecars next to the source; existing profiles keep their earlier annotation setting. Booklight still saves small preferences and recent paths in `settings.json`, and keeps recovery drafts if annotation writes fail. Existing old `library.json` and covers are left intact for manual backup, but no longer created or used as a collection store.
 
-## Reading
+[Data and recovery contract](shared/spec/DATA-FORMAT.md) · [English user guide](docs/USER-GUIDE.md) · [中文使用指南](docs/USER-GUIDE.zh-CN.md)
 
-- **PDF** — continuous scroll, two-page book view, zoom / fit-width,
-  thumbnails, outline, full-text search, split view, keyboard navigation
-- **EPUB** — reflowable serif typography, chapter TOC, whole-book search
-- Annotations — three-color highlights, underline, strikeout, notes and
-  bookmarks stored beside your book, ready for cloud-drive sync
-- Text-to-speech, printing, dark mode, continue-reading everywhere
+## Native architecture
 
-## AI at your elbow
+| Host | Stack |
+|---|---|
+| macOS | SwiftUI, PDFKit |
+| Windows | WinUI 3, PDFium |
+| Linux | GTK4, PDFium, WebKitGTK |
 
-- Selection translation, page / document summaries, chat grounded in the
-  page, your selection, or the document
-- Streaming everywhere; nothing arrives pre-chewed
-- Bring your own model — Zhipu GLM (incl. the GLM Coding plan endpoint),
-  DeepSeek, Moonshot Kimi, Alibaba Qwen, Doubao (Volcano Ark), SiliconFlow,
-  Ollama, or any OpenAI-compatible base URL; model lists fetched on demand
-- Your key lives in your config directory and goes straight to your provider
-
-## Light editing (deliberately small)
-
-- Page surgery in a dedicated Tools menu: rotate, insert blank, delete,
-  extract, merge — in memory, your source files untouched
-- AcroForm filling with export of the filled copy
-
-## Online updates
-
-Ed25519-signature-verified self-update (signed release manifest,
-SHA-256-checked download); checks at most once a day, installs only when
-you click through — on all three platforms. Contract:
-[UPDATE](shared/spec/UPDATE.md)
-
-## Architecture
-
-One Racket domain core (`racket/booklight/` + `app/backend.rkt`) owns all
-business logic — the shelf, AI streaming, PDF page surgery, annotation
-storage, settings — and exposes it over [Rivet](https://github.com/turlamai/rivet)'s
-typed RPC (RVT1). First-party hosts render and interact only:
-
-| Host | Stack | Directory |
-|---|---|---|
-| macOS | SwiftUI + generated client | `macos-host/` |
-| Windows | WinUI 3 (C++/WinRT) + PDFium + generated client | `windows/` |
-| Linux | GTK4 + PDFium + WebKitGTK + generated client | `linux/` |
-
-PDF page-level operations run on the domain core's own minimal PDF
-reader/writer (`racket/booklight/pdfdoc.rkt` + `pdfedit.rkt`) — no external
-PDF libraries. Where your data lives and how it syncs:
-[DATA-FORMAT](shared/spec/DATA-FORMAT.md).
-
-## Building from source
-
-Prerequisites: [Racket](https://racket-lang.org) CS 9.x with [Rivet](https://github.com/turlamai/rivet) linked,
-plus the Swift / WinRT / GTK toolchain for your platform. The Windows and
-Linux hosts render PDF through [PDFium](https://pdfium.googlesource.com/pdfium/)
-(BSD-3): the build fetches pinned, SHA-256-verified binaries at build time —
-nothing is committed to the repository.
+One Racket core communicates through [Rivet](https://github.com/turlamai/rivet) typed RPC. The old shelf RPC endpoints remain transitional non-persistent compatibility shims; this is a **refactor in progress**, not an assertion that every platform release is already rebuilt and verified.
 
 ```bash
-raco rivet doctor --json   # toolchain check
-raco rivet build           # generate clients, build backend + host
-raco rivet dev             # develop (rebuild on change)
-raco test racket/          # domain-core tests
+raco rivet doctor --json
+raco rivet schema check rivet-schema.json --json
+raco test racket/
+raco rivet build
+raco rivet acceptance --json
 ```
 
-## Roadmap
-
-- [x] Shelf — collections, covers, search, reading progress, missing-file
-      handling (all three platforms)
-- [x] Reading — PDF/EPUB, annotations, AI workflow, light page editing,
-      TTS, printing, split view, AcroForm (all three platforms)
-- [x] Reading themes — paper / night page surfaces, typography controls
-      (all three platforms)
-- [ ] Mobile — iOS / iPadOS host (Rivet's portable Swift layer) and Android
-      host (Rivet's Kotlin platform), matching the family's full-platform
-      scope
+[Product decision and acceptance plan](docs/FILE-FIRST-DESIGN.md) · [Developer guide](AGENTS.md)
 
 ## License
 

@@ -305,7 +305,7 @@
   "ui.library.progress": "Page {0} of {1}",
   "ui.library.chapter-progress": "Chapter {0} of {1}",
   "ui.shelf.delete-collection": "Delete Collection…",
-  "ui.shelf.delete-collection-confirm": "Delete the collection \u201c{0}\u201d? Books stay on your shelf \u2014 only the grouping is removed.",
+  "ui.shelf.delete-collection-confirm": "Delete the collection “{0}”? Books stay on your shelf — only the grouping is removed.",
   "ui.shelf.home": "Home",
   "ui.shelf.search": "Search",
   "ui.shelf.lib": "Library",
@@ -334,6 +334,10 @@
   "ui.watermark.apply": "Apply Watermark",
   "ui.watermark.applying": "Baking watermark…",
   "ui.export.failed": "Export failed: {0}",
-  "ui.home.recent": "Recently Added",
-  "ui.need.text": "This page has no text to export."
+  "ui.need.text": "This page has no text to export.",
+  "ui.pdf.pending-title": "Unsaved PDF edits",
+  "ui.pdf.pending-body": "This PDF has unsaved page changes. Export an edited copy before closing?",
+  "ui.pdf.save-as": "Save As…",
+  "ui.pdf.discard": "Discard Changes",
+  "ui.pdf.preserve-original": "Choose a different destination to preserve the original PDF."
 }

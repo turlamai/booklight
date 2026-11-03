@@ -347,6 +347,11 @@ inline constexpr struct WinStringEntry {
     {"ui.watermark.applying", L"正在烘焙水印…", L"Baking watermark…"},
     {"ui.export.failed", L"导出失败：{0}", L"Export failed: {0}"},
     {"ui.need.text", L"当前页没有可导出的文本。", L"This page has no text to export."},
+    {"ui.pdf.pending-title", L"PDF 修改尚未保存", L"Unsaved PDF edits"},
+    {"ui.pdf.pending-body", L"此 PDF 有尚未保存的页面修改。是否先另存一份已编辑副本？", L"This PDF has unsaved page changes. Export an edited copy before closing?"},
+    {"ui.pdf.save-as", L"另存为…", L"Save As…"},
+    {"ui.pdf.discard", L"放弃更改", L"Discard Changes"},
+    {"ui.pdf.preserve-original", L"请选择其他保存位置，以免覆盖原始 PDF。", L"Choose a different destination to preserve the original PDF."},
 };
 
 }  // namespace pdfgist

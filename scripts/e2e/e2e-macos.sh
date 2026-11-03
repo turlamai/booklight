@@ -9,6 +9,7 @@ driver="$output/macos-ax"
 home="$output/home-$$"
 mkdir -p "$output" "$home"
 [[ -n "$app" && -x "$app" && -f "$fixture" ]]
+fixture_hash_before="$(shasum -a 256 "$fixture" | awk '{print $1}')"
 racket "$repo/scripts/acceptance/seed-annotation-recovery.rkt" "$home/Library/Application Support/site.jrtx.booklight" "$fixture"
 swiftc "$repo/scripts/e2e/macos-ax.swift" -o "$driver" -framework AppKit -framework ApplicationServices
 HOME="$home" BOOKLIGHT_OPEN="$fixture" "$app" >"$output/application.log" 2>&1 &
@@ -17,6 +18,10 @@ stop_bounded() { local pid="$1"; kill -TERM "$pid" 2>/dev/null || true; for _ in
 cleanup() { local status=$?; trap - EXIT; if kill -0 "$app_pid" 2>/dev/null; then stop_bounded "$app_pid" || true; wait "$app_pid" 2>/dev/null || true; fi; exit "$status"; }
 trap cleanup EXIT
 "$driver" --pid "$app_pid" --output "$output"
+# The original EPUB remains byte-identical; no library or cover cache.
+[[ ! -e "$home/Library/Application Support/site.jrtx.booklight/library.json" ]]
+[[ ! -d "$home/Library/Application Support/site.jrtx.booklight/covers" ]]
+[[ "$fixture_hash_before" == "$(shasum -a 256 "$fixture" | awk '{print $1}')" ]]
 for _ in $(seq 1 200); do kill -0 "$app_pid" 2>/dev/null || break; sleep 0.05; done
 if kill -0 "$app_pid" 2>/dev/null; then echo "Booklight did not exit after native termination" >&2; exit 1; fi
 wait "$app_pid"

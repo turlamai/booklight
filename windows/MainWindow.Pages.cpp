@@ -192,6 +192,10 @@ void MainWindow::ReloadTabDocument(std::shared_ptr<PdfTab> tab,
     return;
   }
   tab->doc = std::move(doc);
+  tab->pdf_edits_pending = true;  // only an explicit export persists edits
+  if (auto label = tab->tab_item.Header().try_as<muxc::TextBlock>()) {
+    label.Text(tab->title + L" •");
+  }
   tab->page_count = tab->doc->PageCount();
   tab->current_page = 1;
   ClearSelection(*tab);
@@ -221,14 +225,20 @@ void MainWindow::PickPdfFile(std::function<void(std::wstring const&)> on_picked)
     }
   }
   picker.FileTypeFilter().Append(L".pdf");
+  auto const dispatcher = DispatcherQueue();
   picker.PickSingleFileAsync().Completed(
-      [on_picked = std::move(on_picked)](
+      [dispatcher, on_picked = std::move(on_picked)](
           winrt::Windows::Foundation::IAsyncOperation<
               winrt::Windows::Storage::StorageFile> const& sender,
           winrt::Windows::Foundation::AsyncStatus) {
         try {
           auto const file = sender.GetResults();
-          if (file != nullptr) on_picked(std::wstring(file.Path()));
+          if (file == nullptr) return;
+          // Never touch current tab state from a picker completion worker.
+          dispatcher.TryEnqueue(
+              [on_picked, path = std::wstring(file.Path())]() {
+                on_picked(path);
+              });
         } catch (...) {
         }
       });

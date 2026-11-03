@@ -10,6 +10,7 @@ $executable = Get-ChildItem -LiteralPath (Join-Path $repo 'dist') `
     -Filter RivetHost.exe -File -Recurse | Select-Object -First 1
 if (-not $executable) { throw 'packaged Booklight executable was not found' }
 if (-not (Test-Path -LiteralPath $fixture)) { throw 'sample EPUB fixture was not found' }
+$fixtureHashBefore = (Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash
 $appData = Join-Path $output "appdata-$PID"
 $localData = Join-Path $output "local-$PID"
 New-Item -ItemType Directory -Force -Path $output,$appData,$localData | Out-Null
@@ -110,6 +111,10 @@ try {
         throw
     }
     Save-Snapshot $window (Join-Path $output 'accessibility.json')
+    # File-first: opening cannot write library.json/covers or alter the EPUB.
+    if (Test-Path -LiteralPath (Join-Path $configDir 'library.json')) { throw 'unexpected library.json' }
+    if (Test-Path -LiteralPath (Join-Path $configDir 'covers')) { throw 'unexpected covers cache' }
+    if ($fixtureHashBefore -ne (Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash) { throw 'original EPUB was modified' }
     [ordered]@{
         platform = 'windows'
         artifact = $executable.FullName
