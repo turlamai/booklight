@@ -29,6 +29,11 @@ def text(node):
         value = node.queryText(); return value.getText(0, value.characterCount)
     except Exception: return ""
 def contains(root, fragment): return any(fragment in (node.name or "") or fragment in text(node) for node in walk(root))
+def contains_safe(root, fragment):
+    # Discarding the last document may end the whole application; a dead
+    # app means the document is gone.
+    try: return contains(root, fragment)
+    except Exception: return False
 def press(node):
     try:
         actions = node.queryAction()
@@ -105,10 +110,13 @@ def main():
         wait_for("unsaved PDF edits dialog again", lambda: contains(application, "Unsaved PDF edits") or contains(application, "PDF 修改尚未保存"))
         discard = wait_for("discard button", lambda: find_button(application, ("Discard Changes", "放弃更改")))
         press(discard)
-        wait_for("document closed after discard", lambda: not (contains(window, "Page 1 / 2") or contains(window, "第 1 / 2 页")))
+        wait_for("document closed after discard", lambda: not contains_safe(window, "Page 1 / 2") and not contains_safe(window, "第 1 / 2 页"))
         (args.output / "close-guard.json").write_text(json.dumps({"platform": "linux", "actions": ["launch:sample-guard.pdf", "activate:page-rotate", "press:Close", "assert:Unsaved PDF edits", "press:Cancel", "press:Close", "press:Discard Changes"], "assertions": ["packaged GTK4 opens the synthetic PDF", "native rotate marks in-memory page edits", "window close raises the unsaved-edits dialog", "Cancel keeps the document open", "Discard closes the document without writing the original"]}, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
-        if application is not None:
-            (args.output / "close-guard-failure.json").write_text(json.dumps(snapshot(application), ensure_ascii=False, indent=2), encoding="utf-8")
+        try:
+            if application is not None:
+                (args.output / "close-guard-failure.json").write_text(json.dumps(snapshot(application), ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
         raise
 if __name__ == "__main__": main()

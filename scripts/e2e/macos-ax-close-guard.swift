@@ -57,7 +57,9 @@ do {
     _ = try gone(application, dialogMarkers)
     _ = try gone(window, ["sample-guard"])
     try writeJSON(["platform": "macos", "actions": ["launch:sample-guard.pdf", "press:Tools", "press:Rotate Page", "press:CloseButton", "assert:Unsaved PDF edits", "press:Cancel", "press:CloseButton", "press:Discard Changes"], "assertions": ["packaged SwiftUI opens the synthetic PDF", "native rotate marks in-memory page edits", "window close raises the unsaved-edits sheet", "Cancel keeps the document open", "Discard closes the document without writing the original"]], to: output.appendingPathComponent("close-guard.json"))
-    guard let running = NSRunningApplication(processIdentifier: pid), running.terminate() else { throw DriverError.failure("native application rejected termination") }
+    if let running = NSRunningApplication(processIdentifier: pid), !running.isTerminated {
+        guard running.terminate() else { throw DriverError.failure("native application rejected termination") }
+    }
 } catch {
     if let application = diagnosticApplication, let output = diagnosticOutput { try? writeJSON(snapshot(application), to: output.appendingPathComponent("close-guard-failure.json")) }
     throw error
