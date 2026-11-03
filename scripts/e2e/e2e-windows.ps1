@@ -2,6 +2,24 @@ $ErrorActionPreference = 'Stop'
 
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+Add-Type -AssemblyName System.Drawing
+
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class NativeIconProbe {
+    [DllImport("user32.dll")]
+    public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg,
+        IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "PrivateExtractIconsW")]
+    public static extern uint PrivateExtractIcons(string fileName, int iconIndex,
+        int width, int height, IntPtr[] phicon, int[] piconid, int nIcons, int[] icons);
+    [DllImport("user32.dll")]
+    public static extern bool DestroyIcon(IntPtr hIcon);
+    public const uint WM_GETICON = 0x007F;
+    public const uint SMTO_ABORTIFHUNG = 0x0002;
+}
+"@
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $output = Join-Path $repo '.rivet\acceptance\windows'
@@ -64,6 +82,86 @@ function Invoke-NamedControl {
     return $false
 }
 
+function Get-IconPixelDigest {
+    param($Icon)
+    $bitmap = $Icon.ToBitmap()
+    try {
+        $rect = [System.Drawing.Rectangle]::new(0, 0, $bitmap.Width, $bitmap.Height)
+        $data = $bitmap.LockBits($rect,
+            [System.Drawing.Imaging.ImageLockMode]::ReadOnly,
+            [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        try {
+            $bytes = New-Object byte[] ($data.Stride * $data.Height)
+            [System.Runtime.InteropServices.Marshal]::Copy($data.Scan0, $bytes, 0, $bytes.Length)
+            $sha = [System.Security.Cryptography.SHA256]::Create()
+            try { return ([BitConverter]::ToString($sha.ComputeHash($bytes)) -replace '-', '') }
+            finally { $sha.Dispose() }
+        } finally { $bitmap.UnlockBits($data) }
+    } finally { $bitmap.Dispose() }
+}
+
+function Test-BrandedTitlebarIcon {
+    # The packaged exe embeds the project icon as RT_GROUP_ICON resource
+    # ID 1 and the WinUI host applies it through AppWindow.SetIcon, so the
+    # titlebar icon must be pixel-identical to the exe's own resource at
+    # whatever size the shell requested. A build without the resource keeps
+    # the placeholder (host fallback); this packaged acceptance must not
+    # pass in that state.
+    $hwnd = [IntPtr]$window.Current.NativeWindowHandle
+    $found = @{}
+    foreach ($kind in 1, 2, 3) {  # ICON_BIG, ICON_SMALL, ICON_SMALL2
+        $result = [IntPtr]::Zero
+        [void][NativeIconProbe]::SendMessageTimeout($hwnd,
+            [NativeIconProbe]::WM_GETICON, [IntPtr]$kind, [IntPtr]::Zero,
+            [NativeIconProbe]::SMTO_ABORTIFHUNG, 2000, [ref]$result)
+        if ($result -ne [IntPtr]::Zero) { $found[$kind] = $result }
+    }
+    if ($found.Count -eq 0) {
+        throw 'titlebar icon absent: WM_GETICON returned nothing (RT_GROUP_ICON resource ID 1 missing or AppWindow.SetIcon not applied)'
+    }
+    # Reference renderings of the exe's own group icon at the two shell
+    # sizes; the titlebar handles must reproduce one of these exactly.
+    $referenceDigests = @{}
+    foreach ($size in 16, 32) {
+        $exeIcons = New-Object 'IntPtr[]' 1
+        $ids = New-Object 'int[]' 1
+        $sizes = New-Object 'int[]' 1
+        $extracted = [NativeIconProbe]::PrivateExtractIcons(
+            $executable.FullName, 0, $size, $size, $exeIcons, $ids, 1, $sizes)
+        if ($extracted -lt 1 -or $exeIcons[0] -eq [IntPtr]::Zero) {
+            throw 'packaged exe exposes no group icon resource (resource ID 1 missing)'
+        }
+        try {
+            $icon = [System.Drawing.Icon]::FromHandle($exeIcons[0])
+            try { $referenceDigests[$size] = Get-IconPixelDigest $icon }
+            finally { $icon.Dispose() }
+        } finally {
+            [void][NativeIconProbe]::DestroyIcon($exeIcons[0])
+        }
+    }
+    foreach ($kind in $found.Keys) {
+        $icon = [System.Drawing.Icon]::FromHandle($found[$kind])
+        try {
+            $digest = Get-IconPixelDigest $icon
+            if ($referenceDigests.Values -notcontains $digest) {
+                throw "titlebar icon (WM_GETICON kind $kind) is not pixel-identical to the packaged exe group icon resource"
+            }
+            $bitmap = $icon.ToBitmap()
+            try {
+                $visible = $false
+                for ($y = 0; $y -lt $bitmap.Height -and -not $visible; $y += 2) {
+                    for ($x = 0; $x -lt $bitmap.Width -and -not $visible; $x += 2) {
+                        if ($bitmap.GetPixel($x, $y).A -gt 0) { $visible = $true }
+                    }
+                }
+                if (-not $visible) {
+                    throw 'titlebar icon rendered fully transparent (blank resource or placeholder)'
+                }
+            } finally { $bitmap.Dispose() }
+        } finally { $icon.Dispose() }
+    }
+}
+
 function Get-EpubTabs {
     param($Root)
     $condition = [System.Windows.Automation.PropertyCondition]::new(
@@ -124,6 +222,7 @@ try {
             [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
         $desktop.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition)
     }
+    Test-BrandedTitlebarIcon
     try {
         $bookTabs = Wait-Until 'two native EPUB tabs with parsed titles' {
             $found = @(Get-EpubTabs $window)
@@ -183,7 +282,7 @@ try {
         platform = 'windows'
         artifact = $executable.FullName
         actions = @('launch:two-original-epub-paths','switch:first-epub','press:Annotations','switch:second-epub','switch:first-epub')
-        assertions = @('packaged WinUI window activated','sample EPUB crossed RVT1 into the embedded backend','native accessibility tree contains The Sample Book','native accessibility tree contains First Chapter','pending recovery crosses RVT1 on reopen','native Notes pane exposes recovered status and Retry Save','recovered annotation remains visible and exportable','two distinct native EPUB tabs persist across switches','first EPUB recovery state is isolated','both source EPUB hashes remain unchanged')
+        assertions = @('packaged WinUI window activated','branded titlebar icon is pixel-identical to the packaged exe group icon resource','sample EPUB crossed RVT1 into the embedded backend','native accessibility tree contains The Sample Book','native accessibility tree contains First Chapter','pending recovery crosses RVT1 on reopen','native Notes pane exposes recovered status and Retry Save','recovered annotation remains visible and exportable','two distinct native EPUB tabs persist across switches','first EPUB recovery state is isolated','both source EPUB hashes remain unchanged')
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output 'interaction-trace.json') -Encoding utf8
 
     $pattern = $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern)
