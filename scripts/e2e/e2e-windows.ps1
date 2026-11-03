@@ -307,11 +307,14 @@ try {
     }
     try {
         [void](Wait-Until 'synthetic PDF opened' { Contains-Text $window 'sample-guard' })
-        [void](Wait-Until 'page edit toggle' {
-            Invoke-NamedControl $window @('Page edit','页编辑')
-        })
+        # The page-ops pane may already be expanded for a PDF tab; only
+        # press the (unnamed) Page edit toggle when the pane is not showing.
         [void](Wait-Until 'rotate page action' {
-            Invoke-NamedControl $window @('Rotate Page','旋转本页')
+            if (Contains-Text $window 'Rotate Page') { return $true }
+            if (-not (Contains-Text $window 'Target: page')) {
+                Invoke-NamedControl $window @('Page edit','页编辑')
+            }
+            return $false
         })
         $pattern = $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern)
         ([System.Windows.Automation.WindowPattern]$pattern).Close()
