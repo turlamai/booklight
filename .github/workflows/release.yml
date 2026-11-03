@@ -288,49 +288,68 @@ jobs:
             on {print}
           ' CHANGELOG.md > /tmp/notes.md
           head -3 /tmp/notes.md
-      - name: SHA256SUMS
+      - name: Verify and stage the exact public release
         run: |
-          cd dist
-          cat *.sha256 > SHA256SUMS
-          sha256sum --check SHA256SUMS
+          set -euo pipefail
+          (cd dist && cat *.sha256 | sed 's/ \*/  /' | LC_ALL=C sort -k2 > SHA256SUMS)
+          (cd dist && sha256sum --check SHA256SUMS)
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          v = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          prefix = f"booklight-{v}-"
+          required = {
+              prefix + suffix for suffix in (
+                  "macos-arm64.dmg", "macos-arm64.zip",
+                  "macos-x64.dmg", "macos-x64.zip",
+                  "windows-x64.msi", "windows-x64.zip",
+                  "linux-arm64.tar.gz", "linux-arm64.zip",
+                  "linux-x64.tar.gz", "linux-x64.zip",
+                  "linux-arm64.deb", "linux-amd64.deb",
+                  "linux-aarch64.AppImage", "linux-x86_64.AppImage",
+                  "1-linux-aarch64.rpm", "1-linux-x86_64.rpm",
+              )
+          }
+          rows = [line.split() for line in Path("dist/SHA256SUMS").read_text().splitlines()]
+          actual = [row[1] for row in rows if len(row) == 2]
+          if len(rows) != len(actual) or len(actual) != len(required) or set(actual) != required:
+              raise SystemExit(
+                  f"Bad public asset matrix: missing={sorted(required - set(actual))}; "
+                  f"unexpected={sorted(set(actual) - required)}"
+              )
+          for name in actual:
+              path = Path("dist") / name
+              if not path.is_file() or path.stat().st_size == 0:
+                  raise SystemExit(f"Missing or empty installer: {name}")
+          PY
+          mkdir -p publish-assets
+          while read -r _ name; do cp "dist/$name" "publish-assets/$name"; done < dist/SHA256SUMS
+          cp dist/SHA256SUMS dist/update-stable.json dist/update-manifest.json publish-assets/
+          (cd publish-assets && sha256sum --check SHA256SUMS)
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          if gh release view "${{ github.ref_name }}" -R turlamai/booklight >/dev/null 2>&1; then
-            gh release upload "${{ github.ref_name }}" dist/* --clobber -R turlamai/booklight
+          set -euo pipefail
+          VERSION="$(printf '%s' "$GITHUB_REF_NAME" | cut -c2-)"
+          if gh release view "$GITHUB_REF_NAME" -R turlamai/booklight >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --notes-file /tmp/notes.md -R turlamai/booklight
+            gh release upload "$GITHUB_REF_NAME" publish-assets/* --clobber -R turlamai/booklight
           else
-            gh release create "${{ github.ref_name }}" dist/* \
+            gh release create "$GITHUB_REF_NAME" publish-assets/* \
               -R turlamai/booklight \
-              --title "Booklight ${VERSION}" \
+              --title "Booklight $VERSION" \
               --notes-file /tmp/notes.md
           fi
-      - name: Attest build provenance
+          # Reruns must prune old sidecars, aliases, and build-only output.
+          gh release view "$GITHUB_REF_NAME" -R turlamai/booklight --json assets --jq '.assets[].name' |
+            while IFS= read -r name; do
+              if [ ! -f "publish-assets/$name" ]; then
+                gh release delete-asset "$GITHUB_REF_NAME" "$name" --yes -R turlamai/booklight
+              fi
+            done
+      - name: Attest public artifact provenance
         uses: actions/attest-build-provenance@v1
         with:
-          subject-path: dist/*
-      - name: Stable alias copies (versionless direct-download links)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          # Family rule: download buttons point at
-          # releases/latest/download/<alias>, so every release also ships
-          # versionless copies of the primary installers (dmg per macOS
-          # arch, MSI for Windows). Deliberately after the provenance
-          # attestation so dist/* there stays versioned-only.
-          mkdir -p stable-alias
-          cp "dist/booklight-${VERSION}-macos-arm64.dmg" stable-alias/booklight-macos-arm64.dmg
-          cp "dist/booklight-${VERSION}-macos-x64.dmg" stable-alias/booklight-macos-x64.dmg
-          # Linux: deb (x64/arm64), AppImage (x86_64/aarch64 naming) and
-          # the tar.gz the linux feed entry serves.
-          cp "dist/booklight-${VERSION}-linux-amd64.deb" stable-alias/booklight-linux-x64.deb
-          cp "dist/booklight-${VERSION}-linux-arm64.deb" stable-alias/booklight-linux-arm64.deb
-          cp "dist/booklight-${VERSION}-linux-x86_64.AppImage" stable-alias/booklight-linux-x64.AppImage
-          cp "dist/booklight-${VERSION}-linux-aarch64.AppImage" stable-alias/booklight-linux-arm64.AppImage
-          cp "dist/booklight-${VERSION}-linux-x64.tar.gz" stable-alias/booklight-linux-x64.tar.gz
-          cp "dist/booklight-${VERSION}-linux-arm64.tar.gz" stable-alias/booklight-linux-arm64.tar.gz
-          cp "dist/booklight-${VERSION}-windows-x64.msi" stable-alias/booklight-windows-x64.msi
-          gh release upload "${{ github.ref_name }}" stable-alias/* --clobber -R turlamai/booklight
+          subject-path: publish-assets/*
