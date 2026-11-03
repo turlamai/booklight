@@ -14,8 +14,10 @@ env:
   KEEL_PIN: d56e38f6ad89a5e85c455ac1b26acd2dfd312165
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Keep each main acceptance gate; GitHub silently replaces older pending
+  # runs that share a group. Only superseded revisions of one PR cancel.
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   windows:
