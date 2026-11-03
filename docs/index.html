@@ -381,7 +381,7 @@ html:lang(en) .reader-zh,html:lang(zh) .reader-en{display:none!important}@media(
       links.forEach(function (a) {
         a.href = page;
         if (!release || release.draft || release.prerelease ||
-            !/^v[0-9]+\\.[0-9]+\\.[0-9]+$/.test(release.tag_name)) return;
+            !/^v[0-9]+\.[0-9]+\.[0-9]+$/.test(release.tag_name)) return;
         var name = "booklight-" + release.tag_name.slice(1) + "-" + a.dataset.releaseSuffix;
         var exact = "https://github.com/turlamai/booklight/releases/download/" + release.tag_name + "/" + name;
         var asset = (release.assets || []).find(function (x) {
