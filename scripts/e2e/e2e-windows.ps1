@@ -11,7 +11,7 @@ public static class NativeIconProbe {
     [DllImport("user32.dll")]
     public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg,
         IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "PrivateExtractIconsW")]
     public static extern uint PrivateExtractIcons(string fileName, int iconIndex,
         int width, int height, IntPtr[] phicon, int[] piconid, int nIcons, int[] icons);
     [DllImport("user32.dll")]
