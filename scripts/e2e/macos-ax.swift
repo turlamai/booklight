@@ -13,18 +13,26 @@ func walk(_ element: AXUIElement) -> [AXUIElement] { [element] + children(elemen
 func contains(_ root: AXUIElement, _ fragment: String) -> Bool { walk(root).contains { node in [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute, kAXHelpAttribute].contains { stringAttribute(node, $0).contains(fragment) } } }
 func pressNamed(_ root: AXUIElement, _ names: Set<String>) -> Bool { for node in walk(root) { let values = [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute].map { stringAttribute(node, $0) }; if values.contains(where: names.contains) && AXUIElementPerformAction(node, kAXPressAction as CFString) == .success { return true } }; return false }
 func waitFor<T>(_ description: String, timeout: TimeInterval = 90, probe: () -> T?) throws -> T { let deadline = Date().addingTimeInterval(timeout); while Date() < deadline { if let value = probe() { return value }; Thread.sleep(forTimeInterval: 0.05) }; throw DriverError.failure("timed out waiting for \(description)") }
+var sheetDiagnostics = ""
 func sheetElements(_ window: AXUIElement) -> [AXUIElement] {
     // Sheets surface as AXSheet-role descendants of the window, not through
     // a dedicated window attribute.
     walk(window).filter { stringAttribute($0, kAXRoleAttribute) == "AXSheet" }
 }
 func pressSheetCancel(_ window: AXUIElement) -> Bool {
-    for sheet in sheetElements(window) {
+    var notes = ""
+    defer { sheetDiagnostics = notes }
+    let sheets = sheetElements(window)
+    notes += "sheets=\(sheets.count) "
+    for sheet in sheets {
         for node in walk(sheet) {
-            guard stringAttribute(node, kAXRoleAttribute) == "AXButton" else { continue }
+            let role = stringAttribute(node, kAXRoleAttribute)
+            guard role == "AXButton" else { continue }
             let values = [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute].map { stringAttribute(node, $0) }
-            if values.contains(where: { $0 == "Cancel" || $0 == "取消" }) &&
-                AXUIElementPerformAction(node, kAXPressAction as CFString) == .success { return true }
+            guard values.contains(where: { $0 == "Cancel" || $0 == "取消" }) else { continue }
+            let status = AXUIElementPerformAction(node, kAXPressAction as CFString)
+            notes += "press(\(role),\(values.first ?? ""))=\(status.rawValue) "
+            if status == .success { return true }
         }
     }
     return false
@@ -62,7 +70,11 @@ do {
     // on a like-named element outside the sheet, and a lost press event must
     // not read as a product failure — the dismissal probe re-presses at a
     // bounded pace while the sheet is still up.
-    _ = try waitFor("native AI send cancellation") { pressSheetCancel(window) ? true : nil }
+    _ = try waitFor("native AI send cancellation") {
+        let pressed = pressSheetCancel(window)
+        if !pressed { FileHandle.standardError.write(Data("cancel probe: \(sheetDiagnostics)\n".utf8)) }
+        return pressed ? true : nil
+    }
     _ = try waitFor("AI send review dismissal") {
         if sheetElements(window).isEmpty &&
             !contains(window, "Review what will be sent") &&
