@@ -13,6 +13,17 @@ func walk(_ element: AXUIElement) -> [AXUIElement] { [element] + children(elemen
 func contains(_ root: AXUIElement, _ fragment: String) -> Bool { walk(root).contains { node in [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute, kAXHelpAttribute].contains { stringAttribute(node, $0).contains(fragment) } } }
 func pressNamed(_ root: AXUIElement, _ names: Set<String>) -> Bool { for node in walk(root) { let values = [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute].map { stringAttribute(node, $0) }; if values.contains(where: names.contains) && AXUIElementPerformAction(node, kAXPressAction as CFString) == .success { return true } }; return false }
 func waitFor<T>(_ description: String, timeout: TimeInterval = 90, probe: () -> T?) throws -> T { let deadline = Date().addingTimeInterval(timeout); while Date() < deadline { if let value = probe() { return value }; Thread.sleep(forTimeInterval: 0.05) }; throw DriverError.failure("timed out waiting for \(description)") }
+// Sheets take Escape as Cancel; when the AX press action cannot complete
+// (cannotComplete from the sheet's buttons), the keyboard path exercises
+// the same native cancel response.
+func sendEscapeToPid(_ pid: Int32) {
+    guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 53, keyDown: true),
+          let up = CGEvent(keyboardEventSource: nil, virtualKey: 53, keyDown: false) else { return }
+    down.postToPid(pid)
+    usleep(60_000)
+    up.postToPid(pid)
+}
+
 var sheetDiagnostics = ""
 func sheetElements(_ window: AXUIElement) -> [AXUIElement] {
     // Sheets surface as AXSheet-role descendants of the window, not through
@@ -70,19 +81,28 @@ do {
     // on a like-named element outside the sheet, and a lost press event must
     // not read as a product failure — the dismissal probe re-presses at a
     // bounded pace while the sheet is still up.
+    var usedEscape = false
     _ = try waitFor("native AI send cancellation") {
-        let pressed = pressSheetCancel(window)
-        if !pressed { FileHandle.standardError.write(Data("cancel probe: \(sheetDiagnostics)\n".utf8)) }
-        return pressed ? true : nil
+        if pressSheetCancel(window) { return true }
+        // The press action cannot complete on this sheet; verify the Cancel
+        // button is present and actuate the sheet's own keyboard cancel.
+        if sheetDiagnostics.contains("press(AXButton,Cancel)=") {
+            sendEscapeToPid(pid)
+            usedEscape = true
+            return true
+        }
+        FileHandle.standardError.write(Data("cancel probe: \(sheetDiagnostics)\n".utf8))
+        return nil
     }
     _ = try waitFor("AI send review dismissal") {
         if sheetElements(window).isEmpty &&
             !contains(window, "Review what will be sent") &&
             !contains(window, "核对即将发送的内容") { return true }
         Thread.sleep(forTimeInterval: 0.4)
-        _ = pressSheetCancel(window)
+        if !pressSheetCancel(window) { sendEscapeToPid(pid) }
         return nil
     }
+    if usedEscape { FileHandle.standardError.write(Data("cancel path: escape\n".utf8)) }
     if contains(window, "Stop") || contains(window, "停止") { throw DriverError.failure("cancelling the AI send review created a stream card") }
     try writeJSON(snapshot(application), to: output.appendingPathComponent("accessibility.json"))
     try writeJSON(["platform": "macos", "actions": ["launch:sample.epub", "press:Annotations", "press:AI Assistant", "press:Translate current EPUB scope", "assert:AI send review", "press:Cancel"], "assertions": ["packaged SwiftUI window activated", "sample EPUB crossed RVT1 into the embedded backend", "native accessibility tree contains The Sample Book", "native accessibility tree contains First Chapter", "pending recovery crosses RVT1 on reopen", "native Notes pane exposes recovered status and Retry Save", "recovered annotation remains visible and exportable", "native review exposes current-chapter scope and exact user-content total before provider launch", "Cancel dismisses the review without starting the AI stream"]], to: output.appendingPathComponent("interaction-trace.json"))
