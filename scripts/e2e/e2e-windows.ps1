@@ -72,7 +72,10 @@ function Get-EpubTabs {
     $items = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
     $tabs = @()
     for ($index = 0; $index -lt $items.Count; $index++) {
-        if ($items[$index].Current.Name -like '*The Sample Book*') {
+        # A WinUI TabViewItem with a custom header TextBlock exposes an empty
+        # automation name of its own; the parsed title lives on a descendant
+        # text element. Match the tab by its subtree, not by its own name.
+        if (Contains-Text $items[$index] 'The Sample Book') {
             $tabs += $items[$index]
         }
     }
