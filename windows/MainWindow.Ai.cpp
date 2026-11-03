@@ -24,6 +24,13 @@ void MainWindow::BuildAiSidebar() {
   chat_scope_buttons_.clear();
   AiTabRow().Children().Clear();
 
+  // The toggle is icon-only; the localized name is the UIA contract the
+  // packaged acceptance and screen readers both key off (the XAML tooltip
+  // was hardcoded Chinese and duplicated this string).
+  AiToggle().AutomationProperties().Name(pdfgist::Tr("ui.toolbar.ai"));
+  AiToggle().ToolTipService().ToolTip(
+      winrt::box_value(pdfgist::Tr("ui.toolbar.ai")));
+
   char const* tabs[] = {"ui.tab.translate", "ui.tab.summarize",
                         "ui.tab.chat", "ui.tab.forms", "ui.tab.settings"};
   for (int i = 0; i < 5; ++i) {

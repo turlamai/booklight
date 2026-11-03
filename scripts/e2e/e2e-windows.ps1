@@ -108,6 +108,11 @@ try {
             (Contains-Text $window 'Export Annotations') -or (Contains-Text $window '导出批注')
         })
         [void](Wait-Until 'recovery fixture note' { Contains-Text $window 'Recovered fixture note' })
+        # The file-first host keeps the AI sidebar hidden until toggled;
+        # open it by its localized automation name before reading the pane.
+        [void](Wait-Until 'AI panel toggle' {
+            Invoke-NamedControl $window @('AI Assistant','AI 助手')
+        })
         [void](Wait-Until 'translate current EPUB scope action' {
             Invoke-NamedControl $window @('Translate Chapter','本章翻译','Translate page','本页翻译')
         })
@@ -143,7 +148,7 @@ try {
     [ordered]@{
         platform = 'windows'
         artifact = $executable.FullName
-        actions = @('launch:sample.epub','press:Annotations','press:Translate current EPUB scope','assert:AI send review','press:Cancel')
+        actions = @('launch:sample.epub','press:Annotations','press:AI Assistant','press:Translate current EPUB scope','assert:AI send review','press:Cancel')
         assertions = @('packaged WinUI window activated','sample EPUB crossed RVT1 into the embedded backend','native accessibility tree contains The Sample Book','native accessibility tree contains First Chapter','pending recovery crosses RVT1 on reopen','native Notes pane exposes recovered status and Retry Save','recovered annotation remains visible and exportable','native review exposes current-chapter scope and exact user-content total before provider launch','Cancel dismisses the review without starting the AI stream')
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output 'interaction-trace.json') -Encoding utf8
 
