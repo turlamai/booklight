@@ -4022,6 +4022,17 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_header_bar_pack_start(GTK_HEADER_BAR(header), tts_button);
   g_host.header_tts = tts_button;
 
+  // AI sidebar toggle: the sidebar starts hidden (reading canvas first),
+  // so it needs a discoverable surface — same as the mac and Windows
+  // hosts. The explicit accessible label is the packaged journey's handle.
+  auto* ai_button = gtk_button_new_from_icon_name("starred-symbolic");
+  gtk_actionable_set_action_name(GTK_ACTIONABLE(ai_button), "app.toggle-ai");
+  gtk_widget_set_tooltip_text(ai_button, Tr("ui.toolbar.ai").c_str());
+  gtk_accessible_update_property(GTK_ACCESSIBLE(ai_button),
+                                 GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                 Tr("ui.toolbar.ai").c_str(), -1);
+  gtk_header_bar_pack_start(GTK_HEADER_BAR(header), ai_button);
+
   // split view toggle
   auto* split_button = gtk_button_new_from_icon_name("view-dual-symbolic");
   gtk_widget_set_tooltip_text(split_button, Tr("ui.toolbar.split").c_str());
