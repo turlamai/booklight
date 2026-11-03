@@ -94,13 +94,20 @@ do {
         FileHandle.standardError.write(Data("cancel probe: \(sheetDiagnostics)\n".utf8))
         return nil
     }
-    _ = try waitFor("AI send review dismissal") {
-        if sheetElements(window).isEmpty &&
-            !contains(window, "Review what will be sent") &&
-            !contains(window, "核对即将发送的内容") { return true }
+    // The application logs the modal response itself; once it records the
+    // cancel the sheet is genuinely gone, and lingering AX reads come from
+    // the stale window element the driver has held since launch — re-fetch
+    // the window before judging dismissal.
+    let dismissalDeadline = Date().addingTimeInterval(30)
+    while Date() < dismissalDeadline {
+        if let fresh = (attribute(application, kAXWindowsAttribute) as? [AXUIElement])?.first,
+           !contains(fresh, "Review what will be sent") &&
+           !contains(fresh, "核对即将发送的内容") { break }
         Thread.sleep(forTimeInterval: 0.4)
-        if !pressSheetCancel(window) { sendEscapeToPid(pid) }
-        return nil
+    }
+    let finalWindow = (attribute(application, kAXWindowsAttribute) as? [AXUIElement])?.first ?? window
+    if contains(finalWindow, "Review what will be sent") || contains(finalWindow, "核对即将发送的内容") {
+        throw DriverError.failure("AI send review dismissal not observed")
     }
     if usedEscape { FileHandle.standardError.write(Data("cancel path: escape\n".utf8)) }
     if contains(window, "Stop") || contains(window, "停止") { throw DriverError.failure("cancelling the AI send review created a stream card") }
