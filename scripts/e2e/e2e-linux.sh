@@ -29,9 +29,9 @@ racket "$repo/scripts/acceptance/seed-ai-preview.rkt" "$XDG_CONFIG_HOME/site.jrt
 # a zero-width allocation, GTK never realizes it, and its whole AT-SPI
 # subtree — including the Translate page tab this journey asserts on —
 # disappears. Present a desktop wide enough for the real window instead.
-weston_ini="$XDG_CONFIG_HOME/weston.ini"
-printf '[output]\nname=headless\nmode=1600x1000\n' > "$weston_ini"
-weston --backend=headless-backend.so --config="$weston_ini" --socket="$WAYLAND_DISPLAY" --idle-time=0 --debug --log="$output/weston.log" &
+# (--width/--height work on weston 13 and 14; [output] mode= in weston.ini
+# only applies to headless outputs from weston 14.)
+weston --backend=headless-backend.so --width=1600 --height=1000 --socket="$WAYLAND_DISPLAY" --idle-time=0 --debug --log="$output/weston.log" &
 weston_pid=$!; app_pid=""; atspi_pid=""
 stop_bounded() { local pid="$1"; kill -TERM "$pid" 2>/dev/null || true; for _ in $(seq 1 200); do kill -0 "$pid" 2>/dev/null || return 0; sleep 0.05; done; kill -KILL "$pid" 2>/dev/null || true; return 1; }
 cleanup() { local status=$?; trap - EXIT; [[ -n "$app_pid" ]] && kill -0 "$app_pid" 2>/dev/null && stop_bounded "$app_pid" || true; [[ -n "$atspi_pid" ]] && kill -0 "$atspi_pid" 2>/dev/null && kill -TERM "$atspi_pid" || true; kill -TERM "$weston_pid" 2>/dev/null || true; wait "$app_pid" "$atspi_pid" "$weston_pid" 2>/dev/null || true; exit "$status"; }
