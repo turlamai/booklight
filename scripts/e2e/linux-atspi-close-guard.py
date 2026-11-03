@@ -8,6 +8,7 @@ Discard closes it, and neither path may touch the original file.
 """
 import argparse
 import json
+import subprocess
 import time
 from pathlib import Path
 
@@ -80,10 +81,18 @@ def main():
         application = wait_for("Booklight application", find_application)
         window = wait_for("Booklight frame", lambda: next((node for node in walk(application) if role(node) == "frame"), None))
         wait_for("PDF opened with page status", lambda: contains(window, "Page 1 / 2") or contains(window, "第 1 / 2 页"))
-        menu_button = wait_for("primary menu button", lambda: find_button(window, ("Menu",)))
-        press(menu_button)
-        rotate_item = wait_for("rotate page menu item", lambda: find_menu_item(application, ("Rotate Page 90°", "本页旋转 90°")))
-        press(rotate_item)
+        # Edit setup: actuate the page-rotate GAction directly. GtkMenuButton
+        # popups do not open through AT-SPI actions on headless Wayland
+        # (verified with a minimal GTK4 probe), and the menu item is only a
+        # visual shell over this exact action activation. The asserted
+        # behavior — the close guard dialog and the untouched original —
+        # remains fully native UI.
+        subprocess.run(
+            ["gdbus", "call", "--session", "--dest", "site.jrtx.booklight",
+             "--object-path", "/site/jrtx/booklight",
+             "--method", "org.gtk.Actions.Activate",
+             "page-rotate", "[]", "{}"],
+            check=True, capture_output=True, timeout=10)
         close_button = wait_for("title bar close button", lambda: find_button(window, ("Close",)))
         press(close_button)
         wait_for("unsaved PDF edits dialog", lambda: contains(application, "Unsaved PDF edits") or contains(application, "PDF 修改尚未保存"))
@@ -97,7 +106,7 @@ def main():
         discard = wait_for("discard button", lambda: find_button(application, ("Discard Changes", "放弃更改")))
         press(discard)
         wait_for("document closed after discard", lambda: not (contains(window, "Page 1 / 2") or contains(window, "第 1 / 2 页")))
-        (args.output / "close-guard.json").write_text(json.dumps({"platform": "linux", "actions": ["launch:sample-guard.pdf", "press:Menu", "press:Rotate Page 90°", "press:Close", "assert:Unsaved PDF edits", "press:Cancel", "press:Close", "press:Discard Changes"], "assertions": ["packaged GTK4 opens the synthetic PDF", "native rotate marks in-memory page edits", "window close raises the unsaved-edits dialog", "Cancel keeps the document open", "Discard closes the document without writing the original"]}, ensure_ascii=False, indent=2), encoding="utf-8")
+        (args.output / "close-guard.json").write_text(json.dumps({"platform": "linux", "actions": ["launch:sample-guard.pdf", "activate:page-rotate", "press:Close", "assert:Unsaved PDF edits", "press:Cancel", "press:Close", "press:Discard Changes"], "assertions": ["packaged GTK4 opens the synthetic PDF", "native rotate marks in-memory page edits", "window close raises the unsaved-edits dialog", "Cancel keeps the document open", "Discard closes the document without writing the original"]}, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         if application is not None:
             (args.output / "close-guard-failure.json").write_text(json.dumps(snapshot(application), ensure_ascii=False, indent=2), encoding="utf-8")
