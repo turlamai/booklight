@@ -136,6 +136,16 @@ wu::Color SelectionFill() { return wu::Color{0x50, 0xB4, 0x53, 0x09}; }
 MainWindow::MainWindow() {
   InitializeComponent();
   Title(kAppTitle);
+  // WinUI shows a generic placeholder in the title bar unless the window is
+  // handed an icon explicitly. rivet embeds the project icon in the exe as
+  // the numeric RT_GROUP_ICON resource ID 1 (rivet-cli/build.rkt), so load
+  // it from our own module; a build without the icon resource keeps the
+  // placeholder. The same narrow helper is used by the pinned rivet host.
+  if (HICON const icon =
+          ::LoadIconW(::GetModuleHandleW(nullptr), MAKEINTRESOURCEW(1))) {
+    AppWindow().SetIcon(winrt::Microsoft::UI::IconId{
+        static_cast<std::uint64_t>(reinterpret_cast<UINT_PTR>(icon))});
+  }
 
   // v1 UI is Chinese-first; en.json exists, so follow the system locale the
   // same way the mac host does (zh prefix → zh, otherwise en) — unless the
