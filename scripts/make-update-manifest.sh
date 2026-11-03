@@ -33,7 +33,7 @@ DIST="${2:?usage: make-update-manifest.sh <tag> <dist-dir> <key-der-path>}"
 KEY_PATH="${3:?usage: make-update-manifest.sh <tag> <dist-dir> <key-der-path>}"
 VERSION="${TAG#v}"
 KEY_ID="${RIVET_UPDATE_KEY_ID:-booklight-2026-10}"
-BASE_URL="${RELEASE_ASSET_BASE_URL:-https://github.com/turinglambdaai/booklight/releases/download/$TAG}"
+BASE_URL="${RELEASE_ASSET_BASE_URL:-https://github.com/turlamai/booklight/releases/download/$TAG}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 

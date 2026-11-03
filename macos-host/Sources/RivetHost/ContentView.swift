@@ -46,7 +46,10 @@ struct DocumentWindowView: View {
 /// replacing SwiftUI's lifecycle/navigation callbacks with our close guard.
 @MainActor
 private final class ReaderWindowCloseDelegate: NSObject, NSWindowDelegate {
-    weak var originalDelegate: (any NSWindowDelegate)?
+    // The NSObject runtime overrides below are nonisolated; AppKit consults
+    // an NSWindow delegate on the main thread, so reading this property from
+    // them is sound even though the class itself is MainActor-isolated.
+    nonisolated(unsafe) weak var originalDelegate: (any NSWindowDelegate)?
     weak var reader: ReaderModel?
     private var allowClose = false
 
