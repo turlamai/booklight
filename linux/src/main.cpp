@@ -91,6 +91,7 @@ struct Host {
   GtkStack* left_stack{nullptr};
   GtkWidget* left_sidebar{nullptr};
   GtkWidget* right_sidebar{nullptr};
+  GtkWidget* inner_paned{nullptr};
   GtkFlowBox* thumbs{nullptr};
   GtkListBox* outline_list{nullptr};
   GtkScrolledWindow* outline_scroll{nullptr};
@@ -3433,9 +3434,32 @@ void toggle_left_sidebar() {
   if (visible) populate_thumbs();
 }
 
+// The paned clamps its divider while the end child is hidden, so the first
+// reveal would hand the AI sidebar a zero-width allocation and GTK would
+// never realize it (its whole AT-SPI subtree disappears). Re-request the
+// sidebar's width from the paned's actual allocation once it is showing.
+static gboolean reposition_ai_paned(gpointer data) {
+  auto* paned = GTK_PANED(data);
+  GtkAllocation allocation{};
+  gtk_widget_get_allocation(GTK_WIDGET(paned), &allocation);
+  if (allocation.width > kAiSidebarWidth + 32) {
+    gtk_paned_set_position(paned, allocation.width - kAiSidebarWidth - 6);
+  }
+  return G_SOURCE_REMOVE;
+}
+
+void reveal_ai_sidebar() {
+  gtk_widget_set_visible(g_host.right_sidebar, TRUE);
+  g_idle_add(reposition_ai_paned, g_host.inner_paned);
+}
+
 void toggle_ai_sidebar() {
   bool const visible = !gtk_widget_get_visible(g_host.right_sidebar);
-  gtk_widget_set_visible(g_host.right_sidebar, visible);
+  if (visible) {
+    reveal_ai_sidebar();
+  } else {
+    gtk_widget_set_visible(g_host.right_sidebar, FALSE);
+  }
   host::save_pref_int("ai-sidebar", visible ? 1 : 0);
 }
 
@@ -4350,6 +4374,7 @@ void on_activate(GtkApplication* app, gpointer) {
 
   // panes: sidebar | notebook | AI
   auto* inner = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+  g_host.inner_paned = inner;
   gtk_paned_set_start_child(GTK_PANED(inner), notebook);
   gtk_paned_set_shrink_start_child(GTK_PANED(inner), FALSE);
   gtk_paned_set_end_child(GTK_PANED(inner), g_host.right_sidebar);
@@ -4388,8 +4413,8 @@ void on_activate(GtkApplication* app, gpointer) {
   if (host::pref_int("left-sidebar", 1) == 0) {
     gtk_widget_set_visible(left_sidebar, FALSE);
   }
-  if (host::pref_int("ai-sidebar", 0) == 0) {
-    gtk_widget_set_visible(g_host.right_sidebar, FALSE);
+  if (host::pref_int("ai-sidebar", 0) != 0) {
+    reveal_ai_sidebar();
   }
 
   // notebook events
