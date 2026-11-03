@@ -308,11 +308,23 @@ jobs:
                   "linux-x64.tar.gz", "linux-x64.zip",
                   "linux-arm64.deb", "linux-amd64.deb",
                   "linux-aarch64.AppImage", "linux-x86_64.AppImage",
-                  "1-linux-aarch64.rpm", "1-linux-x86_64.rpm",
               )
           }
           rows = [line.split() for line in Path("dist/SHA256SUMS").read_text().splitlines()]
           actual = [row[1] for row in rows if len(row) == 2]
+          # RPM release-number is a packaging revision, not app SemVer;
+          # enforce exactly one per CPU without hard-coding the revision.
+          import re
+          rpm_arches = ("aarch64", "x86_64")
+          rpm = [
+              name for name in actual
+              if re.fullmatch(re.escape(prefix) + r"[0-9]+-linux-(aarch64|x86_64)\.rpm", name)
+          ]
+          for arch in rpm_arches:
+              matching = [name for name in rpm if name.endswith(f"-linux-{arch}.rpm")]
+              if len(matching) != 1:
+                  raise SystemExit(f"Expected one RPM for {arch}, found {matching}")
+          required.update(rpm)
           if len(rows) != len(actual) or len(actual) != len(required) or set(actual) != required:
               raise SystemExit(
                   f"Bad public asset matrix: missing={sorted(required - set(actual))}; "
