@@ -13,7 +13,11 @@ func walk(_ element: AXUIElement) -> [AXUIElement] { [element] + children(elemen
 func contains(_ root: AXUIElement, _ fragment: String) -> Bool { walk(root).contains { node in [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute, kAXHelpAttribute].contains { stringAttribute(node, $0).contains(fragment) } } }
 func pressNamed(_ root: AXUIElement, _ names: Set<String>) -> Bool { for node in walk(root) { let values = [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute].map { stringAttribute(node, $0) }; if values.contains(where: names.contains) && AXUIElementPerformAction(node, kAXPressAction as CFString) == .success { return true } }; return false }
 func waitFor<T>(_ description: String, timeout: TimeInterval = 90, probe: () -> T?) throws -> T { let deadline = Date().addingTimeInterval(timeout); while Date() < deadline { if let value = probe() { return value }; Thread.sleep(forTimeInterval: 0.05) }; throw DriverError.failure("timed out waiting for \(description)") }
-func sheetElements(_ window: AXUIElement) -> [AXUIElement] { (attribute(window, "AXSheet") as? [AXUIElement]) ?? [] }
+func sheetElements(_ window: AXUIElement) -> [AXUIElement] {
+    // Sheets surface as AXSheet-role descendants of the window, not through
+    // a dedicated window attribute.
+    walk(window).filter { stringAttribute($0, kAXRoleAttribute) == "AXSheet" }
+}
 func pressSheetCancel(_ window: AXUIElement) -> Bool {
     for sheet in sheetElements(window) {
         for node in walk(sheet) {
