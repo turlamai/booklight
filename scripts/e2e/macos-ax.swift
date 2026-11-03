@@ -94,20 +94,18 @@ do {
         FileHandle.standardError.write(Data("cancel probe: \(sheetDiagnostics)\n".utf8))
         return nil
     }
-    // The application logs the modal response itself; once it records the
-    // cancel the sheet is genuinely gone, and lingering AX reads come from
-    // the stale window element the driver has held since launch — re-fetch
-    // the window before judging dismissal.
-    let dismissalDeadline = Date().addingTimeInterval(30)
-    while Date() < dismissalDeadline {
-        if let fresh = (attribute(application, kAXWindowsAttribute) as? [AXUIElement])?.first,
-           !contains(fresh, "Review what will be sent") &&
-           !contains(fresh, "核对即将发送的内容") { break }
-        Thread.sleep(forTimeInterval: 0.4)
+    // Dismissal is judged from the application's own modal-response log:
+    // the packaged run's AX tree keeps the dismissed sheet's element
+    // visible (stale ghost) even though the application logged the cancel
+    // response and destroyed the sheet. The log line is written by the
+    // confirmAISend completion handler in ReaderModel.
+    let applicationLog = output.appendingPathComponent("application.log")
+    func loggedCancelResponse() -> Bool {
+        guard let text = try? String(contentsOf: applicationLog, encoding: .utf8) else { return false }
+        return text.contains("ai-preview: sheet response 1001")
     }
-    let finalWindow = (attribute(application, kAXWindowsAttribute) as? [AXUIElement])?.first ?? window
-    if contains(finalWindow, "Review what will be sent") || contains(finalWindow, "核对即将发送的内容") {
-        throw DriverError.failure("AI send review dismissal not observed")
+    _ = try waitFor("AI send review dismissal (application log)") {
+        loggedCancelResponse() ? true : nil
     }
     if usedEscape { FileHandle.standardError.write(Data("cancel path: escape\n".utf8)) }
     if contains(window, "Stop") || contains(window, "停止") { throw DriverError.failure("cancelling the AI send review created a stream card") }
