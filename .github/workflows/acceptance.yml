@@ -13,6 +13,10 @@ env:
   RIVET_PIN: v0.12.0
   KEEL_PIN: d56e38f6ad89a5e85c455ac1b26acd2dfd312165
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows:
     name: Windows packaged WinUI acceptance
@@ -26,11 +30,22 @@ jobs:
           architecture: x64
           distribution: full
           variant: CS
-      - name: Install pinned Rivet and dependencies
-        shell: bash
+      - name: Export trusted Mozilla CA roots for Windows Racket
+        shell: pwsh
         run: |
-          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/keel.git#${KEEL_PIN}"
-          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/rivet.git#${RIVET_PIN}" crypto
+          # Racket 9.3's Windows ROOT-store reader throws X509*->C on some
+          # hosted runners. Node bundles Mozilla CA roots independently of
+          # Windows; export the roots, without disabling TLS verification.
+          $bundle = Join-Path $env:RUNNER_TEMP 'booklight-mozilla-roots.pem'
+          $js = 'const tls=require("node:tls"),fs=require("node:fs"); if(tls.rootCertificates.length<50) process.exit(2); fs.writeFileSync(process.argv[1],tls.rootCertificates.join("\n")+"\n",{flag:"wx"});'
+          node -e $js $bundle
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $bundle -PathType Leaf)) {
+            throw "Unable to export trusted CA roots; refusing insecure TLS fallback"
+          }
+          "BOOKLIGHT_CI_CA_BUNDLE=$bundle" >> $env:GITHUB_ENV
+      - name: Install pinned Rivet and dependencies with verified TLS
+        shell: pwsh
+        run: racket scripts/ci-install-windows-deps.rkt --crypto
       - name: Locate zlib for the backend FFI
         shell: pwsh
         run: |
@@ -69,8 +84,8 @@ jobs:
           variant: CS
       - name: Install pinned Rivet and dependencies
         run: |
-          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/keel.git#${KEEL_PIN}"
-          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/rivet.git#${RIVET_PIN}" crypto
+          raco pkg install --auto --no-docs "https://github.com/turlamai/keel.git#${KEEL_PIN}"
+          raco pkg install --auto --no-docs "https://github.com/turlamai/rivet.git#${RIVET_PIN}" crypto
       - name: Run executable product acceptance
         run: raco rivet acceptance --json
       - uses: actions/upload-artifact@v4
@@ -101,12 +116,12 @@ jobs:
             at-spi2-core python3-pyatspi
       - name: Install pinned Rivet and dependencies
         run: |
-          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/keel.git#${KEEL_PIN}"
-          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/rivet.git#${RIVET_PIN}" crypto
+          raco pkg install --auto --no-docs "https://github.com/turlamai/keel.git#${KEEL_PIN}"
+          raco pkg install --auto --no-docs "https://github.com/turlamai/rivet.git#${RIVET_PIN}" crypto
       - name: Remember full Racket command path
         run: echo "FULL_RACKET_BIN=$(dirname "$(command -v raco)")" >> "$GITHUB_ENV"
       - name: Set up embeddable Racket CS
-        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@v0.12.0
+        uses: turlamai/rivet/.github/actions/setup-embed-racket@v0.12.0
       - name: Run executable product acceptance
         run: PATH="$FULL_RACKET_BIN:$PATH" dbus-run-session -- raco rivet acceptance --json
       - uses: actions/upload-artifact@v4

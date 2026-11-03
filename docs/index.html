@@ -6,8 +6,6 @@
 <title>Booklight — 专注文件的 PDF / EPUB 阅读与轻编辑</title>
 <meta name="description" content="本地优先的 AI PDF 阅读器：划词翻译、段落对照、一键总结、与文档对话。兼容任意 OpenAI 协议端点（GLM Coding、Kimi Code、DeepSeek、Qwen、Ollama…），API Key 只存本机。开源，AGPL-3.0。" />
 <link rel="icon" type="image/png" href="assets/favicon.png" />
-<link rel="preload" href="assets/fonts/newsreader-latin-var.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="preload" href="assets/fonts/newsreader-latin-var-italic.woff2" as="font" type="font/woff2" crossorigin />
 <style>
 /* Self-hosted Inter (variable, latin subset) — no third-party font CDN */
 @font-face {
@@ -203,13 +201,12 @@ html:lang(en) .reader-zh,html:lang(zh) .reader-en{display:none!important}@media(
   <p class="sub" data-en="Your PDFs and EPUBs stay where they belong. Open a file, read beautifully, annotate and edit with care. No bookshelf database, copied books, reading timer, goals or streaks. Optional AI uses your chosen provider."
   data-zh="PDF / EPUB 文件留在原来的位置。打开即阅读，可靠批注，需要时轻编辑；没有书库数据库、文件副本、阅读时长、目标或打卡。AI 可选，并由你选择服务商。">PDF / EPUB 文件留在原来的位置。打开即阅读，可靠批注，需要时轻编辑；没有书库数据库、文件副本、阅读时长、目标或打卡。AI 可选，并由你选择服务商。</p>
   <div class="hero-actions">
-    <a class="btn btn-primary" href="https://github.com/turlamai/booklight/releases/latest/download/booklight-macos-arm64.dmg" data-en="Download for macOS" data-zh="下载 macOS 版">下载 macOS 版</a>
+    <a class="btn btn-primary" href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="macos-arm64.dmg" data-en="Download for macOS" data-zh="下载 macOS 版">下载 macOS 版</a>
     <a class="btn btn-ghost" href="https://github.com/turlamai/booklight" target="_blank" rel="noopener" data-en="View on GitHub" data-zh="GitHub 源码">GitHub 源码</a>
   </div>
-  <p class="hero-note" data-en="Works with GLM Coding Plan, Kimi Code, DeepSeek, Qwen, Doubao, SiliconFlow, Ollama and more" data-zh="支持 GLM Coding 套餐、Kimi Code、DeepSeek、通义千问、豆包、硅基流动、Ollama 等">支持 GLM Coding 套餐、Kimi Code、DeepSeek、通义千问、豆包、硅基流动、Ollama 等</p>
-  <div class="shot animate-on-scroll">
-    <img class="shot-light" src="assets/hero-light.png" alt="Booklight 阅读界面——段落对照翻译" />
-    <img class="shot-dark" src="assets/hero-dark.png" alt="Booklight 阅读界面（深色模式）" />
+  <p class="hero-note" data-en="Use a compatible model endpoint or local model you configure; availability and usage fees depend on your provider." data-zh="使用自行配置的兼容模型接口或本地模型；可用性与用量费用以服务商为准。">使用自行配置的兼容模型接口或本地模型。</p>
+  <div class="shot animate-on-scroll" style="padding:24px;">
+    <p data-en="Open a small PDF or EPUB, add an annotation, close the document and reopen it. Confirm the annotation remains before relying on the workflow with important files." data-zh="打开一份小型 PDF 或 EPUB，添加批注，再关闭并重新打开。确认批注仍在后，再用重要文件执行同样流程。">打开一份小型 PDF 或 EPUB，添加批注并重新打开确认保存结果。</p>
   </div>
 </header>
 
@@ -317,26 +314,26 @@ html:lang(en) .reader-zh,html:lang(zh) .reader-en{display:none!important}@media(
       <div class="dl-card">
         <h3>macOS</h3>
         <p class="fmt">Apple silicon · dmg</p>
-        <a href="https://github.com/turlamai/booklight/releases/latest/download/booklight-macos-arm64.dmg" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
+        <a href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="macos-arm64.dmg" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
       </div>
       <div class="dl-card">
         <h3>macOS (Intel)</h3>
         <p class="fmt">Intel 芯片 · dmg</p>
-        <a href="https://github.com/turlamai/booklight/releases/latest/download/booklight-macos-x64.dmg" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
+        <a href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="macos-x64.dmg" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
       </div>
       <div class="dl-card">
         <h3>Windows</h3>
         <p class="fmt">x64 · MSI 安装包</p>
-        <a href="https://github.com/turlamai/booklight/releases/latest/download/booklight-windows-x64.msi" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
+        <a href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="windows-x64.msi" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
       </div>
       <div class="dl-card">
         <h3>Linux</h3>
         <p class="fmt">x64 · deb / rpm / AppImage / tar.gz</p>
-        <a href="https://github.com/turlamai/booklight/releases/latest/download/booklight-linux-x64.AppImage" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
+        <a href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="linux-x86_64.AppImage" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
       </div>
     </div>
     <p style="text-align:center;margin-top:10px"><a href="https://github.com/turlamai/booklight/releases" target="_blank" rel="noopener" data-en="All releases" data-zh="全部版本">全部版本</a></p>
-    <p class="hero-note" style="text-align:center;margin-top:18px" data-en="All downloads ship SHA-256 checksums. Linux also comes as deb / rpm / tar.gz (arm64 builds on the release page); Windows portable zip and macOS portable zip are on the release page too. Update behavior depends on the installation channel; consult the release notes and user guide." data-zh="所有下载附 SHA-256 校验文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均支持应用内自动更新。">所有下载附 SHA-256 校验文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均支持应用内自动更新。</p>
+    <p class="hero-note" style="text-align:center;margin-top:18px" data-en="Verify published downloads using the release SHA256SUMS file. Linux also comes as deb / rpm / tar.gz (arm64 builds on the release page); Windows portable zip and macOS portable zip are on the release page too. Update behavior depends on the installation channel; consult the release notes and user guide." data-zh="请使用 Release 提供的 SHA256SUMS 校验下载文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均支持应用内自动更新。">所有下载附 SHA-256 校验文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均支持应用内自动更新。</p>
   </div>
 </section>
 
@@ -390,30 +387,45 @@ html:lang(en) .reader-zh,html:lang(zh) .reader-en{display:none!important}@media(
   }, { threshold: 0.12 });
   document.querySelectorAll(".animate-on-scroll").forEach(function (el) { io.observe(el); });
 
-  // Arch-aware direct downloads (macOS-only product): point the hero CTA at
-  // the dmg matching the visitor's chip and outline the matching card.
-  // Safari's UA never reveals the arch, so the default is Apple silicon —
-  // Chromium users get the real answer via userAgentData; Intel users can
-  // always use the second card or "All releases".
+  // Resolve exact tagged installers; keep Releases as the fallback while
+  // the API is blocked, offline, or a draft has no qualifying public assets.
   (function () {
-    var style = document.createElement("style");
-    style.textContent = ".dl-card.current{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}";
-    document.head.appendChild(style);
-    var ua = navigator.userAgent;
-    if (!/Mac|iPhone|iPad/i.test(ua)) return; // mac-only product
-    var cards = document.querySelectorAll("#download .dl-card");
-    var pick = function (arch) { return "https://github.com/turlamai/booklight/releases/latest/download/booklight-macos-" + arch + ".dmg"; };
-    var applyArch = function (arch) {
-      document.querySelector('.hero-actions a.btn-primary').setAttribute("href", pick(arch));
-      var idx = arch === "x64" ? 1 : 0;
-      if (cards[idx]) cards[idx].classList.add("current");
-    };
+    var page = "https://github.com/turlamai/booklight/releases/latest";
+    var release = null;
+    var links = document.querySelectorAll("a[data-release-suffix]");
+    function resolveLinks() {
+      links.forEach(function (a) {
+        a.href = page;
+        if (!release || release.draft || release.prerelease ||
+            !/^v[0-9]+\.[0-9]+\.[0-9]+$/.test(release.tag_name)) return;
+        var name = "booklight-" + release.tag_name.slice(1) + "-" + a.dataset.releaseSuffix;
+        var exact = "https://github.com/turlamai/booklight/releases/download/" + release.tag_name + "/" + name;
+        var asset = (release.assets || []).find(function (x) {
+          return x.name === name && x.size > 0 && x.browser_download_url === exact;
+        });
+        if (asset) a.href = exact;
+      });
+    }
+    function applyArch(arch) {
+      var hero = document.querySelector(".hero-actions a.btn-primary");
+      if (hero) { hero.dataset.releaseSuffix = "macos-" + arch + ".dmg"; }
+      document.querySelectorAll("#download .dl-card").forEach(function (card, i) {
+        card.classList.toggle("current", i === (arch === "x64" ? 1 : 0));
+      });
+      links = document.querySelectorAll("a[data-release-suffix]");
+      resolveLinks();
+    }
     applyArch("arm64");
     if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
       navigator.userAgentData.getHighEntropyValues(["architecture", "platform"]).then(function (h) {
         if (h && /Mac/i.test(h.platform || "") && h.architecture === "x86") applyArch("x64");
       }).catch(function () {});
     }
+    fetch("https://api.github.com/repos/turlamai/booklight/releases/latest",
+          {headers: {"Accept": "application/vnd.github+json"}})
+      .then(function (r) { if (!r.ok) throw new Error("release lookup"); return r.json(); })
+      .then(function (data) { release = data; resolveLinks(); })
+      .catch(function () { /* No direct asset without a verified release. */ });
   })();
 </script>
 </body>

@@ -8,6 +8,10 @@ on:
 # references this so a bump is one edit, not a grep-replace across jobs.
 env:
   RIVET_PIN: v0.12.0
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   contract:
     name: Contract preflight (release metadata + i18n)
@@ -16,6 +20,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify release version alignment (VERSION == rivet.rktd == updater)
         run: bash scripts/check-release-version.sh
+      - name: Release signing trust-root negative tests (no secrets)
+        run: python3 -m unittest discover -s scripts/tests -p 'test_release_signing.py'
       - name: Verify the WinUI i18n table matches shared/i18n
         run: node scripts/gen-win-strings.mjs --check
       - name: Verify the GTK i18n table matches shared/i18n
@@ -59,12 +65,22 @@ jobs:
           distribution: full
           variant: CS
           version: '9.3'
-      - name: Install Rivet (catalog)
-        shell: bash
+      - name: Export trusted Mozilla CA roots for Windows Racket
+        shell: pwsh
         run: |
-          # TEMP (upstream outage): see the racket-tests keel pin above.
-          raco pkg install --auto --no-docs 'https://github.com/turlamai/keel.git#d56e38f6ad89a5e85c455ac1b26acd2dfd312165'
-          raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
+          # Racket 9.3's Windows ROOT-store reader throws X509*->C on some
+          # hosted runners. Node bundles Mozilla CA roots independently of
+          # Windows; export the roots, without disabling TLS verification.
+          $bundle = Join-Path $env:RUNNER_TEMP 'booklight-mozilla-roots.pem'
+          $js = 'const tls=require("node:tls"),fs=require("node:fs"); if(tls.rootCertificates.length<50) process.exit(2); fs.writeFileSync(process.argv[1],tls.rootCertificates.join("\n")+"\n",{flag:"wx"});'
+          node -e $js $bundle
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $bundle -PathType Leaf)) {
+            throw "Unable to export trusted CA roots; refusing insecure TLS fallback"
+          }
+          "BOOKLIGHT_CI_CA_BUNDLE=$bundle" >> $env:GITHUB_ENV
+      - name: Install pinned Rivet with verified TLS
+        shell: pwsh
+        run: racket scripts/ci-install-windows-deps.rkt
       # The backend's pdf FFI (pdfdoc.rkt binds zlib) is instantiated while
       # `raco rivet build` assembles the codegen contract, so zlib1.dll must
       # be on PATH first; the same cache copy rides into the packaged stage.
@@ -105,7 +121,7 @@ jobs:
       # release.yml's copy of this step) — it ships the runtime the pinned
       # rivet expects.
       - name: Set up embeddable Racket CS
-        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@v0.12.0
+        uses: turlamai/rivet/.github/actions/setup-embed-racket@v0.12.0
       # Installed after the embeddable runtime so the catalog dependency
       # closure (cext-lib, crypto-lib, keel) resolves against the minimal
       # build — it ships no packages of its own. crypto backs the updater.
