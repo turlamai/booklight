@@ -23,7 +23,15 @@ unset DISPLAY
 mkdir -p "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
 racket "$repo/scripts/acceptance/seed-annotation-recovery.rkt" "$XDG_CONFIG_HOME/site.jrtx.booklight" "$fixture"
 racket "$repo/scripts/acceptance/seed-ai-preview.rkt" "$XDG_CONFIG_HOME/site.jrtx.booklight"
-weston --backend=headless-backend.so --socket="$WAYLAND_DISPLAY" --idle-time=0 --debug --log="$output/weston.log" &
+# Weston's default headless output is 1024x768, but the host window requests
+# 1280x860. GDK clamps the initial size to the output, so the inner paned
+# gets ~784px while its divider sits at 880px: the AI sidebar would receive
+# a zero-width allocation, GTK never realizes it, and its whole AT-SPI
+# subtree — including the Translate page tab this journey asserts on —
+# disappears. Present a desktop wide enough for the real window instead.
+weston_ini="$XDG_CONFIG_HOME/weston.ini"
+printf '[output]\nname=headless\nmode=1600x1000\n' > "$weston_ini"
+weston --backend=headless-backend.so --config="$weston_ini" --socket="$WAYLAND_DISPLAY" --idle-time=0 --debug --log="$output/weston.log" &
 weston_pid=$!; app_pid=""; atspi_pid=""
 stop_bounded() { local pid="$1"; kill -TERM "$pid" 2>/dev/null || true; for _ in $(seq 1 200); do kill -0 "$pid" 2>/dev/null || return 0; sleep 0.05; done; kill -KILL "$pid" 2>/dev/null || true; return 1; }
 cleanup() { local status=$?; trap - EXIT; [[ -n "$app_pid" ]] && kill -0 "$app_pid" 2>/dev/null && stop_bounded "$app_pid" || true; [[ -n "$atspi_pid" ]] && kill -0 "$atspi_pid" 2>/dev/null && kill -TERM "$atspi_pid" || true; kill -TERM "$weston_pid" 2>/dev/null || true; wait "$app_pid" "$atspi_pid" "$weston_pid" 2>/dev/null || true; exit "$status"; }
