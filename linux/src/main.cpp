@@ -3807,6 +3807,10 @@ void build_primary_menu() {
   g_menu_append(view, Tr("ui.menu.zoom-reset").c_str(), "app.zoom-reset");
   g_menu_append(view, Tr("ui.viewer.fit").c_str(), "app.fit-width");
   g_menu_append(view, Tr("ui.toolbar.split").c_str(), "app.split-toggle");
+  // The AI sidebar starts hidden (reading canvas first); without a named
+  // menu entry the only way to open it is the hidden accelerator, which
+  // neither assistive technology nor the packaged journey can reach.
+  g_menu_append(view, Tr("ui.toolbar.ai").c_str(), "app.toggle-ai");
   g_menu_append_section(menu, nullptr, G_MENU_MODEL(view));
   g_object_unref(view);
   {
