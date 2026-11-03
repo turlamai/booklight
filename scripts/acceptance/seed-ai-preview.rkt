@@ -22,7 +22,7 @@
              'target_language "English"
              'recent_files '()
              'view_mode "single"
-             'annotation_sidecar #f
+             'annotation_sidecar #t
              'reading_theme "system"
              'reading_font_scale 1.0)
      out)))
