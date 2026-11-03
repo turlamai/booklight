@@ -25,10 +25,12 @@
 #include <ctime>
 #include <exception>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <type_traits>
 #include <unistd.h>
@@ -44,7 +46,6 @@
 #include "panels.hpp"
 #include "pdfview.hpp"
 #include "printing.hpp"
-#include "shelf.hpp"
 #include "tts.hpp"
 
 namespace {
@@ -117,6 +118,7 @@ struct Host {
   GtkSearchEntry* find_entry{nullptr};
   GtkLabel* find_count{nullptr};
   GtkWidget* main_stack{nullptr};
+  GtkBox* welcome_recents{nullptr};
   GtkLabel* status_label{nullptr};
   GtkLabel* page_label{nullptr};
   GtkLabel* zoom_label{nullptr};
@@ -136,7 +138,6 @@ struct Host {
   std::unique_ptr<rivet_app::API> api;
   PanelContext panel_ctx;
   std::unique_ptr<AiPanel> ai_panel;
-  std::unique_ptr<pdfgist::Shelf> shelf;
   bool shelf_visible{true};  // launch state: the shelf IS the empty state
 
   std::vector<std::unique_ptr<PdfTab>> tabs;
@@ -377,14 +378,9 @@ void save_reading_font_scale(double scale) {
 // ---------------------------------------------------------------------------
 
 void refresh_header_title() {
-  // Shelf surface (launch state): the title follows the sidebar selection
-  // (mac navigationTitle parity).
+  // The empty-window welcome is not a bookshelf or collection scope.
   if (g_host.shelf_visible) {
-    gtk_label_set_text(g_host.title_label,
-                       (g_host.shelf != nullptr
-                            ? g_host.shelf->current_title()
-                            : Tr("ui.library.title"))
-                           .c_str());
+    gtk_label_set_text(g_host.title_label, "Booklight");
     gtk_label_set_text(g_host.subtitle_label, "");
     return;
   }
@@ -403,7 +399,11 @@ void refresh_header_title() {
   }
   gtk_widget_set_visible(g_host.header_toc_menu, FALSE);
   if (tab != nullptr) {
-    gtk_label_set_text(g_host.title_label, tab->title().c_str());
+    std::string title = tab->title();
+    if (tab->pdf_edits_pending) {
+      title += " •";  // differs from the original PDF until explicit export
+    }
+    gtk_label_set_text(g_host.title_label, title.c_str());
     gtk_label_set_text(g_host.subtitle_label,
                        (std::to_string(tab->current_page()) + " / " +
                         std::to_string(tab->document()->page_count()))
@@ -537,7 +537,24 @@ void update_recents_debounced(std::string const& path, int page) {
                 static_cast<double>(std::max(ctx->pages, 1)) * 100000.0 +
             0.5);
         (void)g_host.api->update_recents_async(
-            ctx->path, ctx->page, ratio, [](rivet_app::Result<void>&&) {});
+            ctx->path, ctx->page, ratio,
+            [](rivet_app::Result<void> result) {
+              if (!result.succeeded()) return;
+              // The async completion is not on the GTK thread. Marshal
+              // access to host state/API through the native main loop.
+              host::dispatch_ui([] {
+                if (!g_host.ready || g_host.api == nullptr) return;
+                (void)g_host.api->get_recents_async(
+                    [](rivet_app::Result<std::vector<rivet_app::RecentEntry>> result) {
+                      if (!result.succeeded()) return;
+                      auto recents = std::move(result.value.value());
+                      host::dispatch_ui([recents = std::move(recents)]() mutable {
+                        g_host.recents = std::move(recents);
+                        refresh_recents_menu();
+                      });
+                    });
+              });
+            });
         return G_SOURCE_REMOVE;
       },
       ctx);
@@ -766,7 +783,6 @@ void finish_pdf_open(std::string const& path, int resume_page,
   refresh_header_title();
   // Reading-first: every successful open grows the shelf (mac
   // importOpenedBook — the upsert dedupes on the path).
-  if (g_host.shelf != nullptr) g_host.shelf->import_book(path);
 }
 
 // Modal password prompt with an in-place wrong-password retry loop (the
@@ -961,7 +977,6 @@ void open_epub_path(std::string const& path, int resume_chapter = 1) {
   refresh_header_title();
   // Reading-first: the opened EPUB lands on the shelf too (mac
   // importOpenedEpub).
-  if (g_host.shelf != nullptr) g_host.shelf->import_book(path);
 }
 
 void open_path(std::string const& path, int resume_page = 1) {
@@ -977,7 +992,10 @@ void open_path(std::string const& path, int resume_page = 1) {
   }
 }
 
-void close_tab_index(gint index) {
+void save_edited_pdf_for_tab(PdfTab* tab, std::function<void(bool)> on_complete);
+void confirm_close_dirty_pdf(PdfTab* tab, std::function<void()> proceed);
+
+void close_tab_index_unchecked(gint index) {
   if (g_host.epub_tab_index >= 0 && index == g_host.epub_tab_index) {
     auto* dying = g_host.epub;
     gtk_notebook_remove_page(g_host.notebook, index);
@@ -1017,6 +1035,29 @@ void close_tab_index(gint index) {
   }
   refresh_status();
   refresh_header_title();
+}
+
+bool pdf_tab_still_open(PdfTab const* tab) {
+  return std::any_of(g_host.tabs.begin(), g_host.tabs.end(),
+                     [tab](auto const& entry) { return entry.get() == tab; });
+}
+
+void close_tab_index(gint index) {
+  if (index >= 0 && static_cast<std::size_t>(index) < g_host.tabs.size()) {
+    PdfTab* const tab = g_host.tabs[static_cast<std::size_t>(index)].get();
+    if (tab->pdf_edits_pending) {
+      confirm_close_dirty_pdf(tab, [tab] {
+        for (gint i = 0; i < static_cast<gint>(g_host.tabs.size()); ++i) {
+          if (g_host.tabs[static_cast<std::size_t>(i)].get() == tab) {
+            close_tab_index_unchecked(i);
+            break;
+          }
+        }
+      });
+      return;
+    }
+  }
+  close_tab_index_unchecked(index);
 }
 
 void close_active_reader() {
@@ -2110,7 +2151,7 @@ void bootstrap() {
       gtk_label_set_text(g_host.status_label, "");
       g_host.ai_panel->sync_settings();
       refresh_recents_menu();
-      if (g_host.shelf != nullptr) g_host.shelf->refresh();
+      // No bookshelf to refresh; recents remain file shortcuts.
 
       // Tabs opened before the backend was ready get their stored
       // annotations now (mac loadDocData needs the API too).
@@ -2327,6 +2368,7 @@ void page_merge_pick() {
   gtk_file_filter_set_name(filter, Tr("ui.filter.pdf").c_str());
   gtk_file_filter_add_mime_type(filter, "application/pdf");
   gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(chooser), filter);
+  gtk_file_chooser_set_select_multiple(GTK_FILE_CHOOSER(chooser), TRUE);
   hook(
       chooser, "response",
       +[](GtkNativeDialog* native, int response, gpointer) {
@@ -2484,50 +2526,171 @@ std::string ascii_trim(std::string const& s) {
   return s.substr(begin, end - begin + 1);
 }
 
-// Shared typed save dialog (mac ReaderModel.saveData parity): the default
-// name is prefilled, GTK confirms overwrites, and the bytes ride the
-// closure — owned by the destroy notify, freed when the chooser dies.
+// Shared Save As dialog. This does not mutate the source PDF. A completion
+// callback allows close/quit to proceed only after a successful disk write.
+struct SaveBytesRequest {
+  rivet::Bytes data;
+  std::function<void(bool)> on_complete;
+  std::string protected_source;
+};
+
 void save_bytes_dialog(std::string const& title,
-                       std::string const& default_name, rivet::Bytes data) {
+                       std::string const& default_name, rivet::Bytes data,
+                       std::function<void(bool)> on_complete = {},
+                       std::string protected_source = {}) {
   auto* chooser = gtk_file_chooser_native_new(
       title.c_str(), g_host.window, GTK_FILE_CHOOSER_ACTION_SAVE,
       Tr("ui.dialog.save").c_str(), Tr("ui.password.cancel").c_str());
-  // No explicit overwrite toggle: the setter left the GTK headers in 4.20,
-  // and the portal chooser (every real desktop) confirms overwrites itself,
-  // which is the mac NSSavePanel behavior too.
+  // Portal file chooser confirms overwrite of existing non-source targets.
   gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(chooser),
-                                    default_name.c_str());
-  auto* payload = new rivet::Bytes(std::move(data));
-  hook(
-      chooser, "response",
-      +[](GtkNativeDialog* native, int response, gpointer user_data) {
-        auto* data = static_cast<rivet::Bytes*>(user_data);
-        if (response == GTK_RESPONSE_ACCEPT) {
-          if (GFile* file =
-                  gtk_file_chooser_get_file(GTK_FILE_CHOOSER(native));
-              file != nullptr) {
-            gchar* path = g_file_get_path(file);
-            g_object_unref(file);
-            if (path != nullptr) {
-              GError* error = nullptr;
-              g_file_set_contents(path,
-                                  reinterpret_cast<char const*>(data->data()),
-                                  static_cast<gssize>(data->size()), &error);
-              if (error != nullptr) {
-                std::string message = error->message;
-                g_error_free(error);
-                host_alert(Trf("ui.export.failed", message));
-              }
-              g_free(path);
-            }
-          }
-        }
-        g_object_unref(native);  // the destroy notify then frees the bytes
-      },
-      payload,
-      +[](gpointer p, GClosure*) { delete static_cast<rivet::Bytes*>(p); },
-      static_cast<GConnectFlags>(0));
+                                     default_name.c_str());
+  auto* request = new SaveBytesRequest{
+      std::move(data), std::move(on_complete), std::move(protected_source)};
+  hook(chooser, "response",
+       +[](GtkNativeDialog* native, int response, gpointer user_data) {
+         auto* request = static_cast<SaveBytesRequest*>(user_data);
+         bool saved = false;
+         if (response == GTK_RESPONSE_ACCEPT) {
+           if (GFile* file = gtk_file_chooser_get_file(GTK_FILE_CHOOSER(native));
+               file != nullptr) {
+             gchar* path = g_file_get_path(file);
+             g_object_unref(file);
+             if (path != nullptr) {
+               // Save As may overwrite an explicitly chosen different file;
+               // it may NEVER replace the PDF that the reader opened.
+               bool original = false;
+               if (!request->protected_source.empty()) {
+                 gchar* from = g_canonicalize_filename(
+                     request->protected_source.c_str(), nullptr);
+                 gchar* to = g_canonicalize_filename(path, nullptr);
+                 original = g_strcmp0(from, to) == 0;
+                 g_free(from);
+                 g_free(to);
+                 // Also reject symlink/hard-link aliases of the source.
+                 std::error_code ec;
+                 original = original || std::filesystem::equivalent(
+                     std::filesystem::path(path),
+                     std::filesystem::path(request->protected_source), ec);
+               }
+               if (original) {
+                 host_alert(Tr("ui.pdf.preserve-original"));
+               } else {
+                 GError* error = nullptr;
+                 saved = g_file_set_contents(
+                     path,
+                     reinterpret_cast<char const*>(request->data.data()),
+                     static_cast<gssize>(request->data.size()), &error);
+                 if (!saved) {
+                   std::string const message =
+                       error != nullptr ? error->message : "write failed";
+                   host_alert(Trf("ui.export.failed", message));
+                 }
+                 if (error != nullptr) g_error_free(error);
+               }
+               g_free(path);
+             }
+           }
+         }
+         auto completed = std::move(request->on_complete);
+         g_object_unref(native);  // frees request via closure destroy notify
+         if (completed) completed(saved);
+       },
+       request,
+       +[](gpointer p, GClosure*) { delete static_cast<SaveBytesRequest*>(p); },
+       static_cast<GConnectFlags>(0));
   gtk_native_dialog_show(GTK_NATIVE_DIALOG(chooser));
+}
+
+// Export the actual current in-memory document, not the original bytes.
+// Cancellation/failure leaves the edited tab open and visibly dirty.
+void save_edited_pdf_for_tab(PdfTab* tab, std::function<void(bool)> on_complete) {
+  if (tab == nullptr || !pdf_tab_still_open(tab)) {
+    if (on_complete) on_complete(false);
+    return;
+  }
+  auto const document = tab->document();
+  if (document == nullptr) {
+    if (on_complete) on_complete(false);
+    return;
+  }
+  rivet::Bytes data = document->memory_bytes();
+  if (data.empty()) {
+    // An unedited PDF can still be exported on an explicit Tools request.
+    gchar* raw = nullptr;
+    gsize length = 0;
+    GError* error = nullptr;
+    if (!g_file_get_contents(tab->path().c_str(), &raw, &length, &error)) {
+      std::string const message =
+          error != nullptr ? error->message : "read failed";
+      if (error != nullptr) g_error_free(error);
+      host_alert(Trf("ui.export.failed", message));
+      if (on_complete) on_complete(false);
+      return;
+    }
+    auto const* first = reinterpret_cast<std::uint8_t const*>(raw);
+    data.assign(first, first + length);
+    g_free(raw);
+  }
+  save_bytes_dialog(
+      Tr("ui.dialog.save") + " PDF", title_stem(tab->title()) + "-edited.pdf",
+      std::move(data),
+      [tab, document, on_complete = std::move(on_complete)](bool saved) {
+        bool const unchanged = pdf_tab_still_open(tab) &&
+                               tab->document() == document;
+        if (saved && unchanged) {
+          tab->pdf_edits_pending = false;
+          refresh_header_title();
+        }
+        if (on_complete) on_complete(saved && unchanged);
+      },
+      tab->path());
+}
+
+void tools_save_pdf() {
+  save_edited_pdf_for_tab(g_host.active_pdf_only(), {});
+}
+
+// Save As / Discard / Cancel also covers tab-close, window-manager close and
+// Quit. A canceled/failed export MUST NOT invoke the pending close action.
+void confirm_close_dirty_pdf(PdfTab* tab, std::function<void()> proceed) {
+  auto* dialog = gtk_dialog_new_with_buttons(
+      Tr("ui.pdf.pending-title").c_str(), g_host.window, GTK_DIALOG_MODAL,
+      Tr("ui.password.cancel").c_str(), GTK_RESPONSE_CANCEL,
+      Tr("ui.pdf.discard").c_str(), GTK_RESPONSE_REJECT,
+      Tr("ui.pdf.save-as").c_str(), GTK_RESPONSE_ACCEPT, nullptr);
+  auto* area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+  auto* message = gtk_label_new(Tr("ui.pdf.pending-body").c_str());
+  gtk_label_set_wrap(GTK_LABEL(message), TRUE);
+  gtk_widget_set_margin_top(message, 16);
+  gtk_widget_set_margin_bottom(message, 16);
+  gtk_widget_set_margin_start(message, 16);
+  gtk_widget_set_margin_end(message, 16);
+  gtk_box_append(GTK_BOX(area), message);
+  struct CloseRequest {
+    PdfTab* tab;
+    std::function<void()> proceed;
+  };
+  auto* request = new CloseRequest{tab, std::move(proceed)};
+  hook(dialog, "response",
+       +[](GtkDialog* dialog, gint response, gpointer user_data) {
+         auto* request = static_cast<CloseRequest*>(user_data);
+         PdfTab* const tab = request->tab;
+         auto proceed = request->proceed;
+         gtk_window_destroy(GTK_WINDOW(dialog));
+         if (!pdf_tab_still_open(tab)) return;
+         if (response == GTK_RESPONSE_REJECT) {
+           tab->pdf_edits_pending = false;  // explicitly discard; no writes
+           proceed();
+         } else if (response == GTK_RESPONSE_ACCEPT) {
+           save_edited_pdf_for_tab(
+               tab, [proceed = std::move(proceed)](bool saved) {
+                 if (saved) proceed();
+               });
+         }
+       }, request,
+       +[](gpointer p, GClosure*) { delete static_cast<CloseRequest*>(p); },
+       static_cast<GConnectFlags>(0));
+  gtk_window_present(GTK_WINDOW(dialog));
 }
 
 // Tools > Add Watermark (mac WatermarkSheet parity): watermark text, a
@@ -3192,19 +3355,13 @@ constexpr int kLeftSidebarWidth = 232;
 constexpr int kAiSidebarWidth = 400;
 
 void update_main_stack() {
-  // the shelf is the launch surface; the reader replaces it while tabs live
+  // welcome when no documents are open; reader for active documents
   if (g_host.main_stack == nullptr) return;
   gint const pages = gtk_notebook_get_n_pages(g_host.notebook);
   bool const reading = pages > 0;
   gtk_stack_set_visible_child_name(GTK_STACK(g_host.main_stack),
                                    reading ? "reader" : "shelf");
   bool const shelf_active = !reading;
-  if (g_host.shelf != nullptr) {
-    g_host.shelf->set_active(shelf_active);
-    // Coming back to the shelf re-joins reading progress (recents moved
-    // while the notebook owned the window).
-    if (shelf_active && !g_host.shelf_visible) g_host.shelf->refresh();
-  }
   g_host.shelf_visible = shelf_active;
   gtk_widget_set_visible(GTK_WIDGET(g_host.header_edit_menu), pages > 0);
   if (g_host.header_bookmark != nullptr) {
@@ -3216,7 +3373,52 @@ void update_main_stack() {
 }
 
 void build_primary_menu();
-void refresh_recents_menu() { build_primary_menu(); }
+
+void rebuild_welcome_recents() {
+  if (g_host.welcome_recents == nullptr) return;
+  auto* box = GTK_WIDGET(g_host.welcome_recents);
+  while (GtkWidget* child = gtk_widget_get_first_child(box)) {
+    gtk_box_remove(g_host.welcome_recents, child);
+  }
+  gtk_widget_set_visible(box, !g_host.recents.empty());
+  if (g_host.recents.empty()) return;
+  auto* title = gtk_label_new(Tr("ui.viewer.recents").c_str());
+  gtk_widget_add_css_class(title, "heading");
+  gtk_widget_set_halign(title, GTK_ALIGN_START);
+  gtk_box_append(g_host.welcome_recents, title);
+  int count = 0;
+  for (auto const& recent : g_host.recents) {
+    if (++count > 10) break;
+    gchar* name = g_path_get_basename(recent.path.c_str());
+    auto* button = gtk_button_new_with_label(name);
+    g_free(name);
+    gtk_button_set_has_frame(GTK_BUTTON(button), FALSE);
+    gtk_widget_set_halign(button, GTK_ALIGN_FILL);
+    gtk_widget_set_tooltip_text(button, recent.path.c_str());
+    g_object_set_data_full(G_OBJECT(button), "booklight-recent-path",
+                           g_strdup(recent.path.c_str()), g_free);
+    hook(button, "clicked", +[](GtkButton* b, gpointer) {
+      auto const* path = static_cast<char const*>(
+          g_object_get_data(G_OBJECT(b), "booklight-recent-path"));
+      if (path != nullptr) {
+        int page = 1;
+        for (auto const& recent : g_host.recents) {
+          if (recent.path == path) {
+            page = std::max(1, static_cast<int>(recent.page));
+            break;
+          }
+        }
+        open_path(path, page);
+      }
+    }, nullptr);
+    gtk_box_append(g_host.welcome_recents, button);
+  }
+}
+
+void refresh_recents_menu() {
+  build_primary_menu();
+  rebuild_welcome_recents();
+}
 
 void run_find_ui() {
   gtk_revealer_set_reveal_child(g_host.find_revealer, TRUE);
@@ -3318,16 +3520,22 @@ void pick_and_open() {
       chooser, "response",
       +[](GtkNativeDialog* native, int response, gpointer) {
         if (response == GTK_RESPONSE_ACCEPT) {
-          if (GFile* file = gtk_file_chooser_get_file(
-                  GTK_FILE_CHOOSER(native));
-              file != nullptr) {
-            gchar* path = g_file_get_path(file);
-            g_object_unref(file);
-            if (path != nullptr) {
-              std::string const p = path;
-              g_free(path);
-              open_path(p);
+          // The GTK portal returns a list of originals; each opens in its
+          // own native tab. There is no import, staging folder or catalog.
+          GListModel* files = gtk_file_chooser_get_files(
+              GTK_FILE_CHOOSER(native));
+          if (files != nullptr) {
+            for (guint i = 0; i < g_list_model_get_n_items(files); ++i) {
+              auto* file = G_FILE(g_list_model_get_item(files, i));
+              if (file == nullptr) continue;
+              gchar* path = g_file_get_path(file);
+              g_object_unref(file);
+              if (path != nullptr) {
+                open_path(path);
+                g_free(path);
+              }
             }
+            g_object_unref(files);
           }
         }
         g_object_unref(native);
@@ -3391,7 +3599,7 @@ void install_actions(GtkApplication* app) {
       }, nullptr);
   add("quit", +[](GSimpleAction*, GVariant*, gpointer) {
         // graceful: destroy the window; shutdown stops the backend
-        if (g_host.window != nullptr) gtk_window_destroy(g_host.window);
+        if (g_host.window != nullptr) gtk_window_close(g_host.window);
       }, nullptr);
   add("zoom-in", +[](GSimpleAction*, GVariant*, gpointer) {
         zoom_in_ui();
@@ -3466,6 +3674,10 @@ void install_actions(GtkApplication* app) {
   add("tools-export-page",
       +[](GSimpleAction*, GVariant*, gpointer) {
         tools_export_page_image();
+      }, nullptr);
+  add("tools-save-pdf",
+      +[](GSimpleAction*, GVariant*, gpointer) {
+        tools_save_pdf();
       }, nullptr);
   add("tools-export-text",
       +[](GSimpleAction*, GVariant*, gpointer) {
@@ -3684,6 +3896,8 @@ void build_page_edit_menu(GtkMenuButton* button) {
   // tools (mac Tools menu parity: watermark, then the two exports)
   auto* tools = g_menu_new();
   g_menu_append(tools, Tr("ui.tools.watermark").c_str(), "app.tools-watermark");
+  g_menu_append(tools, (Tr("ui.dialog.save") + " PDF…").c_str(),
+                "app.tools-save-pdf");
   g_menu_append(tools, Tr("ui.tools.export-page").c_str(),
                 "app.tools-export-page");
   g_menu_append(tools, Tr("ui.tools.export-text").c_str(),
@@ -3744,6 +3958,22 @@ void on_activate(GtkApplication* app, gpointer) {
   g_host.window = GTK_WINDOW(window);
   gtk_window_set_title(g_host.window, "Booklight");
   gtk_window_set_default_size(g_host.window, 1280, 860);
+  // Window-manager close and Quit must never bypass unsaved PDF edits.
+  // Re-request closing after each successful Save As/explicit Discard,
+  // so multiple dirty tabs each receive their own decision.
+  hook(g_host.window, "close-request",
+       +[](GtkWindow*, gpointer) -> gboolean {
+         for (auto const& tab : g_host.tabs) {
+           if (tab->pdf_edits_pending) {
+             PdfTab* const target = tab.get();
+             confirm_close_dirty_pdf(target, [] {
+               if (g_host.window != nullptr) gtk_window_close(g_host.window);
+             });
+             return TRUE;  // defer close until the user makes a safe choice
+           }
+         }
+         return FALSE;
+       }, nullptr);
   apply_theme();  // display is connected; gtk_settings are live
 
   // --- header bar ---
@@ -3821,38 +4051,8 @@ void on_activate(GtkApplication* app, gpointer) {
   g_host.primary_menu = primary_button;
   build_primary_menu();
 
-  // shelf header controls (visible only while the shelf is the active
-  // surface — update_main_stack toggles them with the reader chrome).
-  // pack_end paints right-to-left: menu | search, the mac toolbar row.
-  g_host.shelf = std::make_unique<pdfgist::Shelf>(pdfgist::Shelf::Hooks{
-      [](std::string const& p) { open_path(p); },
-      [](std::string const& m) { host_alert(m); },
-      [] {
-        return (g_host.ready && g_host.api != nullptr) ? g_host.api.get()
-                                                       : nullptr;
-      },
-      [] { return g_host.recents; },
-      [] { return g_host.window; },
-      [] {
-        // a reader tab owns the window and the window shows it (mac
-        // readingActive: activeReader.hasDocument && a visible key window
-        // — the shelf idling never accrues seconds)
-        return g_host.window != nullptr &&
-               gtk_widget_get_visible(GTK_WIDGET(g_host.window)) &&
-               !g_host.shelf_visible;
-      },
-      [] { refresh_header_title(); },
-  });
-  gtk_header_bar_pack_start(GTK_HEADER_BAR(header),
-                            g_host.shelf->header_import());
-  gtk_header_bar_pack_start(GTK_HEADER_BAR(header),
-                            g_host.shelf->header_spinner());
-  // pack_end fills from the right edge inward, so the ring lands
-  // rightmost of the shelf group: ring | search, the mac toolbar row.
-  gtk_header_bar_pack_end(GTK_HEADER_BAR(header),
-                          g_host.shelf->header_ring());
-  gtk_header_bar_pack_end(GTK_HEADER_BAR(header),
-                          g_host.shelf->header_search());
+  // File-first: no catalog, cover cache, reading-time timer or bookshelf.
+  // The existing Open button and application menu handle document selection.
 
   auto* title_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   // launch state is the shelf; refresh_header_title keeps it in sync
@@ -3933,9 +4133,33 @@ void on_activate(GtkApplication* app, gpointer) {
                                 GTK_STACK_TRANSITION_TYPE_NONE);
   gtk_box_append(GTK_BOX(root), main_stack);
 
-  // shelf page: the Books surface (source-list sidebar over the home
-  // digest / cover grid; search lives in the header bar, packed above).
-  gtk_stack_add_named(GTK_STACK(main_stack), g_host.shelf->page(), "shelf");
+  // Empty-document welcome. Documents stay at their original paths;
+  // this screen never imports or copies them into an application library.
+  auto* welcome = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
+  gtk_widget_set_halign(welcome, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(welcome, GTK_ALIGN_CENTER);
+  gtk_widget_set_margin_start(welcome, 32);
+  gtk_widget_set_margin_end(welcome, 32);
+  auto* welcome_title = gtk_label_new("Booklight");
+  gtk_widget_add_css_class(welcome_title, "title-1");
+  gtk_box_append(GTK_BOX(welcome), welcome_title);
+  auto* welcome_hint = gtk_label_new(Tr("ui.welcome.open-any").c_str());
+  gtk_box_append(GTK_BOX(welcome), welcome_hint);
+  auto* welcome_open = gtk_button_new_with_label(Tr("ui.menu.open").c_str());
+  gtk_widget_add_css_class(welcome_open, "suggested-action");
+  gtk_widget_set_halign(welcome_open, GTK_ALIGN_CENTER);
+  hook(welcome_open, "clicked",
+       +[](GtkButton*, gpointer) { pick_and_open(); }, nullptr);
+  gtk_box_append(GTK_BOX(welcome), welcome_open);
+  auto* welcome_drop = gtk_label_new(Tr("ui.welcome.linux-hint").c_str());
+  gtk_widget_add_css_class(welcome_drop, "dim-label");
+  gtk_box_append(GTK_BOX(welcome), welcome_drop);
+  auto* recent_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+  g_host.welcome_recents = GTK_BOX(recent_box);
+  gtk_widget_set_margin_top(recent_box, 18);
+  gtk_widget_set_visible(recent_box, FALSE);
+  gtk_box_append(GTK_BOX(welcome), recent_box);
+  gtk_stack_add_named(GTK_STACK(main_stack), welcome, "shelf");
 
   // reader page: left sidebar | notebook | AI panel
   auto* reader = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
@@ -4114,7 +4338,7 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_paned_set_start_child(GTK_PANED(inner), notebook);
   gtk_paned_set_shrink_start_child(GTK_PANED(inner), FALSE);
   gtk_paned_set_end_child(GTK_PANED(inner), g_host.right_sidebar);
-  gtk_widget_set_visible(g_host.right_sidebar, TRUE);
+  gtk_widget_set_visible(g_host.right_sidebar, FALSE);
   gtk_paned_set_position(GTK_PANED(inner), 880);
   auto* outer = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
   gtk_paned_set_start_child(GTK_PANED(outer), left_sidebar);
@@ -4149,7 +4373,7 @@ void on_activate(GtkApplication* app, gpointer) {
   if (host::pref_int("left-sidebar", 1) == 0) {
     gtk_widget_set_visible(left_sidebar, FALSE);
   }
-  if (host::pref_int("ai-sidebar", 1) == 0) {
+  if (host::pref_int("ai-sidebar", 0) == 0) {
     gtk_widget_set_visible(g_host.right_sidebar, FALSE);
   }
 
@@ -4188,15 +4412,8 @@ void on_activate(GtkApplication* app, gpointer) {
           if (path != nullptr) {
             std::string const p = path;
             g_free(path);
-            // Dropping on the shelf imports (reading-first landing); drops
-            // on the reader open the file (mac openDropped parity).
-            if (g_host.shelf != nullptr && !g_host.shelf_visible) {
-              open_path(p);
-            } else if (g_host.shelf != nullptr) {
-              g_host.shelf->import_paths({p});
-            } else {
-              open_path(p);
-            }
+            // File-first: the dropped path is the document identity.
+            open_path(p);
             return TRUE;
           }
         }
@@ -4302,7 +4519,7 @@ void on_shutdown(GApplication*, gpointer) {
   g_host.tabs.clear();
   g_host.forms_pane.reset();
   g_host.ai_panel.reset();
-  g_host.shelf.reset();
+  // No shelf instance to dispose.
   g_host.api.reset();
   g_host.backend.reset();
 }

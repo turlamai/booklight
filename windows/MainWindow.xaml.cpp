@@ -162,8 +162,8 @@ MainWindow::MainWindow() {
   set_tip(TtsButton(), pdfgist::Tr("ui.toolbar.tts"));
   set_tip(PrintButton(), pdfgist::Winize(pdfgist::Tr("ui.toolbar.print")));
   set_tip(ToolsButton(), pdfgist::Tr("ui.menu.tools"));
-  set_tip(TodayRing(), pdfgist::Tr("ui.shelf.today"));
   ToolsWatermarkItem().Text(pdfgist::Tr("ui.tools.watermark"));
+  ToolsSavePdfItem().Text(pdfgist::Tr("ui.dialog.save") + L" PDF…");
   ToolsExportPageItem().Text(pdfgist::Tr("ui.tools.export-page"));
   ToolsExportTextItem().Text(pdfgist::Tr("ui.tools.export-text"));
   set_tip(AiToggle(), pdfgist::Tr("ui.toolbar.ai"));
@@ -172,22 +172,11 @@ MainWindow::MainWindow() {
   ThumbsModeLabel().Text(pdfgist::Tr("ui.viewer.thumbs"));
   OutlineModeLabel().Text(pdfgist::Tr("ui.viewer.outline"));
   NotesModeLabel().Text(pdfgist::Tr("ui.sidebar.annotations"));
-  ShelfImportLabel().Text(pdfgist::Tr("ui.library.import"));
-  ShelfSearch().PlaceholderText(pdfgist::Tr("ui.library.search"));
-  ShelfEmptyTitle().Text(pdfgist::Tr("ui.library.empty"));
-  ShelfEmptyHint().Text(pdfgist::Tr("ui.library.empty-hint"));
-  ShelfEmptyImportLabel().Text(pdfgist::Tr("ui.library.import"));
-  ShelfEmptyIcon().Foreground(Brush(AccentColor()));
   FindInput().PlaceholderText(pdfgist::Tr("ui.viewer.find-placeholder"));
   FitWidthLabel().Text(pdfgist::Tr("ui.viewer.fit"));
   ChatSendLabel().Text(pdfgist::Tr("ui.chat.send"));
   ChatStopLabel().Text(pdfgist::Tr("ui.chat.stop"));
   ChatInput().PlaceholderText(pdfgist::Tr("ui.chat.placeholder"));
-
-  // shelf chrome must exist before ApplyTheme, which refreshes the shelf
-  // so code-built colors re-resolve (nav rows, home rows).
-  RebuildShelfNav();
-  LoadReadingStats();
 
   LoadHostPrefs();
   ApplyTheme();
@@ -212,6 +201,30 @@ MainWindow::MainWindow() {
     if (auto window = weak.get()) window->OpenDroppedRaw(args);
   });
 
+  // Titlebar close, Alt+F4 and explicit Close share the same PDF safeguard.
+  AppWindow().Closing([weak = get_weak()](auto&&, auto const& args) {
+    auto window = weak.get();
+    if (!window) return;
+    for (auto const& tab : window->tabs_) {
+      if (!tab->pdf_edits_pending) continue;
+      args.Cancel(true);
+      if (window->window_close_prompt_active_) return;
+      window->window_close_prompt_active_ = true;
+      window->ConfirmDirtyPdfClose(
+          tab,
+          [weak] {
+            if (auto w = weak.get()) {
+              w->window_close_prompt_active_ = false;
+              w->Close();  // other pending edits get their own confirmation
+            }
+          },
+          [weak] {
+            if (auto w = weak.get()) w->window_close_prompt_active_ = false;
+          });
+      return;
+    }
+  });
+
   Closed([weak = get_weak()](auto&&, auto&&) {
     auto window = weak.get();
     if (!window || !window->ready_ || !window->api_) return;
@@ -231,13 +244,13 @@ MainWindow::MainWindow() {
       } catch (...) {
       }
     }
-    if (window->epub_ &&
-        (window->epub_->doc_data_loaded || window->epub_->anno_dirty)) {
+    for (auto const& book : window->epubs_) {
+      if (!book->doc_data_loaded && !book->anno_dirty) continue;
       try {
-        auto json = window->SerializeDocData(window->epub_->doc_data);
+        auto json = window->SerializeDocData(book->doc_data);
         rivet::Bytes bytes(json.begin(), json.end());
         (void)window->api_
-            ->set_annotations(to_utf8(window->epub_->path),
+            ->set_annotations(to_utf8(book->path),
                               window->settings_.annotation_sidecar,
                               std::move(bytes))
             .get();
@@ -283,7 +296,6 @@ MainWindow::MainWindow() {
     }
   });
 
-  StartReadingClock();
 
   InitializeBackendAsync();
 }
@@ -384,8 +396,6 @@ void MainWindow::Bootstrap() {
     rivet_app::SettingsView settings{};
     std::vector<rivet_app::ProviderPreset> presets;
     std::vector<rivet_app::RecentEntry> recents;
-    std::vector<rivet_app::LibraryEntry> library;
-    std::vector<std::string> collections;
     try {
       rivet_app::API api(*backend);
       api.initialize().get();
@@ -393,8 +403,6 @@ void MainWindow::Bootstrap() {
       settings = api.get_settings().get();
       presets = api.list_presets().get();
       recents = api.get_recents().get();
-      library = api.get_library().get();
-      collections = api.library_collections().get();
     } catch (std::exception const& e) {
       failure = e.what();
     }
@@ -402,8 +410,6 @@ void MainWindow::Bootstrap() {
                            settings = std::move(settings),
                            presets = std::move(presets),
                            recents = std::move(recents),
-                           library = std::move(library),
-                           collections = std::move(collections),
                            failure = std::move(failure)]() mutable {
       auto window = weak.get();
       if (!window) return;
@@ -414,34 +420,17 @@ void MainWindow::Bootstrap() {
       window->settings_ = std::move(settings);
       window->presets_ = std::move(presets);
       window->recents_ = std::move(recents);
-      window->library_ = std::move(library);
-      window->library_collections_ = std::move(collections);
-      window->library_loaded_ = true;
       window->settings_loaded_ = true;
       window->ready_ = true;
       window->SetStatus(true, L"");
       window->LoadSettingsIntoPane();
       window->RefreshLeftPanel();
-      window->RefreshShelf();
+      window->WelcomeFileHint().Text(pdfgist::Tr("ui.welcome.open-any"));
+      window->WelcomeFileOpen().Text(pdfgist::Tr("ui.menu.open"));
+      window->WelcomeFileDrop().Text(pdfgist::Tr("ui.welcome.or-drag"));
+      window->RefreshRecentsRows();
       window->HandleInstallMarkers();
       window->StartAutoUpdateCheck();
-      // Missing statuses refresh in the background; the shelf shows whatever
-      // is known the moment it is on screen (mac rescanShelf parity).
-      std::thread([weak, dispatcher, backend]() mutable {
-        std::vector<rivet_app::LibraryEntry> scanned;
-        try {
-          rivet_app::API api(*backend);
-          scanned = api.library_scan().get();
-        } catch (...) {
-          return;  // keep the bootstrap snapshot on failure
-        }
-        dispatcher.TryEnqueue([weak, scanned = std::move(scanned)]() mutable {
-          if (auto window = weak.get()) {
-            window->library_ = std::move(scanned);
-            window->RefreshShelf();
-          }
-        });
-      }).detach();
       // Stand-in for v1's file association (mac bootstrap parity).
       wchar_t buffer[32768]{};
       DWORD length =
@@ -482,7 +471,8 @@ void MainWindow::ShowDialog(std::wstring const& title, std::wstring const& body,
                             std::wstring const& close_button,
                             std::function<void()> on_primary,
                             std::wstring const& secondary_button,
-                            std::function<void()> on_secondary) {
+                            std::function<void()> on_secondary,
+                            std::function<void()> on_close) {
   muxc::ContentDialog dialog;
   dialog.Title(winrt::box_value(title));
   // Selection-enabled text so failure messages stay copyable (mac parity).
@@ -502,22 +492,33 @@ void MainWindow::ShowDialog(std::wstring const& title, std::wstring const& body,
   dialog.CloseButtonText(close_button);
   dialog.XamlRoot(Content().XamlRoot());
 
+  auto const dispatcher = DispatcherQueue();
   auto op = dialog.ShowAsync();
-  op.Completed([on_primary = std::move(on_primary),
-                on_secondary = std::move(on_secondary)](
+  op.Completed([dispatcher, on_primary = std::move(on_primary),
+                on_secondary = std::move(on_secondary),
+                on_close = std::move(on_close)](
                    winrt::Windows::Foundation::IAsyncOperation<
                        muxc::ContentDialogResult> const& sender,
-                   winrt::Windows::Foundation::AsyncStatus) {
+                   winrt::Windows::Foundation::AsyncStatus) mutable {
     muxc::ContentDialogResult result{muxc::ContentDialogResult::None};
     try {
       result = sender.GetResults();
     } catch (...) {
-      return;  // another dialog is already up; the flow can be retried
+      // A dialog collision or cancellation must not leave close pending.
     }
-    if (result == muxc::ContentDialogResult::Primary && on_primary) on_primary();
-    if (result == muxc::ContentDialogResult::Secondary && on_secondary) {
-      on_secondary();
-    }
+    dispatcher.TryEnqueue(
+        [result, on_primary = std::move(on_primary),
+         on_secondary = std::move(on_secondary),
+         on_close = std::move(on_close)]() {
+          if (result == muxc::ContentDialogResult::Primary && on_primary) {
+            on_primary();
+          } else if (result == muxc::ContentDialogResult::Secondary &&
+                     on_secondary) {
+            on_secondary();
+          } else if (result == muxc::ContentDialogResult::None && on_close) {
+            on_close();
+          }
+        });
   });
 }
 
@@ -531,9 +532,6 @@ void MainWindow::ApplyTheme() {
   }
   if (epub_) ApplyEpubTheme(*epub_);
   RelayoutActive();
-  // code-built shelf colors (nav rows, home strip cells) resolve per
-  // scheme; rebuild so a toggle never leaves a stale scheme on the shelf.
-  RefreshShelf();
 }
 
 void MainWindow::ToggleTheme() {
@@ -610,12 +608,10 @@ void MainWindow::Theme_Click(winrt::Windows::Foundation::IInspectable const&,
 }
 
 void MainWindow::UpdateChrome() {
-  // The shelf is the launch surface: visible whenever no reader tab is up.
-  bool const shelf = tabs_.empty() && epub_ == nullptr;
-  ShelfView().Visibility(shelf ? Visibility::Visible : Visibility::Collapsed);
-  // Reader-only toolbar controls do nothing on the shelf; keep the chrome
-  // honest about it (open / AI / theme stay useful everywhere).
-  auto const reader_vis = shelf ? Visibility::Collapsed : Visibility::Visible;
+  // No file open: show an Open/Recent welcome instead of a catalog.
+  bool const empty = tabs_.empty() && epubs_.empty();
+  WelcomeView().Visibility(empty ? Visibility::Visible : Visibility::Collapsed);
+  auto const reader_vis = empty ? Visibility::Collapsed : Visibility::Visible;
   LeftToggle().Visibility(reader_vis);
   RecentsButton().Visibility(reader_vis);
   FindToggle().Visibility(reader_vis);
@@ -624,9 +620,6 @@ void MainWindow::UpdateChrome() {
   TtsButton().Visibility(reader_vis);
   PrintButton().Visibility(reader_vis);
   ToolsButton().Visibility(reader_vis);
-  if (shelf && library_loaded_) {
-    RefreshShelf();  // progress bars catch up on return to the shelf
-  }
   BottomBar().Visibility(!epub_active_ && active_pdf_ != nullptr
                              ? Visibility::Visible
                              : Visibility::Collapsed);
@@ -787,6 +780,7 @@ void MainWindow::DocTabs_SelectionChanged(
     muxc::SelectionChangedEventArgs const&) {
   if (!DocTabs()) return;
   active_pdf_ = nullptr;
+  epub_ = nullptr;
   epub_active_ = false;
   auto const index = DocTabs().SelectedIndex();
   if (index >= 0) {
@@ -802,7 +796,13 @@ void MainWindow::DocTabs_SelectionChanged(
       for (auto const& tab : tabs_) {
         if (tab->tab_item == item) active_pdf_ = tab;
       }
-      if (epub_ && epub_->tab_item == item) epub_active_ = true;
+      for (auto const& book : epubs_) {
+        if (book->tab_item == item) {
+          epub_ = book;
+          epub_active_ = true;
+          break;
+        }
+      }
     } catch (...) {
     }
   }
@@ -825,9 +825,13 @@ void MainWindow::DocTabs_CloseRequested(
     muxc::TabViewTabCloseRequestedEventArgs const& args) {
   try {
     auto const item = args.Tab().as<muxc::TabViewItem>();
-    if (epub_ && epub_->tab_item == item) {
-      CloseEpub();
-      return;
+    for (auto const& book : epubs_) {
+      if (book->tab_item == item) {
+        epub_ = book;
+        epub_active_ = true;
+        CloseEpub();
+        return;
+      }
     }
     for (auto const& tab : tabs_) {
       if (tab->tab_item == item) {
@@ -852,8 +856,9 @@ void MainWindow::PickAndOpen() {
   }
   picker.FileTypeFilter().Append(L".pdf");
   picker.FileTypeFilter().Append(L".epub");
+  auto const pickerDispatcher = DispatcherQueue();
   picker.PickMultipleFilesAsync().Completed(
-      [weak = get_weak()](winrt::Windows::Foundation::IAsyncOperation<
+      [weak = get_weak(), pickerDispatcher](winrt::Windows::Foundation::IAsyncOperation<
                           winrt::Windows::Foundation::Collections::IVectorView<
                               winrt::Windows::Storage::StorageFile>> const&
                               sender,
@@ -865,12 +870,14 @@ void MainWindow::PickAndOpen() {
           for (std::uint32_t i = 0; i < files.Size(); ++i) {
             paths.push_back(std::wstring(files.GetAt(i).Path()));
           }
-          if (auto window = weak.get()) {
-            // Reading-first open: everything lands on the shelf, the first
-            // book opens for reading right away (mac pickAndOpen parity).
-            window->ImportBooks(paths);
-            window->OpenPath(paths[0]);
-          }
+          // The WinRT picker completion may run on a worker thread.
+          // WinUI document/tab operations are strictly UI-thread bound.
+          pickerDispatcher.TryEnqueue(
+              [weak, paths = std::move(paths)]() {
+                if (auto window = weak.get()) {
+                  for (auto const& path : paths) window->OpenPath(path);
+                }
+              });
         } catch (...) {
         }
       });
@@ -880,32 +887,30 @@ void MainWindow::OpenDroppedRaw(mux::DragEventArgs const& args) {
   try {
     auto const deferral = args.GetDeferral();
     auto const weak = get_weak();
+    auto const dropDispatcher = DispatcherQueue();
     args.DataView().GetStorageItemsAsync().Completed(
-        [weak, deferral](winrt::Windows::Foundation::IAsyncOperation<
+        [weak, deferral, dropDispatcher](winrt::Windows::Foundation::IAsyncOperation<
                          winrt::Windows::Foundation::Collections::IVectorView<
                              winrt::Windows::Storage::IStorageItem>> const& sender,
                          winrt::Windows::Foundation::AsyncStatus) mutable {
           try {
             auto const items = sender.GetResults();
-            if (auto window = weak.get()) {
-              std::vector<std::wstring> books;
-              for (std::uint32_t i = 0; i < items.Size(); ++i) {
-                std::wstring const path(items.GetAt(i).Path());
-                if (has_extension(path, L".pdf") ||
-                    has_extension(path, L".epub")) {
-                  books.push_back(path);
-                }
-              }
-              if (books.empty()) return;
-              if (window->tabs_.empty() && window->epub_ == nullptr) {
-                // Shelf drop: import everything, open the first for reading.
-                window->ImportBooks(books);
-                window->OpenPath(books[0]);
-              } else {
-                // Reader drop: a tab, whose open grows the shelf.
-                window->OpenPath(books[0]);
+            std::vector<std::wstring> paths;
+            for (std::uint32_t i = 0; i < items.Size(); ++i) {
+              std::wstring const path(items.GetAt(i).Path());
+              if (has_extension(path, L".pdf") ||
+                  has_extension(path, L".epub")) {
+                paths.push_back(path);
               }
             }
+            // Resolve all storage items before ending the deferral. The
+            // dispatcher then performs every XAML change on the UI thread.
+            dropDispatcher.TryEnqueue(
+                [weak, paths = std::move(paths)]() {
+                  if (auto window = weak.get()) {
+                    for (auto const& path : paths) window->OpenPath(path);
+                  }
+                });
           } catch (...) {
           }
           if (deferral) deferral.Complete();
@@ -1118,10 +1123,6 @@ void MainWindow::OpenDocReady(
   // stored annotations + bookmarks ride the backend sidecar
   LoadDocData(tab);
 
-  // Opening grows the shelf: the catalog feeds on every successful open
-  // (upsert — no duplicates, mac importOpenedBook parity).
-  ImportBook(path);
-
   if (resume_page > 1 && resume_page <= tab->page_count) {
     ScrollToPage(*tab, resume_page);
   }
@@ -1170,10 +1171,54 @@ void MainWindow::ActivateTab(std::shared_ptr<PdfTab> const& tab) {
   DocTabs().SelectedIndex(IndexOfTabItem(tab->tab_item));
 }
 
+void MainWindow::ConfirmDirtyPdfClose(
+    std::shared_ptr<PdfTab> const& tab,
+    std::function<void()> on_success, std::function<void()> on_cancel) {
+  if (!tab || !tab->pdf_edits_pending) {
+    if (on_success) on_success();
+    return;
+  }
+  auto const weak = get_weak();
+  ShowDialog(
+      pdfgist::Tr("ui.pdf.pending-title"),
+      pdfgist::Tr("ui.pdf.pending-body"),
+      pdfgist::Tr("ui.pdf.save-as"),
+      pdfgist::Tr("ui.password.cancel"),
+      [weak, tab, done = on_success, cancelled = on_cancel] {
+        if (auto w = weak.get()) {
+          w->SaveEditedPdf(tab, [weak, tab, done, cancelled](bool saved) {
+            if (auto w = weak.get()) {
+              if (saved) {
+                w->CloseTab(tab.get());
+                if (done) done();
+              } else if (cancelled) {
+                cancelled();
+              }
+            }
+          });
+        }
+      },
+      pdfgist::Tr("ui.pdf.discard"),
+      [weak, tab, done = on_success] {
+        if (auto w = weak.get()) {
+          tab->pdf_edits_pending = false;
+          w->CloseTab(tab.get());
+          if (done) done();
+        }
+      },
+      [cancelled = std::move(on_cancel)] {
+        if (cancelled) cancelled();
+      });
+}
+
 void MainWindow::CloseTab(PdfTab const* tab) {
   for (std::size_t i = 0; i < tabs_.size(); ++i) {
     if (tabs_[i].get() == tab) {
       auto const shared = tabs_[i];
+      if (shared->pdf_edits_pending) {
+        ConfirmDirtyPdfClose(shared);
+        return;
+      }
       auto const index = IndexOfTabItem(shared->tab_item);
       if (shared->anno_dirty) SaveDocDataNow(shared);  // flush pending save
       if (index < DocTabs().TabItems().Size()) {
@@ -2312,12 +2357,26 @@ void MainWindow::RefreshLeftPanel() {
 }
 
 void MainWindow::RefreshRecentsRows() {
-  // The welcome continue list is gone — the shelf is the launch surface.
-  // Recents now feed the shelf's progress bars; the toolbar flyout reads
-  // recents_ directly when it opens.
-  try {
-    if (ShelfView().Visibility() == Visibility::Visible) RefreshShelf();
-  } catch (...) {
+  // A recent document is an ordinary file path, not a catalog entry.
+  auto const children = WelcomeRecentStack().Children();
+  children.Clear();
+  WelcomeRecentSection().Visibility(
+      recents_.empty() ? mux::Visibility::Collapsed : mux::Visibility::Visible);
+  WelcomeRecentTitle().Text(pdfgist::Tr("ui.viewer.recents"));
+  for (auto const& entry : recents_) {
+    auto const path = to_wide(entry.path);
+    auto const last = path.find_last_of(L"/\\");
+    auto label = path.substr(last == std::wstring::npos ? 0 : last + 1);
+    auto button = muxc::Button();
+    button.Content(winrt::box_value(label));
+    button.HorizontalAlignment(mux::HorizontalAlignment::Stretch);
+    button.HorizontalContentAlignment(mux::HorizontalAlignment::Left);
+    button.Click([weak = get_weak(), path = to_wide(entry.path),
+                  page = static_cast<int>(entry.page)](
+                     auto const&, auto const&) {
+      if (auto window = weak.get()) window->OpenPath(path, std::max(page, 1));
+    });
+    children.Append(button);
   }
 }
 

@@ -123,7 +123,6 @@
     <ClCompile Include="MainWindow.Ai.cpp" />
     <ClCompile Include="MainWindow.Settings.cpp" />
     <ClCompile Include="MainWindow.Epub.cpp" />
-    <ClCompile Include="MainWindow.Shelf.cpp" />
     <ClCompile Include="MainWindow.Pages.cpp" />
     <ClCompile Include="MainWindow.Tools.cpp" />
     <ClCompile Include="MainWindow.Annotations.cpp" />

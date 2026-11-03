@@ -1,108 +1,32 @@
-# Booklight × 优秀阅读器设计借鉴
+# Booklight UX baseline — file-first document reader
 
-> 对标对象：Apple Books（Apple 自家阅读器，本产品 README 定调的体验标杆）；
-> 家族内工程对标 taskly（见 git 历史，本文只谈产品与交互）。
-> 目的：把经过市场验证的阅读交互吸收进 Booklight 的跨平台契约——先模仿其
-> 「信息架构与交互语法」，不抄视觉皮肤；一切借鉴以三平台同步落地为准。
->
-> 状态标注：✅ 已落地（main，平台覆盖见标注）· 🔜 短期可做（宿主层或轻
-> schema，无破坏性格式变更）· 🧱 需要立项（涉及 DATA-FORMAT 契约或大迁移）
-> · ❌ 不采纳（附理由）。
+Decision: **2026-10-29-file-first**. The previous Apple Books/iBooks shelf and reading-goals benchmark is retired. The design target is a good native document reader/editor, not a book collection or habit tracker. [Product contract](FILE-FIRST-DESIGN.md).
 
-## 1. Apple Books 的可借鉴设计
+## Benchmarks worth learning from
 
-### 1.1 书架即主页（Shelf as home）
+- **macOS Preview:** File > Open, native windows/tabs, represented file identity, zoom and page actions, clear export and dirty-state behavior. Adapt the principles on macOS rather than copying its styling everywhere.
+- **SumatraPDF:** fast startup, low memory footprint, keyboard navigation and an unobtrusive reader. Keep the PDF/EPUB experience lightweight.
+- **Skim and PDF annotation tools:** page navigation, search, annotation list and recoverable edits. Avoid controls that hide whether a note is saved.
+- **Foliate / document readers:** readable EPUB typography, chapter navigation and progress resume, without requiring an app-managed book database.
+- **Windows and Linux native conventions:** system picker/portal, standard shortcuts, accessibility semantics, logical tab/selection behavior and readable empty states.
 
-Books 打开即书架：封面网格、合集、阅读进度角标，「继续阅读」置顶。
+## Product surfaces
 
-- ✅ 已落地（三平台）：启动即书架（library-first），封面、合集、搜索、
-  阅读进度、想读/在读/读完状态、丢失文件重链；「继续阅读」黑色胶囊一击
-  回到上次读到的位置，工具栏迷你圆环显示今日进度。
-- ✅ 已落地（三平台）：书架文件（library.json）是单一、有文档、稳定的
-  文件，可直接放同步盘（DATA-FORMAT）——Books 的 iCloud 同步在 Booklight
-  的对应物是「你自己的同步盘」，不引入云服务。
+| Situation | Expected behavior | Anti-pattern |
+|---|---|---|
+| No document open | Brand, primary Open action, optional recent paths | Immersive bookshelf, achievements, onboarding tour |
+| PDF open | Source title, main document, optional thumbnail/outline/notes panel | Always-on crowded panels |
+| EPUB open | Chapter text and TOC, search, typography controls | Catalog metadata before reading |
+| User drops files | Open each original path directly | Import, copy or create a hidden cover cache |
+| User annotates | Save status; retry/export on failure | Silently swallowing write errors |
+| User edits PDF | Explicit save/export and confirm overwrite | Replacing the source without consent |
+| Missing/renamed file | Explain missing path and allow picking again | Hiding failure behind stale book-cover tiles |
+| AI action | Preview provider and exact text scope | Automatic upload or unclear origin of answers |
 
-### 1.2 阅读目标（Reading goal）
+## File ownership
 
-Books 的「阅读目标」把每日分钟数变成圆环与连续天数。
+The file manager (Finder, Explorer, Nautilus, etc.) owns folder organization. Booklight does not own a shadow file collection. Recent paths and a resume page may be stored in preferences, but never infer total read time, build a streak, or create goals.
 
-- ✅ 已落地（三平台）：每秒计时（mm:ss）走向每日 20 分钟目标的半圆仪表、
-  工作日连续天数行、专注窗口才计时、数据留在本机。
+## Verification
 
-### 1.3 页面主题（Paper / Night）
-
-Books 的主题控制：纸张/夜间页面底色 + 字号排版。
-
-- ✅ 已落地（三平台，0.5）：阅读主题（跟随应用/纸张/夜间）独立于应用
-  外观，EPUB 页面与 PDF 页面画布即时换肤；字号 A+/A- 即点即存。
-- ✅ 已落地（三平台，0.8）：**sepia（深纸色）第三底色**——更深的奶油
-  页面（#EFE6D5 画布 / #57534E EPUB 文字），夜间与纸张配色不变。
-- ✅ 已落地（三平台，0.8）：**夜间 PDF 内容反色**。Windows/Linux 早在
-  PDFium 位图管线做 PDF.js 式负片滤波；macOS 用 PDFDocument.pageClass
-  的自定义 PDFPage 在绘制层做 difference-blend 反转（切换时按原位重载
-  文档）。
-
-### 1.4 批注与笔记（Highlights & Notes）
-
-Books：选区即批注（五色高亮/下划线/删除线），笔记侧栏聚合全书，可导出。
-
-- ✅ 已落地（三平台，PDF）：三色高亮、下划线、删除线、笔记、书签；侧栏
-  第三模式聚合全书批注；存储在书旁 sidecar/中央目录，随同步盘走。
-- ✅ 已落地（三平台，0.8）：**EPUB 批注**。可选 `anchor {chapter,start,end}`
-  锚定模型（章节 + 章内纯文本偏移，DATA-FORMAT 已文档化）向后兼容 v1
-  页/矩形模型——PDF 批注不携带 anchor、文件字节不变。三端选区桥上报
-  偏移，批注以多段 mark 渲染（PDF 多 rect 同构）；批注侧栏 EPUB 面板
-  提供标注动作（三色高亮/下划线/删除线）、删除 + 一步撤销与 Markdown
-  导出。入口边界如实记录：PDF 在正文右键菜单，EPUB 在批注侧栏的
-  「标注选区」行（三平台一致）。
-- ✅ 已落地（0.6，三平台）：**批注导出**。笔记侧栏一键导出 Markdown
-  汇总（页序高亮/下划线/删除线 + 笔记 + 书签节），领域核心单份渲染，
-  无格式变更。
-
-### 1.5 目录与导航（Navigation）
-
-Books：目录侧栏、页码滑块、书内搜索、书签随手加。
-
-- ✅ 已落地（三平台）：缩略图/目录/批注三模式侧栏、整书搜索（PDF 全文 +
-  EPUB 整书）、页码直达、书签、继续阅读。
-- ✅ 已落地（0.8，三平台）：**目录跟随当前阅读位置**。PDF 大纲按
-  「当前页之前最深条目」高亮并轻量滚动到可见；EPUB 目录高亮当前章节
-  （macOS/Windows 原有，Linux 补齐）并跟随滚动。
-
-### 1.6 朗读与辅助（Accessibility）
-
-Books：朗读整个章节/文档，随读随停。
-
-- ✅ 已落地（三平台）：TTS 朗读本页；打印、暗色、键盘导航齐备。
-
-## 2. taskly 的家族工程基准（本仓库已对标落地）
-
-- ✅ 发布无签名清单即硬失败（release.yml，taskly 规则）。
-- ✅ 更新契约成文（shared/spec/UPDATE.md，与 taskly 同款骨架：触发/相位/
-  三平台安装形态/双 feed 名过渡期）。
-- ✅ 已落地（0.5，三平台）：**界面语言覆盖**（跟随系统/中文/English）。
-  字符串按渲染烘焙，切换需重启（设置页明示）——与 mac 宿主同一契约；
-  「免重启切换」评估结论：**维持重启生效，作为诚实边界**。macOS 可用
-  observable token 做活切换，但 Windows/GTK 宿主是构造期烘焙字符串的
-  代码构建 UI——真活切换等于在两套原生栈上全量重建窗口树，风险与收益
-  不成比例；家族规则要求三端交互语义一致，故统一契约 = 切换后重启
-  生效（设置页明示）。
-- ✅ 已落地（0.7，三平台）：**一步撤销横幅**。批注删除后五秒内可一键
-  撤销（删除即持久化，撤销重插回原位再持久化）；合集删除已有确认对话框
-  保护，不再叠加横幅。
-- ✅ 已落地（0.5，三平台）：**朗读声音/语速可调**（WinRT 音色选择 +
-  SpeakingRate；Linux 映射 speech-dispatcher -r），宿主偏好持久化。
-- ✅ 已落地（0.5，三平台）：**书架合集管理闭环**（删除入口 + 空合集可见）
-  与**「在读」智能视图**。
-- ❌ 不采纳：CLI。Booklight 是阅读器，没有 taskly 的自动化任务面；
-  领域核心已可被脚本经 RVT1 驱动，无 CLI 需求。
-- ❌ 不采纳（当前）：到期通知。阅读器无时间性义务；阅读目标提醒若未来
-  立项，走家族通知适配器。
-
-## 3. 明确不做的（品类边界）
-
-- 格式广度（mobi/azw3/cbr…）：品类定位是 PDF + EPUB 的深度，不是格式
-  数量；新格式按「DATA-FORMAT 契约 + 三端渲染成本」逐个评审。
-- 云服务/账号体系：书是你的文件，同步走你的同步盘（家族「本地优先」
-  红线）。
-- 社交/书店：不做引流与内购，叙事自己定义品类。
+Real packaged native UI acceptance on macOS, Windows and Linux; keyboard and accessibility tree; explicit read-only folder and failed-save cases; original-file-byte comparison after reading and annotations. Screenshots and design reviews alone do not make a feature finished.

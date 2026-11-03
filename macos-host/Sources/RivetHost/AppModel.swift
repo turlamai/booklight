@@ -14,301 +14,11 @@ final class AppModel: ObservableObject {
     @Published var status = ""
     @Published var settings = RivetTypes.SettingsView(
         provider: "deepseek", base_url: "", model: "", target_language: .zh,
-        view_mode: "single", annotation_sidecar: false,
+        view_mode: "single", annotation_sidecar: true,
         reading_theme: .system, reading_font_scale_permille: 1000,
         has_api_key: false, recent: [])
     @Published var presets: [RivetTypes.ProviderPreset] = []
     @Published var recents: [RivetTypes.RecentEntry] = []
-
-    // ---- bookshelf (library-first: the launch window IS the shelf) ----
-    @Published var library: [RivetTypes.LibraryEntry] = []
-    @Published var libraryLoaded = false
-    @Published var libraryImporting = false
-    @Published var shelfSearch = ""
-    /// Books-style sidebar selection: "home" | "search" | "all" | "want" |
-    /// "reading" | "finished" | "pdf" | "epub" | "c:<collection name>".
-    @Published var shelfSelection = "home"
-
-    /// The shelf's own collection list (stored order) — includes collections
-    /// no book carries yet, which the entry labels alone never reveal.
-    @Published var backendCollections: [String] = []
-
-    var shelfCollections: [String] {
-        var seen = Set<String>()
-        var out: [String] = []
-        for name in backendCollections where seen.insert(name).inserted {
-            out.append(name)
-        }
-        for entry in library {
-            for name in entry.collections where seen.insert(name).inserted {
-                out.append(name)
-            }
-        }
-        return out
-    }
-
-    /// The shelf rows after the sidebar selection and the search box.
-    var shelfEntries: [RivetTypes.LibraryEntry] {
-        var rows = library
-        switch shelfSelection {
-        case "want":
-            rows = rows.filter { shelfProgress($0) == nil }
-        case "reading":
-            rows = rows.filter {
-                if let p = shelfProgress($0) { return p.page < p.of }
-                return false
-            }
-        case "finished":
-            rows = rows.filter {
-                if let p = shelfProgress($0) { return p.page >= p.of }
-                return false
-            }
-        case "pdf", "epub":
-            rows = rows.filter { $0.kind == shelfSelection }
-        case let sel where sel.hasPrefix("c:"):
-            let name = String(sel.dropFirst(2))
-            rows = rows.filter { $0.collections.contains(name) }
-        default:
-            break // "all" / home-scope grids
-        }
-        let needle = shelfSearch.trimmingCharacters(in: .whitespaces).lowercased()
-        if !needle.isEmpty {
-            rows = rows.filter {
-                $0.title.lowercased().contains(needle)
-                    || $0.author.lowercased().contains(needle)
-            }
-        }
-        return rows
-    }
-
-    /// Reading progress for a shelf row, joined from recents by path.
-    func shelfProgress(_ entry: RivetTypes.LibraryEntry) -> (page: Int, of: Int)? {
-        let recent = recents.first { $0.path == entry.path }
-        guard let recent, recent.page > 1 || entry.pages > 0 else { return nil }
-        return (Int(recent.page), max(1, Int(entry.pages)))
-    }
-
-    // ---- reading time (Books-style: live seconds toward a daily goal) ----
-    // Persisted device-locally per day; cross-device merging through file
-    // sync would double-count, so this deliberately never leaves the machine.
-    @Published var todaySeconds = 0
-    @Published var weekSeconds: [Int] = Array(repeating: 0, count: 7) // Mon..Sun
-    @Published var streakDays = 0
-    let dailyGoalSeconds = 20 * 60
-
-    private var readingClock: Timer?
-    private let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.locale = Locale(identifier: "en_US_POSIX")
-        return f
-    }()
-
-    static func mmss(_ seconds: Int) -> String {
-        String(format: "%d:%02d", seconds / 60, seconds % 60)
-    }
-
-    func startReadingClock() {
-        guard readingClock == nil else { return }
-        refreshReadingStats()
-        readingClock = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.tickReadingSecond() }
-        }
-    }
-
-    private func readingActive() -> Bool {
-        activeReader?.hasDocument == true
-            && NSApp.windows.contains { $0.isVisible && $0.isKeyWindow }
-    }
-
-    private func tickReadingSecond() {
-        guard readingActive() else { return }
-        addReadingSeconds(1)
-    }
-
-    func addReadingSeconds(_ seconds: Int) {
-        let day = dayFormatter.string(from: Date())
-        var stats = UserDefaults.standard.dictionary(forKey: "booklight-reading-seconds")
-            as? [String: Int] ?? [:]
-        stats[day, default: 0] += seconds
-        UserDefaults.standard.set(stats, forKey: "booklight-reading-seconds")
-        refreshReadingStats()
-    }
-
-    func refreshReadingStats() {
-        let stats = UserDefaults.standard.dictionary(forKey: "booklight-reading-seconds")
-            as? [String: Int] ?? [:]
-        let today = dayFormatter.string(from: Date())
-        todaySeconds = stats[today] ?? 0
-        let cal = Calendar(identifier: .iso8601)
-        let week = cal.dateInterval(of: .weekOfYear, for: Date())!.start
-        weekSeconds = (0..<7).map { offset in
-            let day = dayFormatter.string(from: cal.date(byAdding: .day, value: offset, to: week)!)
-            return stats[day] ?? 0
-        }
-        // current streak: consecutive days with at least a minute of reading,
-        // ending today (or yesterday, if today hasn't started yet)
-        var streak = 0
-        var cursor = Date()
-        if (stats[dayFormatter.string(from: cursor)] ?? 0) < 60 {
-            cursor = cal.date(byAdding: .day, value: -1, to: cursor)!
-        }
-        while (stats[dayFormatter.string(from: cursor)] ?? 0) >= 60 {
-            streak += 1
-            cursor = cal.date(byAdding: .day, value: -1, to: cursor)!
-        }
-        streakDays = streak
-    }
-
-    func loadLibrary() async {
-        guard let api else { return }
-        library = (try? await api.get_library()) ?? library
-        backendCollections = (try? await api.library_collections()) ?? backendCollections
-        libraryLoaded = true
-    }
-
-    func rescanShelf() async {
-        guard let api else { return }
-        library = (try? await api.library_scan()) ?? library
-    }
-
-    func removeFromShelf(_ entry: RivetTypes.LibraryEntry) {
-        library.removeAll { $0.path == entry.path }
-        Task { try? await api?.library_remove(path: entry.path) }
-    }
-
-    /// Generated LibraryEntry is an immutable value type — optimistic UI
-    /// updates rebuild the entry, then persist through the RPC.
-    private func replaceEntry(_ updated: RivetTypes.LibraryEntry) {
-        if let index = library.firstIndex(where: { $0.path == updated.path }) {
-            library[index] = updated
-        }
-    }
-
-    func relinkEntry(_ entry: RivetTypes.LibraryEntry, to url: URL) {
-        replaceEntry(RivetTypes.LibraryEntry(
-            path: url.path, title: entry.title, author: entry.author,
-            kind: entry.kind, pages: entry.pages, added_at_ms: entry.added_at_ms,
-            cover: entry.cover, collections: entry.collections, status: "ok"))
-        Task { try? await api?.library_relink(from: entry.path, to: url.path) }
-    }
-
-    func addToCollection(_ entry: RivetTypes.LibraryEntry, name: String) {
-        guard !entry.collections.contains(name) else { return }
-        replaceEntry(RivetTypes.LibraryEntry(
-            path: entry.path, title: entry.title, author: entry.author,
-            kind: entry.kind, pages: entry.pages, added_at_ms: entry.added_at_ms,
-            cover: entry.cover, collections: entry.collections + [name],
-            status: entry.status))
-        Task { try? await api?.library_book_collection(path: entry.path, name: name, add: true) }
-    }
-
-    func createCollection(_ name: String) {
-        guard !shelfCollections.contains(name) else { return }
-        backendCollections.append(name)
-        Task { try? await api?.library_collection_create(name: name) }
-    }
-
-    /// Deleting a collection strips its label from every book; the books
-    /// themselves stay (optimistic UI, then the RPC).
-    func deleteCollection(_ name: String) {
-        for entry in library where entry.collections.contains(name) {
-            replaceEntry(RivetTypes.LibraryEntry(
-                path: entry.path, title: entry.title, author: entry.author,
-                kind: entry.kind, pages: entry.pages, added_at_ms: entry.added_at_ms,
-                cover: entry.cover, collections: entry.collections.filter { $0 != name },
-                status: entry.status))
-        }
-        backendCollections.removeAll { $0 == name }
-        if shelfSelection == "c:\(name)" { shelfSelection = "all" }
-        Task { try? await api?.library_collection_delete(name: name) }
-    }
-
-    func removeFromCollection(_ entry: RivetTypes.LibraryEntry, name: String) {
-        replaceEntry(RivetTypes.LibraryEntry(
-            path: entry.path, title: entry.title, author: entry.author,
-            kind: entry.kind, pages: entry.pages, added_at_ms: entry.added_at_ms,
-            cover: entry.cover, collections: entry.collections.filter { $0 != name },
-            status: entry.status))
-        Task { try? await api?.library_book_collection(path: entry.path, name: name, add: false) }
-    }
-
-    /// Import files into the shelf (and render covers host-side — hosts own
-    /// the renderers). Books are cataloged in place; files are not touched.
-    func importBooks(_ urls: [URL]) {
-        let books = urls.filter { ["pdf", "epub"].contains($0.pathExtension.lowercased()) }
-        guard !books.isEmpty, let api else { return }
-        libraryImporting = true
-        Task { [weak self] in
-            defer { Task { @MainActor in self?.libraryImporting = false } }
-            for url in books {
-                let ext = url.pathExtension.lowercased()
-                let stem = url.deletingPathExtension().lastPathComponent
-                do {
-                    if ext == "pdf" {
-                        guard let doc = PDFDocument(url: url) else { continue }
-                        let metaTitle = doc.documentAttributes?["Title"] as? String
-                        let title = (metaTitle?.isEmpty == false) ? metaTitle! : stem
-                        let cover = Self.coverPNG(for: doc.page(at: 0), width: 320)
-                        _ = try await api.library_import(
-                            path: url.path, title: title,
-                            author: doc.documentAttributes?["Author"] as? String ?? "",
-                            kind: "pdf", pages: Int64(doc.pageCount),
-                            cover: cover ?? Data())
-                    } else {
-                        let view = try await api.epub_open(path: url.path)
-                        _ = try await api.library_import(
-                            path: url.path, title: view.title, author: "",
-                            kind: "epub", pages: view.chapters, cover: Data())
-                    }
-                } catch {
-                    continue // one bad book never blocks the rest of the import
-                }
-            }
-            await MainActor.run { [weak self] in
-                self?.libraryImporting = false
-            }
-            await self?.loadLibrary()
-        }
-    }
-
-    /// Opening a book from anywhere grows the shelf organically: the open
-    /// path feeds the catalog a cover + metadata (upsert = no duplicates).
-    func importOpenedBook(path: String, doc: PDFDocument) {
-        Task { [weak self] in
-            guard let self, let api = self.api else { return }
-            let metaTitle = doc.documentAttributes?["Title"] as? String
-            let stem = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
-            let title = (metaTitle?.isEmpty == false) ? metaTitle! : stem
-            let cover = Self.coverPNG(for: doc.page(at: 0), width: 320)
-            _ = try? await api.library_import(
-                path: path, title: title, author: doc.documentAttributes?["Author"] as? String ?? "",
-                kind: "pdf", pages: Int64(doc.pageCount), cover: cover ?? Data())
-            await MainActor.run { Task { await self.loadLibrary() } }
-        }
-    }
-
-    func importOpenedEpub(path: String) {
-        Task { [weak self] in
-            guard let self, let api = self.api else { return }
-            guard let view = try? await api.epub_open(path: path) else { return }
-            _ = try? await api.library_import(
-                path: path, title: view.title, author: "",
-                kind: "epub", pages: view.chapters, cover: Data())
-            await MainActor.run { Task { await self.loadLibrary() } }
-        }
-    }
-
-    /// Page-1 thumbnail as PNG bytes for the shelf cover cache.
-    static func coverPNG(for page: PDFPage?, width: CGFloat) -> Data? {
-        guard let page else { return nil }
-        let thumb = page.thumbnail(of: CGSize(width: width, height: width * 1.5),
-                                   for: .mediaBox)
-        guard let tiff = thumb.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff),
-              let png = rep.representation(using: .png, properties: [:]) else { return nil }
-        return png
-    }
 
     // updater state (backend verifies/downloads; this model polls)
     @Published var updateState: UpdateState = .idle
@@ -349,6 +59,15 @@ final class AppModel: ObservableObject {
 
     private var backend: EmbeddedRacketBackend?
     private(set) var api: RivetAPI?
+    private var bootstrapTask: Task<Void, Never>?
+
+    /// Document loads await settings (especially annotation storage mode)
+    /// before choosing central vs sidecar. Otherwise opening via Finder on
+    /// launch can read the wrong location and hide a recovery draft.
+    func waitForBootstrap() async {
+        if ready { return }
+        await bootstrapTask?.value
+    }
 
     init() {
         // v1 UI is Chinese-first; en.json exists, so follow the system locale
@@ -417,6 +136,10 @@ final class AppModel: ObservableObject {
             self?.closingAnnotationFlushes.removeValue(forKey: id)
         }
         closingAnnotationFlushes[id] = task
+    }
+
+    func firstPendingPDFEditReader() -> ReaderModel? {
+        liveReaders.compactMap { $0.value }.first { $0.pdfEditsPending }
     }
 
     func flushAnnotationsBeforeTermination() async {
@@ -516,7 +239,7 @@ final class AppModel: ObservableObject {
             signal(SIGTERM, SIG_DFL)
             let api = RivetAPI(client: backend.client)
             self.api = api
-            Task { await bootstrap() }
+            bootstrapTask = Task { await bootstrap() }
         } catch {
             status = "Configuration error: \(error)"
         }
@@ -539,11 +262,8 @@ final class AppModel: ObservableObject {
             recents = r
             ready = true
             status = ""
-            await loadLibrary()
-            // Refresh missing statuses in the background; the shelf shows
-            // whatever is known the moment it is on screen.
-            Task { [weak self] in await self?.rescanShelf() }
-            startReadingClock()
+            // File-first: settings and a small recent-file list are enough.
+            // Do not catalog opened files or start a reading-time tracker.
             autoCheckForUpdates()
         } catch {
             ready = false
@@ -867,6 +587,7 @@ final class AppModel: ObservableObject {
         HostActions.showWatermark = { [weak self] in self?.activeReader?.showWatermarkDialog() }
         HostActions.exportPageImage = { [weak self] in self?.activeReader?.exportCurrentPageImage() }
         HostActions.exportText = { [weak self] in self?.activeReader?.exportDocumentText() }
+        HostActions.exportPDF = { [weak self] in self?.activeReader?.exportEditedPdf() }
     }
 
     /// Open panel shared by the menu and the welcome state. Empty reader
@@ -882,14 +603,17 @@ final class AppModel: ObservableObject {
             guard response == .OK else { return }
             let urls = panel.urls
             guard !urls.isEmpty, let self else { return }
-            // Reading-first open: everything lands on the shelf, the first
-            // book opens for reading right away.
-            self.importBooks(urls)
+            // Open the selected files at their original paths. Use the
+            // active empty window for the first; every other file gets a
+            // document window. There is no separate catalog import.
             let paths = urls.map { $0.path }
             if let reader = self.activeReader, !reader.hasDocument {
                 Task { await reader.openPath(paths[0]) }
             } else {
                 self.openWindow?(paths[0])
+            }
+            for path in paths.dropFirst() {
+                self.openWindow?(path)
             }
         }
         if let window = NSApp.keyWindow {
@@ -930,6 +654,7 @@ enum HostActions {
     nonisolated(unsafe) static var showWatermark: (() -> Void)?
     nonisolated(unsafe) static var exportPageImage: (() -> Void)?
     nonisolated(unsafe) static var exportText: (() -> Void)?
+    nonisolated(unsafe) static var exportPDF: (() -> Void)?
 }
 
 /// Fields of the watermark sheet; applied through edit-bake-text.

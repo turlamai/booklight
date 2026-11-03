@@ -81,6 +81,7 @@ struct PdfTab {
   std::shared_ptr<pdfgist::PdfDocument> doc;
   int page_count = 0;
   int current_page = 1;
+  bool pdf_edits_pending = false;  // tab bytes differ from source on disk
   double zoom = 1.0;        // multiplier when not fit-width
   bool fit_width = true;    // v1 default: open fitted to width
   std::vector<pdfgist::OutlineItem> outline;
@@ -229,6 +230,8 @@ struct MainWindow : MainWindowT<MainWindow> {
                          winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void ToolsWatermark_Click(winrt::Windows::Foundation::IInspectable const&,
                             winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void ToolsSavePdf_Click(winrt::Windows::Foundation::IInspectable const&,
+                          winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void ToolsExportPage_Click(winrt::Windows::Foundation::IInspectable const&,
                              winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void ToolsExportText_Click(winrt::Windows::Foundation::IInspectable const&,
@@ -271,10 +274,6 @@ struct MainWindow : MainWindowT<MainWindow> {
                        winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void FitWidth_Click(winrt::Windows::Foundation::IInspectable const&,
                       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  void ShelfImport_Click(winrt::Windows::Foundation::IInspectable const&,
-                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  void ConfirmDeleteCollection(std::wstring const& name);
-  void DeleteCollection(std::wstring const& name);
   void ExportAnnotations();
   void UndoDeleteAnnotation();
   void UndoDeleteEpubAnnotation();
@@ -284,12 +283,6 @@ struct MainWindow : MainWindowT<MainWindow> {
   void SaveEpubDocDataNow();
   void BuildEpubNotesPane(
       winrt::Microsoft::UI::Xaml::Controls::StackPanel const& content);
-  void ShelfNav_ItemInvoked(
-      winrt::Windows::Foundation::IInspectable const&,
-      winrt::Microsoft::UI::Xaml::Controls::NavigationViewItemInvokedEventArgs const&);
-  void ShelfSearch_TextChanged(
-      winrt::Windows::Foundation::IInspectable const&,
-      winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const&);
 
  private:
   // ---- lifecycle (MainWindow.xaml.cpp) ----
@@ -320,7 +313,8 @@ struct MainWindow : MainWindowT<MainWindow> {
                   std::wstring const& close_button,
                   std::function<void()> on_primary,
                   std::wstring const& secondary_button = std::wstring(),
-                  std::function<void()> on_secondary = nullptr);
+                  std::function<void()> on_secondary = nullptr,
+                  std::function<void()> on_close = nullptr);
 
   // ---- tabs & document (MainWindow.xaml.cpp) ----
   void PickAndOpen();
@@ -337,6 +331,9 @@ struct MainWindow : MainWindowT<MainWindow> {
   void ActivateTab(std::shared_ptr<PdfTab> const& tab);
   std::shared_ptr<PdfTab> SharedTab(PdfTab* tab);
   void CloseTab(PdfTab const* tab);
+  void ConfirmDirtyPdfClose(std::shared_ptr<PdfTab> const& tab,
+                            std::function<void()> on_success = {},
+                            std::function<void()> on_cancel = {});
   void CloseActiveReader();
   std::uint32_t IndexOfTabItem(
       winrt::Microsoft::UI::Xaml::Controls::TabViewItem const& item);
@@ -531,73 +528,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   void ExportDocumentText();
   // One typed save panel for every export (mac saveData parity).
   void SaveData(std::vector<std::uint8_t> data, std::wstring const& default_name,
-                std::wstring const& type_label, std::wstring const& extension);
-
-  // ---- shelf (MainWindow.Shelf.cpp) — the Books-style launch surface ----
-  // Sidebar selection: "home" | "all" | "want" | "finished" | "pdf" |
-  // "epub" | "c:<collection name>" (mac shelfSelection parity).
-  void RebuildShelfNav();
-  void SelectShelfNavItem(std::wstring const& tag);
-  void ShowShelfDetail();
-  std::wstring ShelfTitleFor(std::wstring const& selection) const;
-  std::vector<rivet_app::LibraryEntry> ShelfRows() const;
-  std::optional<std::pair<int, int>> ShelfProgress(
-      rivet_app::LibraryEntry const& entry) const;
-  void RefreshShelf();
-  void RefreshShelfGrid();
-  void RefreshHomeDigest();
-  winrt::Microsoft::UI::Xaml::UIElement MakeShelfCell(
-      rivet_app::LibraryEntry const& entry);
-  void LoadShelfCover(std::string const& png_path,
-                      winrt::Microsoft::UI::Xaml::Controls::Border const& border,
-                      winrt::Microsoft::UI::Xaml::Controls::StackPanel const& placeholder);
-  void ShelfCreateCollectionDialog();
-  // One shared upsert helper: opening a book from anywhere grows the shelf.
-  void ImportBook(std::wstring const& path);
-  void ImportBooks(std::vector<std::wstring> const& paths);
-  void ShelfReplaceEntry(rivet_app::LibraryEntry const& updated);
-  void ShelfAddToCollection(rivet_app::LibraryEntry const& entry,
-                            std::wstring const& name);
-  void ShelfRemoveFromCollection(rivet_app::LibraryEntry const& entry,
-                                 std::wstring const& name);
-  void ShelfNewCollection(rivet_app::LibraryEntry const& entry);
-  void ShelfRelink(rivet_app::LibraryEntry const& entry);
-  void ShelfRemove(rivet_app::LibraryEntry const& entry);
-  void RevealInExplorer(std::wstring const& path);
-
-  // ---- reading time (MainWindow.Shelf.cpp) — device-local, never synced ----
-  // Live seconds toward the daily goal; buckets persist per day (mac
-  // booklight-reading-seconds parity).
-  std::wstring ReadingSecondsPath() const;
-  void LoadReadingStats();
-  void SaveReadingStats();
-  void RefreshReadingStats();
-  void AddReadingSeconds(int seconds);
-  void TickReadingSecond();
-  void StartReadingClock();
-  int LookupSeconds(std::wstring const& day) const;
-  void BuildStreakRow(bool dark);
-  void UpdateReadingProgress();  // per-tick: gauge, dots, ring (no strips)
-  static std::wstring Mmss(int seconds);
-
-  std::vector<rivet_app::LibraryEntry> library_;
-  bool library_loaded_ = false;
-  bool library_importing_ = false;
-  std::wstring shelf_selection_ = L"home";
-  bool shelf_nav_updating_ = false;
-  std::wstring shelf_search_;
-  std::map<std::wstring,
-           winrt::Microsoft::UI::Xaml::Controls::NavigationViewItem>
-      shelf_nav_items_;
-
-  // seconds buckets keyed "yyyy-MM-dd" (file keeps the reading-minutes.json
-  // name; values are seconds since the 9201fb3 upgrade)
-  std::map<std::wstring, int> reading_seconds_;
-  int today_seconds_ = 0;
-  std::array<int, 7> week_seconds_{};  // Mon..Sun
-  int streak_days_ = 0;
-  static constexpr int kGoalSeconds = 20 * 60;
-  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer reading_timer_{nullptr};
+                std::wstring const& type_label, std::wstring const& extension,
+                std::function<void(bool)> on_complete = {},
+                std::wstring const& protected_original = {});
+  void SaveEditedPdf(std::shared_ptr<PdfTab> const& tab,
+                     std::function<void(bool)> on_complete = {});
 
   // ---- AcroForm pane (MainWindow.Forms.cpp) ----
   void BuildFormsPane();
@@ -635,7 +570,6 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::shared_ptr<rivet::windows::Backend> backend_;
   std::unique_ptr<rivet_app::API> api_;
   rivet_app::SettingsView settings_{};
-  std::vector<std::string> library_collections_;  // the shelf's own list (incl. empty)
   std::string ui_language_ = "system";  // system | zh | en (host pref, relaunch applies)
   std::string tts_voice_ = "";          // display name; empty = system default
   double tts_rate_ = 1.0;
@@ -646,12 +580,15 @@ struct MainWindow : MainWindowT<MainWindow> {
 
   std::vector<std::shared_ptr<PdfTab>> tabs_;
   std::shared_ptr<PdfTab> active_pdf_;
-  std::shared_ptr<EpubBook> epub_;
+  // One native tab and document state per EPUB, never replace an opened file.
+  std::vector<std::shared_ptr<EpubBook>> epubs_;
+  std::shared_ptr<EpubBook> epub_;  // selected EPUB; null while a PDF is active
   bool epub_active_ = false;
+  bool window_close_prompt_active_ = false;
 
   bool left_visible_ = false;
   int left_mode_ = 0;  // 0 thumbnails / 1 outline / 2 notes
-  bool ai_visible_ = true;
+  bool ai_visible_ = false;  // reading canvas first; user pref may override
   int ai_pane_ = 0;
   std::string theme_ = "system";  // system | light | dark
 

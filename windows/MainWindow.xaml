@@ -85,6 +85,7 @@
                     <MenuFlyout Placement="Bottom">
                         <MenuFlyoutItem x:Name="ToolsWatermarkItem" Click="ToolsWatermark_Click" />
                         <MenuFlyoutItem x:Name="ToolsExportPageItem" Click="ToolsExportPage_Click" />
+                        <MenuFlyoutItem x:Name="ToolsSavePdfItem" Click="ToolsSavePdf_Click" />
                         <MenuFlyoutItem x:Name="ToolsExportTextItem" Click="ToolsExportText_Click" />
                     </MenuFlyout>
                 </Button.Flyout>
@@ -164,247 +165,33 @@
                     SelectionChanged="DocTabs_SelectionChanged"
                     TabCloseRequested="DocTabs_CloseRequested"
                     IsAddTabButtonVisible="False" />
-                <!-- the shelf: Books-style launch surface (mac LibraryView parity) —
-                     source-list sidebar over the home digest or a scope grid -->
-                <Grid x:Name="ShelfView" Visibility="Visible">
-                    <NavigationView
-                        x:Name="ShelfNav"
-                        PaneDisplayMode="Left"
-                        OpenPaneLength="220"
-                        IsBackButtonVisible="Collapsed"
-                        IsSettingsVisible="False"
-                        IsPaneToggleButtonVisible="False"
-                        ItemInvoked="ShelfNav_ItemInvoked">
-                        <!-- menu items are built in code: the collections section is dynamic -->
-                        <Grid>
-                            <!-- home digest: goals card (live seconds) + two rows -->
-                            <ScrollViewer x:Name="HomePane">
-                                <StackPanel Padding="32,16,32,32" Spacing="24">
-                                    <TextBlock
-                                        x:Name="HomeTitle"
-                                        FontSize="34"
-                                        FontWeight="Bold"
-                                        Margin="0,12,0,0" />
-                                    <Border
-                                        x:Name="GoalsCard"
-                                        CornerRadius="14"
-                                        BorderThickness="1"
-                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                        MaxWidth="760"
-                                        HorizontalAlignment="Left">
-                                        <StackPanel>
-                                            <Grid
-                                                Width="280"
-                                                Height="150"
-                                                HorizontalAlignment="Center"
-                                                Margin="0,8,0,12">
-                                                <Path
-                                                    x:Name="GoalTrackPath"
-                                                    StrokeThickness="10"
-                                                    StrokeStartLineCap="Round"
-                                                    StrokeEndLineCap="Round" />
-                                                <Path
-                                                    x:Name="GoalProgressPath"
-                                                    StrokeThickness="10"
-                                                    StrokeStartLineCap="Round"
-                                                    StrokeEndLineCap="Round"
-                                                    Visibility="Collapsed" />
-                                                <StackPanel
-                                                    x:Name="GoalCenter"
-                                                    HorizontalAlignment="Center"
-                                                    VerticalAlignment="Center"
-                                                    Spacing="4"
-                                                    Margin="0,14,0,0">
-                                                    <TextBlock
-                                                        x:Name="GoalTodayLabel"
-                                                        FontSize="15"
-                                                        FontWeight="SemiBold"
-                                                        HorizontalAlignment="Center" />
-                                                    <TextBlock
-                                                        x:Name="GoalMmss"
-                                                        FontSize="46"
-                                                        FontWeight="Bold"
-                                                        HorizontalAlignment="Center" />
-                                                    <TextBlock
-                                                        x:Name="GoalOfLabel"
-                                                        FontSize="12"
-                                                        Opacity="0.6"
-                                                        HorizontalAlignment="Center" />
-                                                    <Border
-                                                        x:Name="GoalHitBadge"
-                                                        CornerRadius="10"
-                                                        Padding="8,2"
-                                                        HorizontalAlignment="Center"
-                                                        Visibility="Collapsed">
-                                                        <TextBlock x:Name="GoalHitText" FontSize="11" FontWeight="SemiBold" />
-                                                    </Border>
-                                                </StackPanel>
-                                            </Grid>
-                                            <!-- the Books store-button slot: opens the last-read book -->
-                                            <Button
-                                                x:Name="ContinuePill"
-                                                Click="ContinuePill_Click"
-                                                Padding="28,12"
-                                                CornerRadius="20"
-                                                HorizontalAlignment="Center"
-                                                Margin="0,0,0,24"
-                                                Visibility="Collapsed">
-                                                <TextBlock x:Name="ContinuePillLabel" FontSize="15" FontWeight="SemiBold" />
-                                            </Button>
-                                            <Button
-                                                x:Name="ContinuePillImport"
-                                                Click="ContinuePillImport_Click"
-                                                Style="{ThemeResource AccentButtonStyle}"
-                                                HorizontalAlignment="Center"
-                                                Margin="0,0,0,24"
-                                                Visibility="Collapsed">
-                                                <TextBlock x:Name="ContinuePillImportLabel" FontSize="15" FontWeight="SemiBold" />
-                                            </Button>
-                                            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
-                                            <StackPanel Margin="0,18">
-                                                <StackPanel
-                                                    x:Name="StreakRow"
-                                                    Orientation="Horizontal"
-                                                    Spacing="10"
-                                                    HorizontalAlignment="Center" />
-                                                <TextBlock
-                                                    x:Name="StreakLabel"
-                                                    FontSize="12"
-                                                    Opacity="0.6"
-                                                    HorizontalAlignment="Center"
-                                                    Margin="0,8,0,0" />
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Border>
-                                    <TextBlock
-                                        x:Name="ContinueHeader"
-                                        FontSize="17"
-                                        FontWeight="SemiBold"
-                                        Visibility="Collapsed" />
-                                    <ScrollViewer
-                                        x:Name="ContinueScroll"
-                                        HorizontalAlignment="Left"
-                                        HorizontalScrollBarVisibility="Auto"
-                                        HorizontalScrollMode="Auto"
-                                        VerticalScrollBarVisibility="Disabled"
-                                        Visibility="Collapsed">
-                                        <StackPanel x:Name="ContinueRow" Orientation="Horizontal" Spacing="22" Margin="0,4" />
-                                    </ScrollViewer>
-                                    <TextBlock
-                                        x:Name="RecentHeader"
-                                        FontSize="17"
-                                        FontWeight="SemiBold"
-                                        Visibility="Collapsed" />
-                                    <ScrollViewer
-                                        x:Name="RecentScroll"
-                                        HorizontalAlignment="Left"
-                                        HorizontalScrollBarVisibility="Auto"
-                                        HorizontalScrollMode="Auto"
-                                        VerticalScrollBarVisibility="Disabled"
-                                        Visibility="Collapsed">
-                                        <StackPanel x:Name="RecentRow" Orientation="Horizontal" Spacing="22" Margin="0,4" />
-                                    </ScrollViewer>
-                                </StackPanel>
-                            </ScrollViewer>
-
-                                <!-- scope grid: import / search / covers / empty state -->
-                                <Grid x:Name="GridPane" Visibility="Collapsed">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="*" />
-                                    </Grid.RowDefinitions>
-
-                                    <Grid Grid.Row="0">
-                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="16,8,0,4">
-                                            <Button x:Name="ShelfImport" Click="ShelfImport_Click" Style="{ThemeResource AccentButtonStyle}">
-                                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                                    <FontIcon FontFamily="Segoe Fluent Icons" FontSize="14" Glyph="&#xE710;" />
-                                                    <TextBlock x:Name="ShelfImportLabel" FontSize="12" />
-                                                </StackPanel>
-                                            </Button>
-                                            <TextBox
-                                                x:Name="ShelfSearch"
-                                                Width="190"
-                                                TextChanged="ShelfSearch_TextChanged" />
-                                            <ProgressRing x:Name="ShelfBusy" Width="18" Height="18" IsActive="False" />
-                                        </StackPanel>
-                                        <!-- the Books toolbar mini-gauge: today's minutes over the goal -->
-                                        <Grid
-                                            x:Name="TodayRing"
-                                            Width="30"
-                                            Height="30"
-                                            HorizontalAlignment="Right"
-                                            VerticalAlignment="Center"
-                                            Margin="0,8,16,4">
-                                            <Ellipse x:Name="TodayRingTrack" StrokeThickness="2.5" />
-                                            <Path
-                                                x:Name="TodayRingArc"
-                                                StrokeThickness="2.5"
-                                                StrokeStartLineCap="Round"
-                                                StrokeEndLineCap="Round"
-                                                Visibility="Collapsed" />
-                                            <Ellipse
-                                                x:Name="TodayRingFill"
-                                                StrokeThickness="2.5"
-                                                Visibility="Collapsed" />
-                                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                                <TextBlock x:Name="TodayRingMinutes" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" />
-                                                <TextBlock x:Name="TodayRingGoal" FontSize="7" Opacity="0.5" HorizontalAlignment="Center" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Grid>
-
-                                <GridView
-                                    Grid.Row="1"
-                                    x:Name="ShelfGrid"
-                                    Padding="32,12,32,28"
-                                    IsMultiSelectCheckBoxEnabled="False">
-                                    <GridView.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <ItemsWrapGrid Orientation="Horizontal" ItemWidth="164" ItemHeight="272" />
-                                        </ItemsPanelTemplate>
-                                    </GridView.ItemsPanel>
-                                </GridView>
-
-                                <!-- empty shelf -->
-                                <StackPanel
-                                    Grid.Row="1"
-                                    x:Name="ShelfEmpty"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    Spacing="12"
-                                    Visibility="Collapsed">
-                                    <FontIcon
-                                        x:Name="ShelfEmptyIcon"
-                                        FontFamily="Segoe Fluent Icons"
-                                        FontSize="44"
-                                        Glyph="&#xE736;" />
-                                    <TextBlock
-                                        x:Name="ShelfEmptyTitle"
-                                        FontSize="17"
-                                        FontWeight="SemiBold"
-                                        HorizontalAlignment="Center" />
-                                    <TextBlock
-                                        x:Name="ShelfEmptyHint"
-                                        FontSize="13"
-                                        Opacity="0.6"
-                                        MaxWidth="360"
-                                        TextAlignment="Center"
-                                        TextWrapping="Wrap"
-                                        HorizontalAlignment="Center" />
-                                    <Button
-                                        x:Name="ShelfEmptyImport"
-                                        Click="ShelfImport_Click"
-                                        Style="{ThemeResource AccentButtonStyle}"
-                                        HorizontalAlignment="Center"
-                                        Margin="0,6,0,0">
-                                        <TextBlock x:Name="ShelfEmptyImportLabel" FontSize="14" FontWeight="SemiBold" />
-                                    </Button>
-                                </StackPanel>
-                            </Grid>
-                        </Grid>
-                    </NavigationView>
+                <!-- File-first welcome: no import, library or tracking. -->
+                <Grid x:Name="WelcomeView" Visibility="Visible">
+                    <StackPanel HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Width="480"
+                                Spacing="18"
+                                Padding="36">
+                        <TextBlock Text="Booklight" FontSize="38" FontWeight="SemiBold" />
+                        <TextBlock x:Name="WelcomeFileHint" Text="打开 PDF 或 EPUB 开始阅读"
+                                   FontSize="18" TextWrapping="Wrap" />
+                        <Button Click="Open_Click" Style="{ThemeResource AccentButtonStyle}"
+                                HorizontalAlignment="Left">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8E5;" FontFamily="Segoe Fluent Icons" />
+                                <TextBlock x:Name="WelcomeFileOpen" Text="打开文件…" />
+                            </StackPanel>
+                        </Button>
+                        <TextBlock x:Name="WelcomeFileDrop" Text="或将文件拖入窗口"
+                                   Opacity="0.65" TextWrapping="Wrap" />
+                        <StackPanel x:Name="WelcomeRecentSection"
+                                    Visibility="Collapsed" Spacing="8"
+                                    Margin="0,12,0,0">
+                            <TextBlock x:Name="WelcomeRecentTitle" FontSize="15"
+                                       FontWeight="SemiBold" Text="最近打开" />
+                            <StackPanel x:Name="WelcomeRecentStack" Spacing="4" />
+                        </StackPanel>
+                    </StackPanel>
                 </Grid>
                 <Border
                     x:Name="FindBar"

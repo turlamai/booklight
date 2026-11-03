@@ -1,6 +1,6 @@
 #lang racket/base
 
-;; Seed the packaged-host acceptance profile with a pending central recovery
+;; Seed the packaged-host acceptance profile with a pending sidecar recovery
 ;; document. This is synthetic data: native UI suites use it to prove that a
 ;; reopen crosses the embedded bridge and exposes retry/export rather than
 ;; silently presenting the draft as saved.
@@ -19,7 +19,7 @@
 (define document-path (path->string (path->complete-path (vector-ref arguments 1))))
 (define recovery-file
   (parameterize ([current-config-dir config-dir])
-    (annotation-recovery-path document-path #f)))
+    (annotation-recovery-path document-path #t)))
 
 (make-directory* (path-only recovery-file))
 (call-with-output-file recovery-file

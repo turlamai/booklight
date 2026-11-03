@@ -3,11 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Booklight — 跨平台书架与阅读器</title>
+<title>Booklight — 专注文件的 PDF / EPUB 阅读与轻编辑</title>
 <meta name="description" content="本地优先的 AI PDF 阅读器：划词翻译、段落对照、一键总结、与文档对话。兼容任意 OpenAI 协议端点（GLM Coding、Kimi Code、DeepSeek、Qwen、Ollama…），API Key 只存本机。开源，AGPL-3.0。" />
 <link rel="icon" type="image/png" href="assets/favicon.png" />
-<link rel="preload" href="assets/fonts/newsreader-latin-var.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="preload" href="assets/fonts/newsreader-latin-var-italic.woff2" as="font" type="font/woff2" crossorigin />
 <style>
 /* Self-hosted Inter (variable, latin subset) — no third-party font CDN */
 @font-face {
@@ -180,7 +178,7 @@ html:lang(en) .reader-zh,html:lang(zh) .reader-en{display:none!important}@media(
       <a href="#features" data-en="Features" data-zh="功能">功能</a>
       <a href="#models" data-en="Models" data-zh="模型">模型</a>
       <a href="guide.html" data-en="Guide" data-zh="手册">手册</a>
-      <a href="https://github.com/turinglambdaai/booklight" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/turlamai/booklight" target="_blank" rel="noopener">GitHub</a>
       <div class="lang-dropdown-wrapper">
           <button class="lang-btn" type="button" onclick="void 0" aria-label="Switch language">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
@@ -198,17 +196,17 @@ html:lang(en) .reader-zh,html:lang(zh) .reader-en{display:none!important}@media(
 
 <header class="hero container">
   <div class="hero-badge" data-en="Open source · AGPL-3.0 · macOS 14+ · Windows 10+ · Linux" data-zh="开源 · AGPL-3.0 · macOS 14+ · Windows 10+ · Linux">开源 · AGPL-3.0 · macOS 14+ · Windows 10+ · Linux</div>
-  <h1 data-en='A calm bookshelf, <em>for every desktop</em>' data-zh='把安静的书架，带给<em>每个桌面</em>'>把安静的书架，带给<em>每个桌面</em></h1>
-<p class="reader-en product-availability" lang="en">Development preview. Existing reading, annotation, light editing and single-document BYOK features remain free. No research Pro checkout is open.</p><p class="reader-zh product-availability" lang="zh">开发预览。已有阅读、批注、轻量编辑和单文档 BYOK 功能保持免费；研究 Pro 尚未开售。</p>
-  <p class="sub" data-en="Launch into your shelf — covers, collections, continue-reading. PDF and EPUB reading with selection translation, paragraph-aligned bilingual reading, one-click summaries and document chat, streamed from any OpenAI-compatible endpoint you choose. Your books stay your files; your key never leaves your machine." data-zh="启动即书架——封面、收藏集、续读。PDF 与 EPUB 沉浸阅读，划词翻译、段落对照精读、一键总结、与文档对话——流式输出，接你选择的任意 OpenAI 协议端点。书永远是你的文件，API Key 只存本机。">启动即书架——封面、收藏集、续读。PDF 与 EPUB 沉浸阅读，划词翻译、段落对照精读、一键总结、与文档对话——流式输出，接你选择的任意 OpenAI 协议端点。书永远是你的文件，API Key 只存本机。</p>
+  <h1 data-en='Open a file. <em>Stay with the words.</em>' data-zh='打开文件，<em>专注阅读。</em>'>打开文件，<em>专注阅读。</em></h1>
+<p class="reader-en product-availability" lang="en">Development preview. Existing reading, annotation, light editing and single-document BYOK features remain free. No paid Booklight edition is planned for this refactor.</p><p class="reader-zh product-availability" lang="zh">开发预览。已有阅读、批注、轻量编辑和单文档 BYOK 功能保持免费；本次重构不包含付费版。</p>
+  <p class="sub" data-en="Your PDFs and EPUBs stay where they belong. Open a file, read beautifully, annotate and edit with care. No bookshelf database, copied books, reading timer, goals or streaks. Optional AI uses your chosen provider."
+  data-zh="PDF / EPUB 文件留在原来的位置。打开即阅读，可靠批注，需要时轻编辑；没有书库数据库、文件副本、阅读时长、目标或打卡。AI 可选，并由你选择服务商。">PDF / EPUB 文件留在原来的位置。打开即阅读，可靠批注，需要时轻编辑；没有书库数据库、文件副本、阅读时长、目标或打卡。AI 可选，并由你选择服务商。</p>
   <div class="hero-actions">
-    <a class="btn btn-primary" href="https://github.com/turinglambdaai/booklight/releases/latest/download/booklight-macos-arm64.dmg" data-en="Download for macOS" data-zh="下载 macOS 版">下载 macOS 版</a>
-    <a class="btn btn-ghost" href="https://github.com/turinglambdaai/booklight" target="_blank" rel="noopener" data-en="View on GitHub" data-zh="GitHub 源码">GitHub 源码</a>
+    <a class="btn btn-primary" href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="macos-arm64.dmg" data-en="Download for macOS" data-zh="下载 macOS 版">下载 macOS 版</a>
+    <a class="btn btn-ghost" href="https://github.com/turlamai/booklight" target="_blank" rel="noopener" data-en="View on GitHub" data-zh="GitHub 源码">GitHub 源码</a>
   </div>
-  <p class="hero-note" data-en="Works with GLM Coding Plan, Kimi Code, DeepSeek, Qwen, Doubao, SiliconFlow, Ollama and more" data-zh="支持 GLM Coding 套餐、Kimi Code、DeepSeek、通义千问、豆包、硅基流动、Ollama 等">支持 GLM Coding 套餐、Kimi Code、DeepSeek、通义千问、豆包、硅基流动、Ollama 等</p>
-  <div class="shot animate-on-scroll">
-    <img class="shot-light" src="assets/hero-light.png" alt="Booklight 阅读界面——段落对照翻译" />
-    <img class="shot-dark" src="assets/hero-dark.png" alt="Booklight 阅读界面（深色模式）" />
+  <p class="hero-note" data-en="Use a compatible model endpoint or local model you configure; availability and usage fees depend on your provider." data-zh="使用自行配置的兼容模型接口或本地模型；可用性与用量费用以服务商为准。">使用自行配置的兼容模型接口或本地模型。</p>
+  <div class="shot animate-on-scroll" style="padding:24px;">
+    <p data-en="Open a small PDF or EPUB, add an annotation, close the document and reopen it. Confirm the annotation remains before relying on the workflow with important files." data-zh="打开一份小型 PDF 或 EPUB，添加批注，再关闭并重新打开。确认批注仍在后，再用重要文件执行同样流程。">打开一份小型 PDF 或 EPUB，添加批注并重新打开确认保存结果。</p>
   </div>
 </header>
 
@@ -316,39 +314,54 @@ html:lang(en) .reader-zh,html:lang(zh) .reader-en{display:none!important}@media(
       <div class="dl-card">
         <h3>macOS</h3>
         <p class="fmt">Apple silicon · dmg</p>
-        <a href="https://github.com/turinglambdaai/booklight/releases/latest/download/booklight-macos-arm64.dmg" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
+        <a href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="macos-arm64.dmg" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
       </div>
       <div class="dl-card">
         <h3>macOS (Intel)</h3>
         <p class="fmt">Intel 芯片 · dmg</p>
-        <a href="https://github.com/turinglambdaai/booklight/releases/latest/download/booklight-macos-x64.dmg" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
+        <a href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="macos-x64.dmg" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
       </div>
       <div class="dl-card">
         <h3>Windows</h3>
         <p class="fmt">x64 · MSI 安装包</p>
-        <a href="https://github.com/turinglambdaai/booklight/releases/latest/download/booklight-windows-x64.msi" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
+        <a href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="windows-x64.msi" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
       </div>
       <div class="dl-card">
         <h3>Linux</h3>
         <p class="fmt">x64 · deb / rpm / AppImage / tar.gz</p>
-        <a href="https://github.com/turinglambdaai/booklight/releases/latest/download/booklight-linux-x64.AppImage" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
+        <a href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="linux-x86_64.AppImage" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
       </div>
     </div>
-    <p style="text-align:center;margin-top:10px"><a href="https://github.com/turinglambdaai/booklight/releases" target="_blank" rel="noopener" data-en="All releases" data-zh="全部版本">全部版本</a></p>
-    <p class="hero-note" style="text-align:center;margin-top:18px" data-en="All downloads ship SHA-256 checksums. Linux also comes as deb / rpm / tar.gz (arm64 builds on the release page); Windows portable zip and macOS portable zip are on the release page too. Update behavior depends on the installation channel; consult the release notes and user guide." data-zh="所有下载附 SHA-256 校验文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均支持应用内自动更新。">所有下载附 SHA-256 校验文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均支持应用内自动更新。</p>
+    <p style="text-align:center;margin-top:10px"><a href="https://github.com/turlamai/booklight/releases" target="_blank" rel="noopener" data-en="All releases" data-zh="全部版本">全部版本</a></p>
+    <p class="hero-note" style="text-align:center;margin-top:18px" data-en="Verify published downloads using the release SHA256SUMS file. Linux also comes as deb / rpm / tar.gz (arm64 builds on the release page); Windows portable zip and macOS portable zip are on the release page too. Update behavior depends on the installation channel; consult the release notes and user guide." data-zh="请使用 Release 提供的 SHA256SUMS 校验下载文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均支持应用内自动更新。">所有下载附 SHA-256 校验文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均支持应用内自动更新。</p>
   </div>
 </section>
 
 <section id="start-here" class="product-start" aria-label="Get started / 开始使用">
-<h2 class="reader-en " lang="en">Start with one useful session.</h2><h2 class="reader-zh " lang="zh">从一次有效使用开始。</h2><p class="reader-en start-status" lang="en">Existing reading, annotation, light editing and single-document BYOK features remain free. No research Pro checkout is open.</p><p class="reader-zh start-status" lang="zh">已有阅读、批注、轻量编辑和单文档 BYOK 功能保持免费；研究 Pro 尚未开售。</p><p class="reader-en " lang="en">Desktop previews for macOS, Windows and Linux. Check the release for the architecture you need; mobile is not included.</p><p class="reader-zh " lang="zh">提供 macOS、Windows、Linux 桌面预览版。所需架构以发布附件为准；不包含移动端。</p><div class="product-start-grid"><article><h3 class="reader-en " lang="en">01</h3><h3 class="reader-zh " lang="zh">01</h3><p class="reader-en " lang="en">Open a copy of a small PDF or EPUB. Import references the file in place rather than making a second book copy.</p><p class="reader-zh " lang="zh">先打开一份小型 PDF 或 EPUB 副本。导入会引用原文件，不会额外复制一份书籍。</p></article><article><h3 class="reader-en " lang="en">02</h3><h3 class="reader-zh " lang="zh">02</h3><p class="reader-en " lang="en">Add an annotation, close and reopen the book, and confirm it persists before working on valuable material.</p><p class="reader-zh " lang="zh">添加批注，关闭并重新打开，确认批注保存后再处理重要材料。</p></article><article><h3 class="reader-en " lang="en">03</h3><h3 class="reader-zh " lang="zh">03</h3><p class="reader-en " lang="en">Try page editing or export only on a duplicate. Relink moved books instead of assuming the library copied them.</p><p class="reader-zh " lang="zh">页编辑或导出先在副本试用；文件移动后需重新关联，不要假定书库已复制原件。</p></article></div><p class="reader-en start-limits" lang="en">Save/reopen/export, damaged-file recovery and AI cancellation/secret storage remain release qualification work (<a href="https://github.com/turinglambdaai/booklight/issues/20">#20</a>). A new multi-document research workbench is not delivered.</p><p class="reader-zh start-limits" lang="zh">保存、重开、导出、损坏文件恢复，以及 AI 取消和密钥存储仍需发行验收（<a href="https://github.com/turinglambdaai/booklight/issues/20">#20</a>）。新增多文档研究工作台尚未交付。</p><div class="start-links"><a class="reader-en" lang="en" href="https://github.com/turinglambdaai/booklight/blob/main/docs/USER-GUIDE.md">Installation, privacy &amp; recovery</a><a class="reader-zh" lang="zh" href="https://github.com/turinglambdaai/booklight/blob/main/docs/USER-GUIDE.zh-CN.md">安装、隐私与恢复</a><a href="https://github.com/turinglambdaai/booklight/issues"><span class="reader-en " lang="en">Get help</span><span class="reader-zh " lang="zh">反馈与帮助</span></a></div>
+  <h2 class="reader-en" lang="en">Open, read, edit.</h2>
+  <h2 class="reader-zh" lang="zh">打开、阅读、编辑。</h2>
+  <p class="reader-en" lang="en">Desktop previews for macOS, Windows and Linux; check the actual release assets for supported builds. No book import or managed catalog.</p>
+  <p class="reader-zh" lang="zh">提供 macOS、Windows、Linux 桌面预览版；具体以发布附件为准。无需导入书库，也没有强制编目。</p>
+  <div class="product-start-grid">
+    <article><h3>01</h3><p class="reader-en" lang="en">Open any PDF / EPUB from its original folder or drag it into the app.</p><p class="reader-zh" lang="zh">从原目录打开 PDF / EPUB，或者直接拖进应用。</p></article>
+    <article><h3>02</h3><p class="reader-en" lang="en">Read, search and annotate. Confirm a note is saved before relying on it.</p><p class="reader-zh" lang="zh">阅读、搜索、批注，重要笔记先确认已保存。</p></article>
+    <article><h3>03</h3><p class="reader-en" lang="en">Edit PDFs in a working view and export explicitly; your original must not be silently replaced.</p><p class="reader-zh" lang="zh">轻编辑 PDF，明确选择导出位置，不静默覆盖原文件。</p></article>
+  </div>
+  <p class="reader-en start-limits" lang="en">The file-first refactor is in development. Native cross-platform acceptance is required before a release claim.</p>
+  <p class="reader-zh start-limits" lang="zh">文件优先重构仍在开发中，发布前必须完成三端原生打包验收。</p>
+  <div class="start-links">
+    <a href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.md">English guide</a>
+    <a href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.zh-CN.md">中文使用指南</a>
+    <a href="https://github.com/turlamai/booklight/issues">反馈与帮助</a>
+  </div>
 </section>
 <footer>
   <div class="container foot-inner">
     <span>© 2026 TuringLambdaAI · Booklight is free software under AGPL-3.0</span>
-    <span><a href="https://github.com/turinglambdaai/booklight" target="_blank" rel="noopener">GitHub</a> · <a href="https://jrtx.site" target="_blank" rel="noopener">jrtx.site</a></span>
+    <span><a href="https://github.com/turlamai/booklight" target="_blank" rel="noopener">GitHub</a> · <a href="https://jrtx.site" target="_blank" rel="noopener">jrtx.site</a></span>
   </div>
 </footer>
-<nav id="product-support" aria-label="Support / 支持"><a href="https://github.com/turinglambdaai/booklight/issues"><span class="support-zh">反馈</span><span class="support-en" lang="en">Feedback</span></a> <a href="https://github.com/turinglambdaai/booklight/releases"><span class="support-zh">发布与更新</span><span class="support-en" lang="en">Releases</span></a> <a href="https://github.com/turinglambdaai/booklight/blob/main/LICENSE"><span class="support-zh">源码许可</span><span class="support-en" lang="en">Source license</span></a> <a class="support-zh" href="https://github.com/turinglambdaai/booklight/blob/main/docs/USER-GUIDE.zh-CN.md">使用与帮助</a> <a class="support-en" lang="en" href="https://github.com/turinglambdaai/booklight/blob/main/docs/USER-GUIDE.md">Usage & help</a></nav>
+<nav id="product-support" aria-label="Support / 支持"><a href="https://github.com/turlamai/booklight/issues"><span class="support-zh">反馈</span><span class="support-en" lang="en">Feedback</span></a> <a href="https://github.com/turlamai/booklight/releases"><span class="support-zh">发布与更新</span><span class="support-en" lang="en">Releases</span></a> <a href="https://github.com/turlamai/booklight/blob/main/LICENSE"><span class="support-zh">源码许可</span><span class="support-en" lang="en">Source license</span></a> <a class="support-zh" href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.zh-CN.md">使用与帮助</a> <a class="support-en" lang="en" href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.md">Usage & help</a></nav>
 
 <script>
   var lang = localStorage.getItem("booklight-lang") || "zh";
@@ -374,30 +387,45 @@ html:lang(en) .reader-zh,html:lang(zh) .reader-en{display:none!important}@media(
   }, { threshold: 0.12 });
   document.querySelectorAll(".animate-on-scroll").forEach(function (el) { io.observe(el); });
 
-  // Arch-aware direct downloads (macOS-only product): point the hero CTA at
-  // the dmg matching the visitor's chip and outline the matching card.
-  // Safari's UA never reveals the arch, so the default is Apple silicon —
-  // Chromium users get the real answer via userAgentData; Intel users can
-  // always use the second card or "All releases".
+  // Resolve exact tagged installers; keep Releases as the fallback while
+  // the API is blocked, offline, or a draft has no qualifying public assets.
   (function () {
-    var style = document.createElement("style");
-    style.textContent = ".dl-card.current{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}";
-    document.head.appendChild(style);
-    var ua = navigator.userAgent;
-    if (!/Mac|iPhone|iPad/i.test(ua)) return; // mac-only product
-    var cards = document.querySelectorAll("#download .dl-card");
-    var pick = function (arch) { return "https://github.com/turinglambdaai/booklight/releases/latest/download/booklight-macos-" + arch + ".dmg"; };
-    var applyArch = function (arch) {
-      document.querySelector('.hero-actions a.btn-primary').setAttribute("href", pick(arch));
-      var idx = arch === "x64" ? 1 : 0;
-      if (cards[idx]) cards[idx].classList.add("current");
-    };
+    var page = "https://github.com/turlamai/booklight/releases/latest";
+    var release = null;
+    var links = document.querySelectorAll("a[data-release-suffix]");
+    function resolveLinks() {
+      links.forEach(function (a) {
+        a.href = page;
+        if (!release || release.draft || release.prerelease ||
+            !/^v[0-9]+\.[0-9]+\.[0-9]+$/.test(release.tag_name)) return;
+        var name = "booklight-" + release.tag_name.slice(1) + "-" + a.dataset.releaseSuffix;
+        var exact = "https://github.com/turlamai/booklight/releases/download/" + release.tag_name + "/" + name;
+        var asset = (release.assets || []).find(function (x) {
+          return x.name === name && x.size > 0 && x.browser_download_url === exact;
+        });
+        if (asset) a.href = exact;
+      });
+    }
+    function applyArch(arch) {
+      var hero = document.querySelector(".hero-actions a.btn-primary");
+      if (hero) { hero.dataset.releaseSuffix = "macos-" + arch + ".dmg"; }
+      document.querySelectorAll("#download .dl-card").forEach(function (card, i) {
+        card.classList.toggle("current", i === (arch === "x64" ? 1 : 0));
+      });
+      links = document.querySelectorAll("a[data-release-suffix]");
+      resolveLinks();
+    }
     applyArch("arm64");
     if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
       navigator.userAgentData.getHighEntropyValues(["architecture", "platform"]).then(function (h) {
         if (h && /Mac/i.test(h.platform || "") && h.architecture === "x86") applyArch("x64");
       }).catch(function () {});
     }
+    fetch("https://api.github.com/repos/turlamai/booklight/releases/latest",
+          {headers: {"Accept": "application/vnd.github+json"}})
+      .then(function (r) { if (!r.ok) throw new Error("release lookup"); return r.json(); })
+      .then(function (data) { release = data; resolveLinks(); })
+      .catch(function () { /* No direct asset without a verified release. */ });
   })();
 </script>
 </body>

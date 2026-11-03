@@ -100,7 +100,6 @@ add_executable(RivetHost
   src/host.cpp
   src/pdfium.cpp
   src/pdfview.cpp
-  src/shelf.cpp
   src/annotations.cpp
   src/panels.cpp
   src/epub.cpp

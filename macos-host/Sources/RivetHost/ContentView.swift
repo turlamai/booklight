@@ -42,6 +42,62 @@ struct DocumentWindowView: View {
     }
 }
 
+/// For a SwiftUI-created NSWindow, preserve its existing delegate rather than
+/// replacing SwiftUI's lifecycle/navigation callbacks with our close guard.
+@MainActor
+private final class ReaderWindowCloseDelegate: NSObject, NSWindowDelegate {
+    // The NSObject runtime overrides below are nonisolated; AppKit consults
+    // an NSWindow delegate on the main thread, so reading this property from
+    // them is sound even though the class itself is MainActor-isolated.
+    nonisolated(unsafe) weak var originalDelegate: (any NSWindowDelegate)?
+    weak var reader: ReaderModel?
+    private var allowClose = false
+
+    override func responds(to selector: Selector!) -> Bool {
+        super.responds(to: selector) || originalDelegate?.responds(to: selector) == true
+    }
+
+    override func forwardingTarget(for selector: Selector!) -> Any? {
+        if originalDelegate?.responds(to: selector) == true {
+            return originalDelegate
+        }
+        return super.forwardingTarget(for: selector)
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard !allowClose, let reader, reader.pdfEditsPending else {
+            return originalDelegate?.windowShouldClose?(sender) ?? true
+        }
+        let warning = NSAlert()
+        warning.messageText = L10n.t("ui.pdf.pending-title")
+        warning.informativeText = L10n.t("ui.pdf.pending-body")
+        warning.addButton(withTitle: L10n.t("ui.pdf.save-as"))
+        warning.addButton(withTitle: L10n.t("ui.pdf.discard"))
+        warning.addButton(withTitle: L10n.t("ui.password.cancel"))
+        warning.beginSheetModal(for: sender) { [weak self, weak sender] choice in
+            MainActor.assumeIsolated {
+                guard let self, let sender, let reader = self.reader else { return }
+                switch choice {
+                case .alertFirstButtonReturn:
+                    Task { @MainActor [weak self, weak sender] in
+                        guard await reader.exportEditedPdfForClose(in: sender),
+                              let self, let sender else { return }
+                        self.allowClose = true
+                        sender.performClose(nil)
+                    }
+                case .alertSecondButtonReturn:
+                    reader.pdfEditsPending = false
+                    self.allowClose = true
+                    sender.performClose(nil)
+                default:
+                    break
+                }
+            }
+        }
+        return false
+    }
+}
+
 /// Bridges the SwiftUI window to AppKit: document title + proxy icon, native
 /// window tabbing (Preview model), key-window tracking for the menus, and
 /// close-time flush of pending persistence.
@@ -68,6 +124,7 @@ struct WindowAccessor: NSViewRepresentable {
     final class Coordinator {
         var parent: WindowAccessor
         private weak var window: NSWindow?
+        private var closeGuard: ReaderWindowCloseDelegate?
         // NotificationCenter.removeObserver is thread-safe; the tokens are
         // only touched from install (main actor) and deinit (nonisolated).
         nonisolated(unsafe) private var observers: [NSObjectProtocol] = []
@@ -83,6 +140,11 @@ struct WindowAccessor: NSViewRepresentable {
                 ?? NSApp.windows.first(where: \.isVisible)
             guard let window = candidate else { return }
             self.window = window
+            let closeGuard = ReaderWindowCloseDelegate()
+            closeGuard.originalDelegate = window.delegate
+            closeGuard.reader = parent.reader
+            self.closeGuard = closeGuard
+            window.delegate = closeGuard
             // Native window tabs: share a tabbing identity so Window >
             // Merge All Windows works and the tab bar's + button offers the
             // welcome state, exactly like Preview's document windows.
@@ -105,7 +167,7 @@ struct WindowAccessor: NSViewRepresentable {
                     self.parent.reader.closeDocument()
                     self.parent.app.unregister(self.parent.reader)
                     // Books semantics: closing the last book returns to the
-                    // shelf — the app never idles as a bare Dock icon.
+                    // welcome view — the app never idles as a bare Dock icon.
                     let anyRemaining = NSApp.windows.contains {
                         $0.isVisible && $0 !== window
                             && $0.tabbingIdentifier == "site.jrtx.booklight.reader"
@@ -122,6 +184,10 @@ struct WindowAccessor: NSViewRepresentable {
             // SwiftUI's navigationTitle owns window.title; this only keeps
             // the proxy icon (drag to Finder/Dock) in step with the document.
             guard let window else { return }
+            // Use macOS' native titlebar edited dot. This tracks page edits,
+            // which are distinct from annotation sidecar save status.
+            window.isDocumentEdited = parent.reader.pdfEditsPending
+            closeGuard?.reader = parent.reader
             if let path = parent.reader.documentPath {
                 let url = URL(fileURLWithPath: path)
                 if window.representedURL != url {
@@ -147,14 +213,14 @@ struct ReaderWindowView: View {
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .automatic
     @State private var isKeyWindow = false
 
-    /// Library-first: a window without a document IS the shelf; a window
+    /// File-first: a window without a document shows a small open-file view; a window
     /// with one is a reader. Shared window plumbing wraps both modes.
     var body: some View {
         Group {
             if reader.hasDocument {
                 readerChrome
             } else {
-                LibraryView()
+                FileWelcomeView()
             }
         }
         .background(WindowAccessor(reader: reader, app: app))
@@ -236,11 +302,13 @@ struct ReaderWindowView: View {
         let dropped = urls
             .filter { ["pdf", "epub"].contains($0.pathExtension.lowercased()) }
         guard !dropped.isEmpty else { return }
-        if !reader.hasDocument {
-            // The shelf takes the drop: import all, open none.
-            app.importBooks(dropped)
+        // Dropping onto an empty welcome window should use that window
+        // immediately. Additional documents get separate native windows.
+        // Every path is opened in place: no import/catalog/cover copies.
+        if !reader.hasDocument, let first = dropped.first {
+            Task { await reader.openPath(first.path) }
+            for url in dropped.dropFirst() { app.openWindow?(url.path) }
         } else {
-            // Reading window: dropped books open in new windows.
             for url in dropped { app.openWindow?(url.path) }
         }
     }
@@ -298,6 +366,12 @@ struct ReaderWindowView: View {
                     current: tab.currentPage, total: tab.pageCount,
                     jump: { tab.goToPage($0) })
                 zoomMenu(tab)
+                if reader.pdfEditsPending {
+                    toolbarIcon("square.and.arrow.down", active: true,
+                                help: L10n.t("ui.dialog.save") + " PDF…") {
+                        reader.exportEditedPdf()
+                    }
+                }
                 toolbarIcon("rectangle.split.2x1", active: tab.splitOn,
                             help: L10n.t("ui.toolbar.split")) {
                     reader.toggleSplit()

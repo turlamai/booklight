@@ -56,24 +56,26 @@ std::wstring js_string(std::wstring const& s) {
 // ---- open / close ---------------------------------------------------------------------
 
 void MainWindow::OpenEpub(std::wstring const& path, int resume_chapter) {
-  if (epub_ && epub_->path == path) {
-    ActivateEpub();
-    if (resume_chapter > 1) GoToChapter(*epub_, resume_chapter);
-    return;
+  for (auto const& existing : epubs_) {
+    if (existing->path == path) {
+      epub_ = existing;
+      ActivateEpub();
+      if (resume_chapter > 1) GoToChapter(*existing, resume_chapter);
+      return;
+    }
   }
   if (!ready_ || !api_) {
     Alert(pdfgist::Tr("ui.backend-not-ready"));
     return;
   }
-  // one EPUB tab at a time (mac parity)
-  if (epub_) CloseEpub();
-
+  // File-first multi-document reading: keep every original EPUB open.
   auto book = std::make_shared<EpubBook>();
   book->path = path;
   book->title = file_name(path);
   // Persisted typography rides in; the page picks it up post-load.
   book->font_scale =
       settings_.reading_font_scale_permille / 1000.0;
+  epubs_.push_back(book);
   epub_ = book;
 
   muxc::TabViewItem item;
@@ -117,14 +119,31 @@ void MainWindow::ActivateEpub() {
 void MainWindow::CloseEpub() {
   if (!epub_) return;
   auto const book = epub_;
+  // Persist this book's annotations/chapter before releasing its own tab.
+  // SelectionChanged may fire synchronously while TabItems is modified.
   SaveEpubDocDataNow();
   SaveRecentNow();
   auto const index = IndexOfTabItem(book->tab_item);
+  epubs_.erase(std::remove(epubs_.begin(), epubs_.end(), book), epubs_.end());
   if (index < DocTabs().TabItems().Size()) {
     DocTabs().TabItems().RemoveAt(index);
   }
   epub_ = nullptr;
   epub_active_ = false;
+  auto const selected = DocTabs().SelectedIndex();
+  if (selected >= 0 && static_cast<std::uint32_t>(selected) <
+                            DocTabs().TabItems().Size()) {
+    auto const item = DocTabs().TabItems()
+                          .GetAt(static_cast<std::uint32_t>(selected))
+                          .try_as<muxc::TabViewItem>();
+    for (auto const& remaining : epubs_) {
+      if (remaining->tab_item == item) {
+        epub_ = remaining;
+        epub_active_ = true;
+        break;
+      }
+    }
+  }
   UpdateChrome();
   RefreshLeftPanel();
 }
@@ -172,7 +191,8 @@ void MainWindow::LoadEpubBook(std::shared_ptr<EpubBook> book) {
                            failure = std::move(failure)]() mutable {
       auto window = weak.get();
       if (!window) return;
-      if (window->epub_.get() != book.get()) return;  // tab closed meanwhile
+      if (std::find(window->epubs_.begin(), window->epubs_.end(), book) ==
+          window->epubs_.end()) return;  // tab closed meanwhile
       if (!failure.empty()) {
         window->Alert(pdfgist::Trf("ui.pages.edit-failed", to_wide(failure)));
         return;
@@ -200,8 +220,8 @@ void MainWindow::LoadEpubBook(std::shared_ptr<EpubBook> book) {
         }
       }
       window->RefreshLeftPanel();
-      // Opening grows the shelf (mac importOpenedEpub parity).
-      window->ImportBook(book->path);
+      // EPUB remains at the original path; no library registration.
+
     });
   }).detach();
 }
