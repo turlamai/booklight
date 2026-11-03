@@ -28,6 +28,12 @@ def contains_showing(root, fragment): return any(showing(node) and (fragment in 
 def press(node):
     try:
         actions = node.queryAction()
+        names = [actions.getName(i) for i in range(actions.nActions)]
+        # GTK4 buttons expose "press", "release" and "click"; acting on
+        # "press" alone never completes the activation, so prefer "click".
+        for preferred in ("click", "press"):
+            if preferred in names and actions.doAction(names.index(preferred)):
+                return
         for index in range(actions.nActions):
             if actions.doAction(index): return
     except Exception:
