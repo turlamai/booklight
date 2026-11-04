@@ -1312,8 +1312,16 @@ final class ReaderModel: ObservableObject {
                     if response == .alertFirstButtonReturn { onContinue() }
                 }
                 if let window = NSApp.keyWindow {
-                    panel.beginSheetModal(for: window, completionHandler: handle)
+                    FileHandle.standardError.write(
+                        Data("ai-preview: sheet presented\n".utf8))
+                    panel.beginSheetModal(for: window, completionHandler: { response in
+                        FileHandle.standardError.write(
+                            Data("ai-preview: sheet response \(response.rawValue)\n".utf8))
+                        handle(response)
+                    })
                 } else {
+                    FileHandle.standardError.write(
+                        Data("ai-preview: no key window, running modal\n".utf8))
                     handle(panel.runModal())
                 }
             } catch {
