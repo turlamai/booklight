@@ -55,11 +55,11 @@ func sheetHasButton(_ window: AXUIElement, _ names: Set<String>) -> Bool {
 func logContains(_ log: URL, _ fragment: String) -> Bool {
     (try? String(contentsOf: log, encoding: .utf8))?.contains(fragment) == true
 }
-// Sheet buttons refuse AXPress on the packaged runners; actuate the button
-// by synthesizing a real click at its AX-reported frame instead.
-func clickSheetButton(_ window: AXUIElement, _ names: Set<String>, _ pid: Int32) -> Bool {
-    for sheet in sheetElements(window) {
-        for node in walk(sheet) {
+// Sheet buttons and menu items refuse AXPress on the packaged runners (or
+// accept it without acting); actuate by synthesizing a real click at the
+// AX-reported frame instead.
+func clickAXButton(_ root: AXUIElement, _ names: Set<String>, _ pid: Int32) -> Bool {
+    for node in walk(root) {
             guard stringAttribute(node, kAXRoleAttribute) == "AXButton" else { continue }
             let values = [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute].map { stringAttribute(node, $0) }
             guard values.contains(where: names.contains) else { continue }
@@ -83,7 +83,6 @@ func clickSheetButton(_ window: AXUIElement, _ names: Set<String>, _ pid: Int32)
             usleep(80_000)
             up.postToPid(pid)
             return true
-        }
     }
     return false
 }
@@ -115,10 +114,9 @@ do {
     let openMenu: AXUIElement = try waitFor("opened Tools menu") {
         children(toolsItem).first { stringAttribute($0, kAXRoleAttribute) == "AXMenu" }
     }
-    guard let rotateItem = walk(openMenu).first(where: { ["Rotate Page", "旋转本页"].contains(stringAttribute($0, kAXTitleAttribute)) }) else {
-        throw DriverError.failure("Rotate Page item not in the open Tools menu")
-    }
-    guard AXUIElementPerformAction(rotateItem, kAXPressAction as CFString) == .success else { throw DriverError.failure("Rotate Page item did not press") }
+    // The menu item accepts AXPress without acting on the packaged runners;
+    // actuate it with a real click at its reported frame instead.
+    guard clickAXButton(openMenu, ["Rotate Page", "旋转本页"], pid) else { throw DriverError.failure("Rotate Page item did not press") }
     // The rotate RPC is async; the host logs once the in-memory edit is
     // actually pending. Closing earlier would skip the guard legitimately.
     let guardLog = output.appendingPathComponent("application-guard.log")
@@ -157,7 +155,7 @@ do {
     // discard choice needs a real click on its button (AX frames stay
     // readable even while AXPress refuses).
     _ = try waitFor("discard button click") {
-        clickSheetButton(window, ["Discard Changes", "放弃更改"], pid) ? true : nil
+        clickAXButton(window, ["Discard Changes", "放弃更改"], pid) ? true : nil
     }
     _ = try waitFor("close-guard discard response (application log)") {
         logContains(guardLog, "close-guard: sheet response 1001") ? true : nil
