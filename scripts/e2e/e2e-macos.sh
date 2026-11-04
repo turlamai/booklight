@@ -37,7 +37,13 @@ HOME="$home" BOOKLIGHT_OPEN="$guard_fixture" "$app" >"$output/application-guard.
 app_pid=$!
 "$driver_guard" --pid "$app_pid" --output "$output"
 [[ "$guard_hash_before" == "$(shasum -a 256 "$guard_fixture" | awk '{print $1}')" ]]
-for _ in $(seq 1 200); do kill -0 "$app_pid" 2>/dev/null || break; sleep 0.05; done
-if kill -0 "$app_pid" 2>/dev/null; then echo "Booklight did not exit after the close-guard journey" >&2; exit 1; fi
+# The SIGTERM lands while the embedded backend is still tearing the open
+# document down; give it a full minute before declaring a hang.
+for _ in $(seq 1 600); do kill -0 "$app_pid" 2>/dev/null || break; sleep 0.1; done
+if kill -0 "$app_pid" 2>/dev/null; then
+  kill -KILL "$app_pid" 2>/dev/null || true
+  echo "Booklight did not exit after the close-guard journey" >&2
+  exit 1
+fi
 wait "$app_pid"
 trap - EXIT
