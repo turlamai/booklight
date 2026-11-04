@@ -107,11 +107,17 @@ do {
     // button titled Cancel. Judge the choice from the host's response log.
     precondition(sheetHasButton(window, ["Cancel", "取消"]), "cancel button missing from the sheet")
     sendEscapeToPid(pid)
+    // The host's response log is the dismissal evidence (AX reads of a
+    // dismissed NSAlert sheet linger as stale ghosts).
     _ = try waitFor("close-guard cancel response (application log)") {
         logContains(guardLog, "close-guard: sheet response 1002") ? true : nil
     }
-    _ = try gone(application, dialogMarkers)
-    _ = try waitFor("document still open after cancel") { contains(window, "sample-guard") ? true : nil }
+    // Cancel keeps the document open: re-fetch the window list fresh —
+    // the element captured at launch may be stale after the sheet cycle.
+    _ = try waitFor("document still open after cancel") {
+        ((attribute(application, kAXWindowsAttribute) as? [AXUIElement]) ?? [])
+            .contains { contains($0, "sample-guard") } ? true : nil
+    }
     guard pressWindowClose() else { throw DriverError.failure("window close gesture did not fire the second time") }
     _ = try waitFor("unsaved PDF edits sheet again") { dialogMarkers.contains { contains(application, $0) } ? true : nil }
     precondition(sheetHasButton(window, ["Discard Changes", "放弃更改"]), "discard button missing from the sheet")
@@ -119,8 +125,14 @@ do {
     _ = try waitFor("close-guard discard response (application log)") {
         logContains(guardLog, "close-guard: sheet response 1001") ? true : nil
     }
-    _ = try gone(application, dialogMarkers)
-    _ = try gone(window, ["sample-guard"])
+    // Discard closes the document; discarding the only document may end
+    // the whole application, and ghost AX reads persist either way — judge
+    // closure by the fresh window list, tolerating a dead app.
+    _ = try waitFor("document closed after discard") {
+        if NSRunningApplication(processIdentifier: pid)?.isTerminated == true { return true }
+        let windows = (attribute(application, kAXWindowsAttribute) as? [AXUIElement]) ?? []
+        return windows.contains { contains($0, "sample-guard") } ? nil : true
+    }
     try writeJSON(["platform": "macos", "actions": ["launch:sample-guard.pdf", "press:Tools", "press:Rotate Page", "press:CloseButton", "assert:Unsaved PDF edits", "press:Cancel", "press:CloseButton", "press:Discard Changes"], "assertions": ["packaged SwiftUI opens the synthetic PDF", "native rotate marks in-memory page edits", "window close raises the unsaved-edits sheet", "Cancel keeps the document open", "Discard closes the document without writing the original"]], to: output.appendingPathComponent("close-guard.json"))
     if let running = NSRunningApplication(processIdentifier: pid), !running.isTerminated {
         guard running.terminate() else { throw DriverError.failure("native application rejected termination") }
