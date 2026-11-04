@@ -5,8 +5,37 @@ All notable changes to Booklight are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-04
+
 ### Added
 
+- File-first product model: Booklight opens PDF and EPUB files in place
+  from File > Open, drag-and-drop or the system file association, and
+  remembers recent paths. The managed book catalog, cover library,
+  reading-time tracking, goals and streaks are gone; existing
+  `library.json` files are left untouched on disk and are no longer read
+  or created.
+- AI send review on macOS, Windows and Linux: before a translation,
+  summary or chat request starts, a native dialog shows the exact action,
+  scope (selection/page/chapter/document) and the precise Unicode
+  character counts that will leave the machine; cancelling preserves the
+  typed question and conversation, and no provider is contacted for the
+  preview.
+- Unsaved-PDF close guard on all three platforms: closing a window, tab
+  or the application with in-memory page edits raises a
+  Save As / Discard / Cancel dialog; Cancel keeps the document open and
+  dirty, Save As writes only to an explicitly chosen destination, and the
+  source file is never silently replaced. The Discard button carries the
+  save-panel-convention Command+D shortcut on macOS.
+- Multiple EPUB documents on Windows: each EPUB opens in its own native
+  tab with independent chapter state and annotations; switching and
+  closing tabs never replaces another book or leaks state across
+  documents.
+- Rotation shortcut: Tools > Rotate Page answers Command+R on macOS and
+  Linux.
+- Branded title-bar icon on Windows: the packaged executable's group
+  icon is surfaced in the WinUI title bar instead of the generic
+  placeholder.
 - Recoverable annotation persistence on macOS, Windows and Linux. Booklight
   now stages an atomic app-owned recovery copy before replacing the selected
   central or sidecar store, restores a newer pending copy on reopen, and
@@ -19,6 +48,13 @@ All notable changes to Booklight are documented here. Format follows
   shutdown flushes live PDF and EPUB annotation documents before the backend
   stops. Sidecars use the documented `.booklight.json` name while legacy
   `.pdfgist.json` files remain readable.
+
+### Removed
+
+- The Books-style home: shelf, catalog import, covers, reading-time
+  ledger and goals are removed from all three hosts together with the
+  library RPC surface behind the scenes. Recent original paths replace
+  the bookshelf as the way back to a document.
 
 ## [0.8.0] - 2026-10-22
 
