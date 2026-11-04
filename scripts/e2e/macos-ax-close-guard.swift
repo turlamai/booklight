@@ -55,6 +55,16 @@ func sheetHasButton(_ window: AXUIElement, _ names: Set<String>) -> Bool {
 func logContains(_ log: URL, _ fragment: String) -> Bool {
     (try? String(contentsOf: log, encoding: .utf8))?.contains(fragment) == true
 }
+// AXPress fails transiently (cannotComplete) while menus animate or the
+// accessibility server is busy; retry at a polling pace like every other
+// journey wait instead of giving up after one attempt.
+func pressWithRetry(_ node: AXUIElement, attempts: Int = 50) -> Bool {
+    for _ in 0..<attempts {
+        if AXUIElementPerformAction(node, kAXPressAction as CFString) == .success { return true }
+        Thread.sleep(forTimeInterval: 0.4)
+    }
+    return false
+}
 // Sheet buttons and menu items refuse AXPress on the packaged runners (or
 // accept it without acting); actuate by synthesizing a real click at the
 // AX-reported frame instead.
@@ -115,18 +125,10 @@ do {
     let openMenu: AXUIElement = try waitFor("opened Tools menu") {
         children(toolsItem).first { stringAttribute($0, kAXRoleAttribute) == "AXMenu" }
     }
-    // The menu item accepts AXPress without acting on the packaged runners;
-    // actuate it with a real click at its reported frame instead.
-    guard clickAXButton(openMenu, ["Rotate Page", "旋转本页"], pid) else {
-        for node in walk(openMenu) {
-            var positionValue: CFTypeRef?; var sizeValue: CFTypeRef?
-            AXUIElementCopyAttributeValue(node, kAXPositionAttribute as CFString, &positionValue)
-            AXUIElementCopyAttributeValue(node, kAXSizeAttribute as CFString, &sizeValue)
-            FileHandle.standardError.write(Data(
-                "menu item: role=\(stringAttribute(node, kAXRoleAttribute)) title=\(stringAttribute(node, kAXTitleAttribute)) pos=\(positionValue as? String ?? "?") size=\(sizeValue as? String ?? "?")\n".utf8))
-        }
-        throw DriverError.failure("Rotate Page item did not press")
+    let rotateItem = try waitFor("Rotate Page item in the open menu") {
+        walk(openMenu).first { ["Rotate Page", "旋转本页"].contains(stringAttribute($0, kAXTitleAttribute)) }
     }
+    guard pressWithRetry(rotateItem) else { throw DriverError.failure("Rotate Page item did not press") }
     // The rotate RPC is async; the host logs once the in-memory edit is
     // actually pending. Closing earlier would skip the guard legitimately.
     let guardLog = output.appendingPathComponent("application-guard.log")
