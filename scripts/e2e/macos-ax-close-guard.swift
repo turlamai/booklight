@@ -29,6 +29,10 @@ func writeJSON(_ value: Any, to url: URL) throws { try JSONSerialization.data(wi
 let dialogMarkers = ["Unsaved PDF edits", "PDF 修改尚未保存"]
 var diagnosticApplication: AXUIElement?
 var diagnosticOutput: URL?
+func snapshotOfDiagnostic() -> [String: Any] {
+    if let application = diagnosticApplication { return snapshot(application) }
+    return ["error": "application element unavailable"]
+}
 do {
     let arguments = CommandLine.arguments
     guard let pidIndex = arguments.firstIndex(of: "--pid"), pidIndex + 1 < arguments.count, let pid = Int32(arguments[pidIndex + 1]), let outputIndex = arguments.firstIndex(of: "--output"), outputIndex + 1 < arguments.count else { throw DriverError.failure("usage: macos-ax-close-guard --pid PID --output DIRECTORY") }
@@ -43,15 +47,19 @@ do {
     guard pressNamed(application, ["Tools", "工具"]) else { throw DriverError.failure("Tools menu did not open") }
     _ = try waitFor("Tools menu items") { contains(application, "Rotate Page") || contains(application, "旋转本页") ? true : nil }
     guard pressNamed(application, ["Rotate Page", "旋转本页"]) else { throw DriverError.failure("Rotate Page item did not press") }
-    let closeButton = try waitFor("window close button", probe: { () -> AXUIElement? in
-        attribute(window, kAXCloseButtonAttribute) as! AXUIElement?
-    })
-    guard AXUIElementPerformAction(closeButton, kAXPressAction as CFString) == .success else { throw DriverError.failure("close button rejected the press") }
+    func pressWindowClose() -> Bool {
+        if let closeButton = attribute(window, kAXCloseButtonAttribute) as! AXUIElement?,
+           AXUIElementPerformAction(closeButton, kAXPressAction as CFString) == .success { return true }
+        // The title-bar close button can refuse the AX press; the File menu's
+        // Close item performs the same close gesture.
+        return pressNamed(application, ["Close"])
+    }
+    guard pressWindowClose() else { throw DriverError.failure("window close gesture did not fire") }
     _ = try waitFor("unsaved PDF edits sheet") { dialogMarkers.contains { contains(application, $0) } ? true : nil }
     guard pressNamed(application, ["Cancel", "取消"]) else { throw DriverError.failure("Cancel did not press") }
     _ = try gone(application, dialogMarkers)
     _ = try waitFor("document still open after cancel") { contains(window, "sample-guard") ? true : nil }
-    guard AXUIElementPerformAction(closeButton, kAXPressAction as CFString) == .success else { throw DriverError.failure("close button rejected the second press") }
+    guard pressWindowClose() else { throw DriverError.failure("window close gesture did not fire the second time") }
     _ = try waitFor("unsaved PDF edits sheet again") { dialogMarkers.contains { contains(application, $0) } ? true : nil }
     guard pressNamed(application, ["Discard Changes", "放弃更改"]) else { throw DriverError.failure("Discard Changes did not press") }
     _ = try gone(application, dialogMarkers)
@@ -61,6 +69,9 @@ do {
         guard running.terminate() else { throw DriverError.failure("native application rejected termination") }
     }
 } catch {
-    if let application = diagnosticApplication, let output = diagnosticOutput { try? writeJSON(snapshot(application), to: output.appendingPathComponent("close-guard-failure.json")) }
-    throw error
+    if let output = diagnosticOutput {
+        try? writeJSON(snapshotOfDiagnostic(), to: output.appendingPathComponent("close-guard-failure.json"))
+    }
+    FileHandle.standardError.write(Data("Booklight macOS close-guard failed: \(error)\n".utf8))
+    exit(1)
 }

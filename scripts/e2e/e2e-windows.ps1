@@ -335,13 +335,14 @@ try {
     }
     try {
         [void](Wait-Until 'synthetic PDF opened' { Contains-Text $window 'sample-guard' })
-        # The page-ops pane may already be expanded for a PDF tab; only
-        # press the (unnamed) Page edit toggle when the pane is not showing.
+        # The page-ops pane may already be expanded for a PDF tab; press the
+        # unnamed Page edit toggle only to reveal it, then actually rotate —
+        # the close guard only exists once a page edit is pending.
         [void](Wait-Until 'rotate page action' {
-            if (Contains-Text $window 'Rotate Page') { return $true }
-            if (-not (Contains-Text $window 'Target: page')) {
-                Invoke-NamedControl $window @('Page edit','页编辑')
+            if (Contains-Text $window 'Target: page') {
+                return Invoke-NamedControl $window @('Rotate Page','旋转本页')
             }
+            Invoke-NamedControl $window @('Page edit','页编辑')
             return $false
         })
         $pattern = $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern)
@@ -364,7 +365,9 @@ try {
             $process.Refresh(); if ($process.HasExited) { return $true }; return $false
         } 30)
     } catch {
-        Save-Snapshot $window (Join-Path $output 'close-guard-failure.json')
+        # The process may already be gone when the failure is caught; a dead
+        # window must not mask the original error.
+        try { Save-Snapshot $window (Join-Path $output 'close-guard-failure.json') } catch { }
         throw
     }
     if ($guardHashBefore -ne (Get-FileHash -LiteralPath $guardFixture -Algorithm SHA256).Hash) { throw 'close-guard journey modified the original PDF' }
