@@ -117,7 +117,16 @@ do {
     }
     // The menu item accepts AXPress without acting on the packaged runners;
     // actuate it with a real click at its reported frame instead.
-    guard clickAXButton(openMenu, ["Rotate Page", "旋转本页"], pid) else { throw DriverError.failure("Rotate Page item did not press") }
+    guard clickAXButton(openMenu, ["Rotate Page", "旋转本页"], pid) else {
+        for node in walk(openMenu) {
+            var positionValue: CFTypeRef?; var sizeValue: CFTypeRef?
+            AXUIElementCopyAttributeValue(node, kAXPositionAttribute as CFString, &positionValue)
+            AXUIElementCopyAttributeValue(node, kAXSizeAttribute as CFString, &sizeValue)
+            FileHandle.standardError.write(Data(
+                "menu item: role=\(stringAttribute(node, kAXRoleAttribute)) title=\(stringAttribute(node, kAXTitleAttribute)) pos=\(positionValue as? String ?? "?") size=\(sizeValue as? String ?? "?")\n".utf8))
+        }
+        throw DriverError.failure("Rotate Page item did not press")
+    }
     // The rotate RPC is async; the host logs once the in-memory edit is
     // actually pending. Closing earlier would skip the guard legitimately.
     let guardLog = output.appendingPathComponent("application-guard.log")
