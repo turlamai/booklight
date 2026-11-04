@@ -46,5 +46,21 @@ ${table(en)}
 }
 `;
 
-writeFileSync("macos-host/Sources/RivetHost/GeneratedStrings.swift", out);
-console.log(`GeneratedStrings.swift: ${Object.keys(zh).length} zh / ${Object.keys(en).length} en keys`);
+const target = "macos-host/Sources/RivetHost/GeneratedStrings.swift";
+if (process.argv.includes("--check")) {
+  let actual;
+  try {
+    actual = readFileSync(target, "utf8");
+  } catch {
+    console.error(`${target}: missing generated file; run node scripts/gen-swift-strings.mjs`);
+    process.exitCode = 1;
+  }
+  if (actual !== undefined && actual !== out) {
+    console.error(`${target}: generated strings are stale; run node scripts/gen-swift-strings.mjs`);
+    process.exitCode = 1;
+  }
+  if (process.exitCode !== 1) console.log(`GeneratedStrings.swift verified (${Object.keys(zh).length} zh / ${Object.keys(en).length} en keys)`);
+} else {
+  writeFileSync(target, out);
+  console.log(`GeneratedStrings.swift: ${Object.keys(zh).length} zh / ${Object.keys(en).length} en keys`);
+}

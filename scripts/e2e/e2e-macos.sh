@@ -26,4 +26,26 @@ trap cleanup EXIT
 for _ in $(seq 1 200); do kill -0 "$app_pid" 2>/dev/null || break; sleep 0.05; done
 if kill -0 "$app_pid" 2>/dev/null; then echo "Booklight did not exit after native termination" >&2; exit 1; fi
 wait "$app_pid"
+
+# ---- close-guard journey: unsaved PDF page edits must survive close ----
+guard_fixture="$output/sample-guard-$$.pdf"
+racket "$repo/scripts/acceptance/seed-sample-pdf.rkt" "$guard_fixture"
+guard_hash_before="$(shasum -a 256 "$guard_fixture" | awk '{print $1}')"
+driver_guard="$output/macos-ax-close-guard"
+swiftc "$repo/scripts/e2e/macos-ax-close-guard.swift" -o "$driver_guard" -framework AppKit -framework ApplicationServices
+HOME="$home" BOOKLIGHT_OPEN="$guard_fixture" "$app" >"$output/application-guard.log" 2>&1 &
+app_pid=$!
+"$driver_guard" --pid "$app_pid" --output "$output"
+[[ "$guard_hash_before" == "$(shasum -a 256 "$guard_fixture" | awk '{print $1}')" ]]
+# The close-guard journey deliberately chooses Cancel twice. The document
+# must remain open after both cancellations. Its still-running process is
+# evidence of the intended behavior, not a shutdown failure. Verify it before
+# explicitly stopping this isolated acceptance instance.
+if ! kill -0 "$app_pid" 2>/dev/null; then
+  echo "Booklight unexpectedly exited after cancelling unsaved PDF close" >&2
+  exit 1
+fi
+stop_bounded "$app_pid" || true
+wait "$app_pid" 2>/dev/null || true
+app_pid=""
 trap - EXIT

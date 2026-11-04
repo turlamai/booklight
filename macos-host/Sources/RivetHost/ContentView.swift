@@ -72,9 +72,19 @@ private final class ReaderWindowCloseDelegate: NSObject, NSWindowDelegate {
         warning.messageText = L10n.t("ui.pdf.pending-title")
         warning.informativeText = L10n.t("ui.pdf.pending-body")
         warning.addButton(withTitle: L10n.t("ui.pdf.save-as"))
-        warning.addButton(withTitle: L10n.t("ui.pdf.discard"))
+        let discardButton = warning.addButton(withTitle: L10n.t("ui.pdf.discard"))
+        // The save-panel convention for "Don't Save" (HIG): a chorded
+        // shortcut instead of a bare key, so a stray keystroke can never
+        // discard edits.
+        discardButton.keyEquivalent = "d"
+        discardButton.keyEquivalentModifierMask = .command
         warning.addButton(withTitle: L10n.t("ui.password.cancel"))
         warning.beginSheetModal(for: sender) { [weak self, weak sender] choice in
+            // Packaged-journey evidence: the close-guard driver reads this
+            // line to judge which button the user chose; AX reads of a
+            // dismissed NSAlert sheet linger as stale ghosts.
+            FileHandle.standardError.write(
+                Data("close-guard: sheet response \(choice.rawValue)\n".utf8))
             MainActor.assumeIsolated {
                 guard let self, let sender, let reader = self.reader else { return }
                 switch choice {

@@ -52,15 +52,25 @@ function Wait-Until {
 
 function Contains-Text {
     param($Root, [string]$Fragment)
-    $nodes = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
-        [System.Windows.Automation.Condition]::TrueCondition)
-    for ($index = 0; $index -lt $nodes.Count; $index++) {
-        if ($nodes[$index].Current.Name -like "*$Fragment*") { return $true }
+    try {
+        $nodes = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+            [System.Windows.Automation.Condition]::TrueCondition)
+        for ($index = 0; $index -lt $nodes.Count; $index++) {
+            if ($nodes[$index].Current.Name -like "*$Fragment*") { return $true }
+        }
+        return $false
+    } catch {
+        # Window transitions surface transient UIA faults; the callers poll,
+        # so treat a fault as "not present right now".
+        return $false
     }
-    return $false
 }
 
 function Invoke-NamedControl {
+    param($Root, [string[]]$Names)
+    try { return Invoke-NamedControlInner $Root $Names } catch { return $false }
+}
+function Invoke-NamedControlInner {
     param($Root, [string[]]$Names)
     $nodes = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
         [System.Windows.Automation.Condition]::TrueCondition)
@@ -318,6 +328,71 @@ try {
     $pattern = $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern)
     ([System.Windows.Automation.WindowPattern]$pattern).Close()
     [void](Wait-Until 'Booklight process exit after native window close' { $process.Refresh(); if ($process.HasExited) { return $true }; return $false } 30)
+    # ---- close-guard journey: unsaved PDF page edits must survive close ----
+    $guardFixture = Join-Path $output "sample-guard-$PID.pdf"
+    & racket (Join-Path $repo 'scripts\acceptance\seed-sample-pdf.rkt') $guardFixture
+    if ($LASTEXITCODE -ne 0) { throw 'failed to seed the close-guard PDF fixture' }
+    $guardHashBefore = (Get-FileHash -LiteralPath $guardFixture -Algorithm SHA256).Hash
+    $env:BOOKLIGHT_OPEN = $guardFixture
+    $process = Start-Process -FilePath $executable.FullName -PassThru `
+        -WorkingDirectory $repo `
+        -RedirectStandardOutput (Join-Path $output 'application-guard.stdout.log') `
+        -RedirectStandardError (Join-Path $output 'application-guard.stderr.log')
+    $window = Wait-Until 'Booklight window for the close-guard journey' {
+        $condition = [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
+        $desktop.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition)
+    }
+    try {
+        [void](Wait-Until 'synthetic PDF opened' { Contains-Text $window 'sample-guard' })
+        # The page-ops pane may already be expanded for a PDF tab; press the
+        # unnamed Page edit toggle only to reveal it, then actually rotate —
+        # the close guard only exists once a page edit is pending.
+        [void](Wait-Until 'rotate page action' {
+            if (Contains-Text $window 'Target: page') {
+                return Invoke-NamedControl $window @('Rotate Page','旋转本页')
+            }
+            Invoke-NamedControl $window @('Page edit','页编辑')
+            return $false
+        })
+        # The rotate RPC is async; the tab header gains a bullet only once
+        # the in-memory edit is actually pending. Closing earlier would skip
+        # the guard legitimately.
+        [void](Wait-Until 'pending edits marker in the tab header' {
+            Contains-Text $window "$([char]0x2022)"
+        })
+        $pattern = $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern)
+        ([System.Windows.Automation.WindowPattern]$pattern).Close()
+        [void](Wait-Until 'unsaved PDF edits dialog' {
+            (Contains-Text $window 'Unsaved PDF edits') -or (Contains-Text $window 'PDF 修改尚未保存')
+        })
+        [void](Wait-Until 'cancel button' { Invoke-NamedControl $window @('Cancel','取消') })
+        [void](Wait-Until 'dialog dismissed after cancel' {
+            -not ((Contains-Text $window 'Unsaved PDF edits') -or (Contains-Text $window 'PDF 修改尚未保存'))
+        })
+        [void](Wait-Until 'document still open after cancel' { Contains-Text $window 'sample-guard' })
+        $pattern = $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern)
+        ([System.Windows.Automation.WindowPattern]$pattern).Close()
+        [void](Wait-Until 'unsaved PDF edits dialog again' {
+            (Contains-Text $window 'Unsaved PDF edits') -or (Contains-Text $window 'PDF 修改尚未保存')
+        })
+        [void](Wait-Until 'discard button' { Invoke-NamedControl $window @('Discard Changes','放弃更改') })
+        [void](Wait-Until 'process exit after discarding the only document' {
+            $process.Refresh(); if ($process.HasExited) { return $true }; return $false
+        } 30)
+    } catch {
+        # The process may already be gone when the failure is caught; a dead
+        # window must not mask the original error.
+        try { Save-Snapshot $window (Join-Path $output 'close-guard-failure.json') } catch { }
+        throw
+    }
+    if ($guardHashBefore -ne (Get-FileHash -LiteralPath $guardFixture -Algorithm SHA256).Hash) { throw 'close-guard journey modified the original PDF' }
+    [ordered]@{
+        platform = 'windows'
+        artifact = $executable.FullName
+        actions = @('launch:sample-guard.pdf','press:Page edit','press:Rotate Page','press:WindowClose','assert:Unsaved PDF edits','press:Cancel','press:WindowClose','press:Discard Changes')
+        assertions = @('packaged WinUI opens the synthetic PDF','native rotate marks in-memory page edits','window close raises the unsaved-edits dialog','Cancel keeps the document open','Discard closes the window without writing the original')
+    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output 'close-guard-trace.json') -Encoding utf8
 } finally {
     $env:APPDATA = $savedAppData
     $env:LOCALAPPDATA = $savedLocalData

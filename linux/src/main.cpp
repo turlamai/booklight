@@ -3783,6 +3783,7 @@ void install_accels(GtkApplication* app) {
   set("app.zoom-in", {"<Primary>plus", "<Primary>equal"});
   set("app.zoom-out", {"<Primary>minus"});
   set("app.zoom-reset", {"<Primary>0"});
+  set("app.page-rotate", {"<Primary>r"});
   set("app.find", {"<Primary>f"});
   set("app.find-next", {"F3", "<Primary>g"});
   set("app.find-previous", {"<Shift>F3", "<Shift><Primary>g"});

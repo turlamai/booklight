@@ -44,7 +44,18 @@ for _ in $(seq 1 100); do gdbus call --session --dest org.a11y.Bus --object-path
 export AT_SPI_BUS_ADDRESS="$(gdbus call --session --dest org.a11y.Bus --object-path /org/a11y/bus --method org.a11y.Bus.GetAddress | sed -E "s/^\('([^']+)',\)$/\1/")"
 cd "$repo"; "$executable" "$fixture" >"$output/application.log" 2>&1 & app_pid=$!
 /usr/bin/python3 "$repo/scripts/e2e/linux-atspi.py" --output "$output"
-stop_bounded "$app_pid" || true; wait "$app_pid" 2>/dev/null || true; app_pid=""; trap - EXIT
+stop_bounded "$app_pid" || true; wait "$app_pid" 2>/dev/null || true; app_pid=""
+
+# ---- close-guard journey: unsaved PDF page edits must survive close ----
+guard_fixture="$output/sample-guard-$$.pdf"
+racket "$repo/scripts/acceptance/seed-sample-pdf.rkt" "$guard_fixture"
+guard_hash_before="$(sha256sum "$guard_fixture" | awk '{print $1}')"
+cd "$repo"; "$executable" "$guard_fixture" >"$output/application-guard.log" 2>&1 & app_pid=$!
+/usr/bin/python3 "$repo/scripts/e2e/linux-atspi-close-guard.py" --output "$output"
+stop_bounded "$app_pid" || true; wait "$app_pid" 2>/dev/null || true; app_pid=""
+[[ "$guard_hash_before" == "$(sha256sum "$guard_fixture" | awk '{print $1}')" ]]
+trap - EXIT
+
 # Opening a file must not create a managed catalog, cover cache or source edits.
 [[ ! -e "$XDG_CONFIG_HOME/site.jrtx.booklight/library.json" ]]
 [[ ! -d "$XDG_CONFIG_HOME/site.jrtx.booklight/covers" ]]

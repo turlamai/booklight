@@ -185,6 +185,7 @@ struct AppCommands: Commands {
             Button(L10n.t("ui.pages.rotate")) {
                 HostActions.pageEdit?(.rotateCurrent)
             }
+            .keyboardShortcut("r", modifiers: .command)
             Button(L10n.t("ui.pages.blank")) {
                 HostActions.pageEdit?(.insertBlankAfterCurrent)
             }

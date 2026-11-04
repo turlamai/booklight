@@ -633,6 +633,9 @@ final class ReaderModel: ObservableObject {
         tab.refreshBookmarkFlag()
         pdfEditRevision &+= 1
         pdfEditsPending = true
+        // Packaged-journey evidence: the close-guard driver waits for this
+        // line before closing the window, so the guard cannot race the RPC.
+        FileHandle.standardError.write(Data("page-edit: pending\n".utf8))
     }
 
     /// Export the CURRENT in-memory PDF rather than rereading the original
