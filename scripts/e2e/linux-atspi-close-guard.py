@@ -86,7 +86,7 @@ def snapshot(node, depth=0):
 def find_application():
     desktop = pyatspi.Registry.getDesktop(0)
     for application in children(desktop):
-        if any(role(node) == "frame" and (node.name or "") == "Booklight" for node in walk(application)): return application
+        if any(role(node) == "frame" and name(node) == "Booklight" for node in walk(application)): return application
     return None
 def find_button(root, names):
     return next((node for node in walk(root)
