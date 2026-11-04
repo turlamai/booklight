@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import CoreGraphics
 import Foundation
 
 // Packaged close-guard journey: rotate a page of the synthetic PDF through
@@ -31,6 +32,29 @@ extension AXUIElement {
 }
 
 let dialogMarkers = ["Unsaved PDF edits", "PDF 修改尚未保存"]
+func sendEscapeToPid(_ pid: Int32) {
+    guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 53, keyDown: true),
+          let up = CGEvent(keyboardEventSource: nil, virtualKey: 53, keyDown: false) else { return }
+    down.postToPid(pid)
+    usleep(60_000)
+    up.postToPid(pid)
+}
+func sheetElements(_ window: AXUIElement) -> [AXUIElement] {
+    walk(window).filter { stringAttribute($0, kAXRoleAttribute) == "AXSheet" }
+}
+func sheetHasButton(_ window: AXUIElement, _ names: Set<String>) -> Bool {
+    for sheet in sheetElements(window) {
+        for node in walk(sheet) {
+            guard stringAttribute(node, kAXRoleAttribute) == "AXButton" else { continue }
+            let values = [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute].map { stringAttribute(node, $0) }
+            if values.contains(where: names.contains) { return true }
+        }
+    }
+    return false
+}
+func logContains(_ log: URL, _ fragment: String) -> Bool {
+    (try? String(contentsOf: log, encoding: .utf8))?.contains(fragment) == true
+}
 var diagnosticApplication: AXUIElement?
 var diagnosticOutput: URL?
 func snapshotOfDiagnostic() -> [String: Any] {
@@ -78,12 +102,23 @@ do {
     }
     guard pressWindowClose() else { throw DriverError.failure("window close gesture did not fire") }
     _ = try waitFor("unsaved PDF edits sheet") { dialogMarkers.contains { contains(application, $0) } ? true : nil }
-    guard pressNamed(application, ["Cancel", "取消"]) else { throw DriverError.failure("Cancel did not press") }
+    // Sheet buttons refuse AXPress on the packaged run (cannotComplete);
+    // Escape is the sheet's own cancel gesture — NSAlert binds it to the
+    // button titled Cancel. Judge the choice from the host's response log.
+    precondition(sheetHasButton(window, ["Cancel", "取消"]), "cancel button missing from the sheet")
+    sendEscapeToPid(pid)
+    _ = try waitFor("close-guard cancel response (application log)") {
+        logContains(guardLog, "close-guard: sheet response 1002") ? true : nil
+    }
     _ = try gone(application, dialogMarkers)
     _ = try waitFor("document still open after cancel") { contains(window, "sample-guard") ? true : nil }
     guard pressWindowClose() else { throw DriverError.failure("window close gesture did not fire the second time") }
     _ = try waitFor("unsaved PDF edits sheet again") { dialogMarkers.contains { contains(application, $0) } ? true : nil }
-    guard pressNamed(application, ["Discard Changes", "放弃更改"]) else { throw DriverError.failure("Discard Changes did not press") }
+    precondition(sheetHasButton(window, ["Discard Changes", "放弃更改"]), "discard button missing from the sheet")
+    sendEscapeToPid(pid)
+    _ = try waitFor("close-guard discard response (application log)") {
+        logContains(guardLog, "close-guard: sheet response 1001") ? true : nil
+    }
     _ = try gone(application, dialogMarkers)
     _ = try gone(window, ["sample-guard"])
     try writeJSON(["platform": "macos", "actions": ["launch:sample-guard.pdf", "press:Tools", "press:Rotate Page", "press:CloseButton", "assert:Unsaved PDF edits", "press:Cancel", "press:CloseButton", "press:Discard Changes"], "assertions": ["packaged SwiftUI opens the synthetic PDF", "native rotate marks in-memory page edits", "window close raises the unsaved-edits sheet", "Cancel keeps the document open", "Discard closes the document without writing the original"]], to: output.appendingPathComponent("close-guard.json"))

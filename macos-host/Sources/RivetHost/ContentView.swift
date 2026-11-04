@@ -75,6 +75,11 @@ private final class ReaderWindowCloseDelegate: NSObject, NSWindowDelegate {
         warning.addButton(withTitle: L10n.t("ui.pdf.discard"))
         warning.addButton(withTitle: L10n.t("ui.password.cancel"))
         warning.beginSheetModal(for: sender) { [weak self, weak sender] choice in
+            // Packaged-journey evidence: the close-guard driver reads this
+            // line to judge which button the user chose; AX reads of a
+            // dismissed NSAlert sheet linger as stale ghosts.
+            FileHandle.standardError.write(
+                Data("close-guard: sheet response \(choice.rawValue)\n".utf8))
             MainActor.assumeIsolated {
                 guard let self, let sender, let reader = self.reader else { return }
                 switch choice {
