@@ -15,20 +15,36 @@ from pathlib import Path
 import pyatspi
 
 def children(node):
-    for index in range(node.childCount):
-        try: yield node.getChildAtIndex(index)
-        except Exception: continue
+    # AT-SPI may return None or invalidate a child while a GTK4 window is
+    # rebuilding its accessibility tree. Ignore only the detached node.
+    try:
+        count = node.childCount
+    except Exception:
+        return
+    for index in range(count):
+        try:
+            child = node.getChildAtIndex(index)
+            if child is not None:
+                yield child
+        except Exception:
+            continue
 def walk(node):
+    if node is None:
+        return
     yield node
-    for child in children(node): yield from walk(child)
+    for child in children(node):
+        yield from walk(child)
 def role(node):
     try: return node.getRoleName()
     except Exception: return "unknown"
+def name(node):
+    try: return node.name or ""
+    except Exception: return ""
 def text(node):
     try:
         value = node.queryText(); return value.getText(0, value.characterCount)
     except Exception: return ""
-def contains(root, fragment): return any(fragment in (node.name or "") or fragment in text(node) for node in walk(root))
+def contains(root, fragment): return any(fragment in name(node) or fragment in text(node) for node in walk(root))
 def contains_safe(root, fragment):
     # Discarding the last document may end the whole application; a dead
     # app means the document is gone.
@@ -49,7 +65,7 @@ def press(node):
         pass
     extents = node.queryComponent().getExtents(pyatspi.DESKTOP_COORDS)
     if extents.width <= 0 or extents.height <= 0:
-        raise AssertionError(f"AT-SPI exposes no invokable bounds for {node.name!r}")
+        raise AssertionError(f"AT-SPI exposes no invokable bounds for {name(node)!r}")
     pyatspi.Registry.generateMouseEvent(
         extents.x + extents.width // 2,
         extents.y + extents.height // 2,
@@ -63,7 +79,7 @@ def wait_for(description, probe, timeout=90.0):
         time.sleep(0.05)
     raise AssertionError(f"timed out waiting for {description}")
 def snapshot(node, depth=0):
-    result = {"name": node.name or "", "role": role(node)}; value = text(node)
+    result = {"name": name(node), "role": role(node)}; value = text(node)
     if value: result["text"] = value
     if depth < 10: result["children"] = [snapshot(child, depth + 1) for child in children(node)]
     return result
@@ -74,10 +90,10 @@ def find_application():
     return None
 def find_button(root, names):
     return next((node for node in walk(root)
-                 if role(node) == "push button" and (node.name or "") in names), None)
+                 if role(node) == "push button" and name(node) in names), None)
 def find_menu_item(root, names):
     return next((node for node in walk(root)
-                 if role(node) == "menu item" and (node.name or "") in names), None)
+                 if role(node) == "menu item" and name(node) in names), None)
 
 def main():
     parser = argparse.ArgumentParser(); parser.add_argument("--output", type=Path, required=True); args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True)
