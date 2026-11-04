@@ -55,27 +55,6 @@ func sheetHasButton(_ window: AXUIElement, _ names: Set<String>) -> Bool {
 func logContains(_ log: URL, _ fragment: String) -> Bool {
     (try? String(contentsOf: log, encoding: .utf8))?.contains(fragment) == true
 }
-// Sheet buttons refuse AXPress persistently on the packaged runners and
-// their frames are unreadable; focus the button through AX and actuate it
-// with a synthesized Space keystroke posted to the application.
-func focusAndPressSpace(_ window: AXUIElement, _ names: Set<String>, _ pid: Int32) -> Bool {
-    for sheet in sheetElements(window) {
-        for node in walk(sheet) {
-            guard stringAttribute(node, kAXRoleAttribute) == "AXButton" else { continue }
-            let values = [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute].map { stringAttribute(node, $0) }
-            guard values.contains(where: names.contains) else { continue }
-            guard AXUIElementSetAttributeValue(node, kAXFocusedAttribute as CFString, kCFBooleanTrue) == .success else { continue }
-            usleep(120_000)
-            guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 49, keyDown: true),
-                  let up = CGEvent(keyboardEventSource: nil, virtualKey: 49, keyDown: false) else { return false }
-            down.postToPid(pid)
-            usleep(60_000)
-            up.postToPid(pid)
-            return true
-        }
-    }
-    return false
-}
 // AXPress fails transiently (cannotComplete) while menus animate or the
 // accessibility server is busy; retry at a polling pace like every other
 // journey wait instead of giving up after one attempt.
@@ -200,12 +179,19 @@ do {
     guard pressWindowClose() else { throw DriverError.failure("window close gesture did not fire the second time") }
     _ = try waitFor("unsaved PDF edits sheet again") { dialogMarkers.contains { contains(application, $0) } ? true : nil }
     precondition(sheetHasButton(window, ["Discard Changes", "放弃更改"]), "discard button missing from the sheet")
-    // Escape maps to the sheet's Cancel on a three-button alert, so the
-    // discard choice must actuate its own button: focus it through AX and
-    // press Space, retrying at poll pace while the sheet settles.
-    _ = try waitFor("discard button actuation") {
-        focusAndPressSpace(window, ["Discard Changes", "放弃更改"], pid) ? true : nil
+    // The host binds the save-panel-convention Command+D to the discard
+    // button; synthesized keyboard events are the one input channel this
+    // runner answers reliably (every Escape and shortcut so far landed).
+    precondition(sheetHasButton(window, ["Discard Changes", "放弃更改"]), "discard button missing from the sheet")
+    guard let dDown = CGEvent(keyboardEventSource: nil, virtualKey: 2, keyDown: true),
+          let dUp = CGEvent(keyboardEventSource: nil, virtualKey: 2, keyDown: false) else {
+        throw DriverError.failure("keyboard unavailable")
     }
+    dDown.flags = .maskCommand
+    dUp.flags = .maskCommand
+    dDown.postToPid(pid)
+    usleep(80_000)
+    dUp.postToPid(pid)
     _ = try waitFor("close-guard discard response (application log)") {
         logContains(guardLog, "close-guard: sheet response 1001") ? true : nil
     }
