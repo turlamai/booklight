@@ -59,8 +59,9 @@ func logContains(_ log: URL, _ fragment: String) -> Bool {
 // accept it without acting); actuate by synthesizing a real click at the
 // AX-reported frame instead.
 func clickAXButton(_ root: AXUIElement, _ names: Set<String>, _ pid: Int32) -> Bool {
+    let roles: Set<String> = ["AXButton", "AXMenuItem"]
     for node in walk(root) {
-            guard stringAttribute(node, kAXRoleAttribute) == "AXButton" else { continue }
+            guard roles.contains(stringAttribute(node, kAXRoleAttribute)) else { continue }
             let values = [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute].map { stringAttribute(node, $0) }
             guard values.contains(where: names.contains) else { continue }
             var positionValue: CFTypeRef?; var sizeValue: CFTypeRef?
