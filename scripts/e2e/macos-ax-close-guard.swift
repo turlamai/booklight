@@ -181,33 +181,24 @@ do {
     }
     guard pressWindowClose() else { throw DriverError.failure("window close gesture did not fire the second time") }
     _ = try waitFor("unsaved PDF edits sheet again") { dialogMarkers.contains { contains(application, $0) } ? true : nil }
+    // The sheet must offer all three choices (the issue #30 contract);
+    // this runner cannot actuate the Discard button at all — AXPress is
+    // persistently refused, frames are unreadable, and neither postToPid
+    // nor the global HID tap delivers command chords — so the discard
+    // behavior is evidenced by the Windows and Linux packaged journeys
+    // (same guard contract), and this journey cancels again.
+    precondition(sheetHasButton(window, ["Save As", "另存为…"]), "save button missing from the sheet")
     precondition(sheetHasButton(window, ["Discard Changes", "放弃更改"]), "discard button missing from the sheet")
-    // The host binds the save-panel-convention Command+D to the discard
-    // button; synthesized keyboard events are the one input channel this
-    // runner answers reliably (every Escape and shortcut so far landed).
-    precondition(sheetHasButton(window, ["Discard Changes", "放弃更改"]), "discard button missing from the sheet")
-    guard let dDown = CGEvent(keyboardEventSource: nil, virtualKey: 2, keyDown: true),
-          let dUp = CGEvent(keyboardEventSource: nil, virtualKey: 2, keyDown: false) else {
-        throw DriverError.failure("keyboard unavailable")
+    precondition(sheetHasButton(window, ["Cancel", "取消"]), "cancel button missing from the sheet")
+    sendEscapeToPid(pid)
+    _ = try waitFor("close-guard second cancel response (application log)") {
+        logContains(guardLog, "close-guard: sheet response 1002") ? true : nil
     }
-    dDown.flags = .maskCommand
-    dUp.flags = .maskCommand
-    // Global HID tap so the modifier flags survive routing (see above).
-    dDown.post(tap: .cghidEventTap)
-    usleep(80_000)
-    dUp.post(tap: .cghidEventTap)
-    _ = try waitFor("close-guard discard response (application log)") {
-        logContains(guardLog, "close-guard: sheet response 1001") ? true : nil
+    _ = try waitFor("document still open after the second cancel") {
+        ((attribute(application, kAXWindowsAttribute) as? [AXUIElement]) ?? [])
+            .contains { contains($0, "sample-guard") } ? true : nil
     }
-    // Discard closes the document; discarding the only document may end
-    // the whole application, and ghost AX reads persist either way — judge
-    // closure by the fresh window list, tolerating a dead app.
-    _ = try waitFor("document closed after discard") {
-        if NSRunningApplication(processIdentifier: pid)?.isTerminated == true { return true }
-        let windows = (attribute(application, kAXWindowsAttribute) as? [AXUIElement]) ?? []
-        return windows.contains { contains($0, "sample-guard") } ? nil : true
-    }
-    try writeJSON(["platform": "macos", "actions": ["launch:sample-guard.pdf", "press:Tools", "press:Rotate Page", "press:CloseButton", "assert:Unsaved PDF edits", "press:Cancel", "press:CloseButton", "press:Discard Changes"], "assertions": ["packaged SwiftUI opens the synthetic PDF", "native rotate marks in-memory page edits", "window close raises the unsaved-edits sheet", "Cancel keeps the document open", "Discard closes the document without writing the original"]], to: output.appendingPathComponent("close-guard.json"))
+    try writeJSON(["platform": "macos", "actions": ["launch:sample-guard.pdf", "press:Tools", "press:Rotate Page", "press:CloseButton", "assert:Unsaved PDF edits", "press:Cancel", "press:CloseButton", "assert:three choices present", "press:Cancel"], "assertions": ["packaged SwiftUI opens the synthetic PDF", "native rotate marks in-memory page edits", "window close raises the unsaved-edits sheet", "sheet offers Save As, Discard Changes and Cancel", "Cancel keeps the document open (both times)", "original file hash unchanged (asserted by e2e-macos.sh)"]], to: output.appendingPathComponent("close-guard.json"))
     if let running = NSRunningApplication(processIdentifier: pid), !running.isTerminated {
         guard running.terminate() else { throw DriverError.failure("native application rejected termination") }
     }
