@@ -353,6 +353,11 @@ enum L10n {
     "ui.watermark.applying": "正在烘焙水印…",
     "ui.export.failed": "导出失败：{0}",
     "ui.need.text": "当前页没有可导出的文本。",
+    "ui.pdf.pending-title": "PDF 修改尚未保存",
+    "ui.pdf.pending-body": "此 PDF 有尚未保存的页面修改。是否先另存一份已编辑副本？",
+    "ui.pdf.save-as": "另存为…",
+    "ui.pdf.discard": "放弃更改",
+    "ui.pdf.preserve-original": "请选择其他保存位置，以免覆盖原始 PDF。",
     ]
 
     private static let en: [String: String] = [
@@ -704,6 +709,11 @@ enum L10n {
     "ui.watermark.applying": "Baking watermark…",
     "ui.export.failed": "Export failed: {0}",
     "ui.need.text": "This page has no text to export.",
+    "ui.pdf.pending-title": "Unsaved PDF edits",
+    "ui.pdf.pending-body": "This PDF has unsaved page changes. Export an edited copy before closing?",
+    "ui.pdf.save-as": "Save As…",
+    "ui.pdf.discard": "Discard Changes",
+    "ui.pdf.preserve-original": "Choose a different destination to preserve the original PDF.",
     ]
 
     /// Look up a key in the active language, falling back to zh then the key
