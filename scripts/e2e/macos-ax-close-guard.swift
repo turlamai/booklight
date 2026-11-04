@@ -146,10 +146,26 @@ do {
     let openMenu: AXUIElement = try waitFor("opened Tools menu") {
         children(toolsItem).first { stringAttribute($0, kAXRoleAttribute) == "AXMenu" }
     }
-    let rotateItem = try waitFor("Rotate Page item in the open menu") {
+    let rotateItem: AXUIElement? = try waitFor("Rotate Page item in the open menu") { () -> AXUIElement? in
         walk(openMenu).first { ["Rotate Page", "旋转本页"].contains(stringAttribute($0, kAXTitleAttribute)) }
     }
-    guard pressWithRetry(rotateItem) else { throw DriverError.failure("Rotate Page item did not press") }
+    let menuPressWorked = rotateItem.map({ pressWithRetry($0, attempts: 25) }) ?? false
+    if !menuPressWorked {
+        // Menu-item presses are intermittently refused on the headless
+        // runner. The action carries the same Command+R shortcut as Linux,
+        // and synthesized keyboard events are the one input channel this
+        // runner answers reliably (the Escape cancels all landed).
+        FileHandle.standardError.write(Data("rotate: falling back to the keyboard shortcut\n".utf8))
+        guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 13, keyDown: true),
+              let up = CGEvent(keyboardEventSource: nil, virtualKey: 13, keyDown: false) else {
+            throw DriverError.failure("keyboard fallback unavailable")
+        }
+        down.flags = .maskCommand
+        up.flags = .maskCommand
+        down.postToPid(pid)
+        usleep(80_000)
+        up.postToPid(pid)
+    }
     // The rotate RPC is async; the host logs once the in-memory edit is
     // actually pending. Closing earlier would skip the guard legitimately.
     let guardLog = output.appendingPathComponent("application-guard.log")
