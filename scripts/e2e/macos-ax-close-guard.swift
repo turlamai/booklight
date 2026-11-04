@@ -66,20 +66,19 @@ func clickSheetButton(_ window: AXUIElement, _ names: Set<String>, _ pid: Int32)
             var positionValue: CFTypeRef?; var sizeValue: CFTypeRef?
             guard AXUIElementCopyAttributeValue(node, kAXPositionAttribute as CFString, &positionValue) == .success,
                   AXUIElementCopyAttributeValue(node, kAXSizeAttribute as CFString, &sizeValue) == .success,
-                  let position = positionValue as? String,
-                  let size = sizeValue as? String else { continue }
+                  let positionText = positionValue as? String,
+                  let sizeText = sizeValue as? String else { continue }
             // AX renders "x: N y: M" / "w: N h: M".
-            let nums = position.split(separator: " ").compactMap { Double($0.filter { "0123456789.".contains($0) }) }
-            let dims = size.split(separator: " ").compactMap { Double($0.filter { "0123456789.".contains($0) }) }
+            let nums = positionText.split(separator: " ").compactMap { Double($0.filter { "0123456789.".contains($0) }) }
+            let dims = sizeText.split(separator: " ").compactMap { Double($0.filter { "0123456789.".contains($0) }) }
             guard nums.count >= 2, dims.count >= 2 else { continue }
             let cx = nums[nums.count - 2] + dims[dims.count - 2] / 2
             let cy = nums[nums.count - 1] + dims[dims.count - 1] / 2
+            let position = CGPoint(x: cx, y: cy)
             guard let down = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown,
-                                     mouseClickingState: 1, mouseButton: .left),
+                                     mouseCursorPosition: position, mouseButton: .left),
                   let up = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,
-                                   mouseClickingState: 1, mouseButton: .left) else { return false }
-            down.location = CGPoint(x: cx, y: cy)
-            up.location = CGPoint(x: cx, y: cy)
+                                   mouseCursorPosition: position, mouseButton: .left) else { return false }
             down.postToPid(pid)
             usleep(80_000)
             up.postToPid(pid)
