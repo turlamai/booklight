@@ -55,6 +55,39 @@ func sheetHasButton(_ window: AXUIElement, _ names: Set<String>) -> Bool {
 func logContains(_ log: URL, _ fragment: String) -> Bool {
     (try? String(contentsOf: log, encoding: .utf8))?.contains(fragment) == true
 }
+// Sheet buttons refuse AXPress on the packaged runners; actuate the button
+// by synthesizing a real click at its AX-reported frame instead.
+func clickSheetButton(_ window: AXUIElement, _ names: Set<String>, _ pid: Int32) -> Bool {
+    for sheet in sheetElements(window) {
+        for node in walk(sheet) {
+            guard stringAttribute(node, kAXRoleAttribute) == "AXButton" else { continue }
+            let values = [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute].map { stringAttribute(node, $0) }
+            guard values.contains(where: names.contains) else { continue }
+            var positionValue: CFTypeRef?; var sizeValue: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(node, kAXPositionAttribute as CFString, &positionValue) == .success,
+                  AXUIElementCopyAttributeValue(node, kAXSizeAttribute as CFString, &sizeValue) == .success,
+                  let position = positionValue as? String,
+                  let size = sizeValue as? String else { continue }
+            // AX renders "x: N y: M" / "w: N h: M".
+            let nums = position.split(separator: " ").compactMap { Double($0.filter { "0123456789.".contains($0) }) }
+            let dims = size.split(separator: " ").compactMap { Double($0.filter { "0123456789.".contains($0) }) }
+            guard nums.count >= 2, dims.count >= 2 else { continue }
+            let cx = nums[nums.count - 2] + dims[dims.count - 2] / 2
+            let cy = nums[nums.count - 1] + dims[dims.count - 1] / 2
+            guard let down = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown,
+                                     mouseClickingState: 1, mouseButton: .left),
+                  let up = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,
+                                   mouseClickingState: 1, mouseButton: .left) else { return false }
+            down.location = CGPoint(x: cx, y: cy)
+            up.location = CGPoint(x: cx, y: cy)
+            down.postToPid(pid)
+            usleep(80_000)
+            up.postToPid(pid)
+            return true
+        }
+    }
+    return false
+}
 var diagnosticApplication: AXUIElement?
 var diagnosticOutput: URL?
 func snapshotOfDiagnostic() -> [String: Any] {
@@ -121,7 +154,12 @@ do {
     guard pressWindowClose() else { throw DriverError.failure("window close gesture did not fire the second time") }
     _ = try waitFor("unsaved PDF edits sheet again") { dialogMarkers.contains { contains(application, $0) } ? true : nil }
     precondition(sheetHasButton(window, ["Discard Changes", "放弃更改"]), "discard button missing from the sheet")
-    sendEscapeToPid(pid)
+    // Escape maps to the sheet's Cancel on a three-button alert, so the
+    // discard choice needs a real click on its button (AX frames stay
+    // readable even while AXPress refuses).
+    _ = try waitFor("discard button click") {
+        clickSheetButton(window, ["Discard Changes", "放弃更改"], pid) ? true : nil
+    }
     _ = try waitFor("close-guard discard response (application log)") {
         logContains(guardLog, "close-guard: sheet response 1001") ? true : nil
     }
