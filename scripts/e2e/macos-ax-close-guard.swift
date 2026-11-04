@@ -25,6 +25,10 @@ func gone(_ root: AXUIElement, _ fragments: [String], timeout: TimeInterval = 90
 }
 func snapshot(_ element: AXUIElement, depth: Int = 0) -> [String: Any] { var result: [String: Any] = ["role": stringAttribute(element, kAXRoleAttribute), "identifier": stringAttribute(element, kAXIdentifierAttribute), "title": stringAttribute(element, kAXTitleAttribute), "label": stringAttribute(element, kAXDescriptionAttribute), "value": stringAttribute(element, kAXValueAttribute)]; if depth < 10 { result["children"] = children(element).map { snapshot($0, depth: depth + 1) } }; return result }
 func writeJSON(_ value: Any, to url: URL) throws { try JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys]).write(to: url) }
+extension AXUIElement {
+    var kAXRole: String { stringAttribute(self, kAXRoleAttribute) }
+    var kAXTitle: String { stringAttribute(self, kAXTitleAttribute) }
+}
 
 let dialogMarkers = ["Unsaved PDF edits", "PDF 修改尚未保存"]
 var diagnosticApplication: AXUIElement?
@@ -44,9 +48,21 @@ do {
     _ = AXUIElementSetAttributeValue(application, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
     _ = AXUIElementPerformAction(window, kAXRaiseAction as CFString)
     _ = try waitFor("synthetic PDF opened") { contains(window, "sample-guard") ? true : nil }
-    guard pressNamed(application, ["Tools", "工具"]) else { throw DriverError.failure("Tools menu did not open") }
-    _ = try waitFor("Tools menu items") { contains(application, "Rotate Page") || contains(application, "旋转本页") ? true : nil }
-    guard pressNamed(application, ["Rotate Page", "旋转本页"]) else { throw DriverError.failure("Rotate Page item did not press") }
+    // Menubar items expose their submenu items even while the menu is
+    // closed, so name-based presses land on nothing; wait for the menu to
+    // actually open (an AXMenu child of the pressed item) and press the
+    // item inside that open menu.
+    let toolsItem = try waitFor("Tools menu bar item") { () -> AXUIElement? in
+        walk(application).first { $0.kAXRole == "AXMenuBarItem" && ["Tools", "工具"].contains($0.kAXTitle) }
+    }
+    guard AXUIElementPerformAction(toolsItem, kAXPressAction as CFString) == .success else { throw DriverError.failure("Tools menu did not open") }
+    let openMenu: AXUIElement = try waitFor("opened Tools menu") {
+        children(toolsItem).first { stringAttribute($0, kAXRoleAttribute) == "AXMenu" }
+    }
+    guard let rotateItem = walk(openMenu).first(where: { ["Rotate Page", "旋转本页"].contains(stringAttribute($0, kAXTitleAttribute)) }) else {
+        throw DriverError.failure("Rotate Page item not in the open Tools menu")
+    }
+    guard AXUIElementPerformAction(rotateItem, kAXPressAction as CFString) == .success else { throw DriverError.failure("Rotate Page item did not press") }
     func pressWindowClose() -> Bool {
         if let closeButton = attribute(window, kAXCloseButtonAttribute) as! AXUIElement?,
            AXUIElementPerformAction(closeButton, kAXPressAction as CFString) == .success { return true }

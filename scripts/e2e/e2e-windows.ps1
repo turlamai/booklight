@@ -52,15 +52,25 @@ function Wait-Until {
 
 function Contains-Text {
     param($Root, [string]$Fragment)
-    $nodes = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
-        [System.Windows.Automation.Condition]::TrueCondition)
-    for ($index = 0; $index -lt $nodes.Count; $index++) {
-        if ($nodes[$index].Current.Name -like "*$Fragment*") { return $true }
+    try {
+        $nodes = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+            [System.Windows.Automation.Condition]::TrueCondition)
+        for ($index = 0; $index -lt $nodes.Count; $index++) {
+            if ($nodes[$index].Current.Name -like "*$Fragment*") { return $true }
+        }
+        return $false
+    } catch {
+        # Window transitions surface transient UIA faults; the callers poll,
+        # so treat a fault as "not present right now".
+        return $false
     }
-    return $false
 }
 
 function Invoke-NamedControl {
+    param($Root, [string[]]$Names)
+    try { return Invoke-NamedControlInner $Root $Names } catch { return $false }
+}
+function Invoke-NamedControlInner {
     param($Root, [string[]]$Names)
     $nodes = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
         [System.Windows.Automation.Condition]::TrueCondition)
