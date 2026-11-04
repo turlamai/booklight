@@ -187,7 +187,7 @@ do {
     // nor the global HID tap delivers command chords — so the discard
     // behavior is evidenced by the Windows and Linux packaged journeys
     // (same guard contract), and this journey cancels again.
-    precondition(sheetHasButton(window, ["Save As", "另存为…"]), "save button missing from the sheet")
+    precondition(sheetHasButton(window, ["Save As", "Save As…", "另存为…"]), "save button missing from the sheet")
     precondition(sheetHasButton(window, ["Discard Changes", "放弃更改"]), "discard button missing from the sheet")
     precondition(sheetHasButton(window, ["Cancel", "取消"]), "cancel button missing from the sheet")
     sendEscapeToPid(pid)
