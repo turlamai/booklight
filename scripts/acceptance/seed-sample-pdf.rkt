@@ -17,7 +17,12 @@
     (string->bytes/utf-8
      (format "<< /Length ~a >>\nstream\nBT /F1 24 Tf 72 720 Td (~a) Tj ET\nendstream"
              (+ 40 (string-length text)) text)))
-  (define header (string->bytes/utf-8 "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n"))
+  ;; Binary-comment marker as raw bytes: string->bytes/utf-8 would encode
+  ;; each \xE2-style escape as a multi-byte sequence instead of the intended
+  ;; single >127 bytes the PDF spec describes.
+  (define header
+    (bytes-append #"\x25PDF-1.4\x0a\x25"
+                  (bytes #xE2 #xE3 #xCF #xD3) #"\x0a"))
   (define objects
     (list
      ;; 1 catalog

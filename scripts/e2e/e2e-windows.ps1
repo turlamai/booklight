@@ -355,6 +355,12 @@ try {
             Invoke-NamedControl $window @('Page edit','页编辑')
             return $false
         })
+        # The rotate RPC is async; the tab header gains a bullet only once
+        # the in-memory edit is actually pending. Closing earlier would skip
+        # the guard legitimately.
+        [void](Wait-Until 'pending edits marker in the tab header' {
+            Contains-Text $window "$([char]0x2022)"
+        })
         $pattern = $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern)
         ([System.Windows.Automation.WindowPattern]$pattern).Close()
         [void](Wait-Until 'unsaved PDF edits dialog' {

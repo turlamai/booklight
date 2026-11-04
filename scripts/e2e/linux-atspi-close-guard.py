@@ -98,6 +98,10 @@ def main():
              "--method", "org.gtk.Actions.Activate",
              "page-rotate", "[]", "{}"],
             check=True, capture_output=True, timeout=10)
+        # The rotate RPC is async; the title gains a bullet only once the
+        # in-memory edit is actually pending. Closing earlier would skip the
+        # guard legitimately.
+        wait_for("pending edits marker in the title", lambda: contains_safe(window, "•"))
         close_button = wait_for("title bar close button", lambda: find_button(window, ("Close",)))
         press(close_button)
         wait_for("unsaved PDF edits dialog", lambda: contains(application, "Unsaved PDF edits") or contains(application, "PDF 修改尚未保存"))

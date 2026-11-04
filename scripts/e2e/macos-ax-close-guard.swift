@@ -63,6 +63,12 @@ do {
         throw DriverError.failure("Rotate Page item not in the open Tools menu")
     }
     guard AXUIElementPerformAction(rotateItem, kAXPressAction as CFString) == .success else { throw DriverError.failure("Rotate Page item did not press") }
+    // The rotate RPC is async; the host logs once the in-memory edit is
+    // actually pending. Closing earlier would skip the guard legitimately.
+    let guardLog = output.appendingPathComponent("application-guard.log")
+    _ = try waitFor("page edit pending (application log)") {
+        (try? String(contentsOf: guardLog, encoding: .utf8))?.contains("page-edit: pending") == true ? true : nil
+    }
     func pressWindowClose() -> Bool {
         if let closeButton = attribute(window, kAXCloseButtonAttribute) as! AXUIElement?,
            AXUIElementPerformAction(closeButton, kAXPressAction as CFString) == .success { return true }
