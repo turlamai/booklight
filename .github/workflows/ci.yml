@@ -29,6 +29,8 @@ jobs:
         run: node scripts/gen-win-strings.mjs --check
       - name: Verify the GTK i18n table matches shared/i18n
         run: node scripts/gen-linux-strings.mjs --check
+      - name: Verify the macOS i18n table matches shared/i18n
+        run: node scripts/gen-swift-strings.mjs --check
       - name: Prevent book library / reading analytics regression
         run: node scripts/check-file-first.mjs
 
