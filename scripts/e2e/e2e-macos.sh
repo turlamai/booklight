@@ -11,6 +11,7 @@ mkdir -p "$output" "$home"
 [[ -n "$app" && -x "$app" && -f "$fixture" ]]
 fixture_hash_before="$(shasum -a 256 "$fixture" | awk '{print $1}')"
 racket "$repo/scripts/acceptance/seed-annotation-recovery.rkt" "$home/Library/Application Support/site.jrtx.booklight" "$fixture"
+racket "$repo/scripts/acceptance/seed-ai-preview.rkt" "$home/Library/Application Support/site.jrtx.booklight"
 swiftc "$repo/scripts/e2e/macos-ax.swift" -o "$driver" -framework AppKit -framework ApplicationServices
 HOME="$home" BOOKLIGHT_OPEN="$fixture" "$app" >"$output/application.log" 2>&1 &
 app_pid=$!

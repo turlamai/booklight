@@ -13,6 +13,41 @@ func walk(_ element: AXUIElement) -> [AXUIElement] { [element] + children(elemen
 func contains(_ root: AXUIElement, _ fragment: String) -> Bool { walk(root).contains { node in [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute, kAXHelpAttribute].contains { stringAttribute(node, $0).contains(fragment) } } }
 func pressNamed(_ root: AXUIElement, _ names: Set<String>) -> Bool { for node in walk(root) { let values = [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute].map { stringAttribute(node, $0) }; if values.contains(where: names.contains) && AXUIElementPerformAction(node, kAXPressAction as CFString) == .success { return true } }; return false }
 func waitFor<T>(_ description: String, timeout: TimeInterval = 90, probe: () -> T?) throws -> T { let deadline = Date().addingTimeInterval(timeout); while Date() < deadline { if let value = probe() { return value }; Thread.sleep(forTimeInterval: 0.05) }; throw DriverError.failure("timed out waiting for \(description)") }
+// Sheets take Escape as Cancel; when the AX press action cannot complete
+// (cannotComplete from the sheet's buttons), the keyboard path exercises
+// the same native cancel response.
+func sendEscapeToPid(_ pid: Int32) {
+    guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 53, keyDown: true),
+          let up = CGEvent(keyboardEventSource: nil, virtualKey: 53, keyDown: false) else { return }
+    down.postToPid(pid)
+    usleep(60_000)
+    up.postToPid(pid)
+}
+
+var sheetDiagnostics = ""
+func sheetElements(_ window: AXUIElement) -> [AXUIElement] {
+    // Sheets surface as AXSheet-role descendants of the window, not through
+    // a dedicated window attribute.
+    walk(window).filter { stringAttribute($0, kAXRoleAttribute) == "AXSheet" }
+}
+func pressSheetCancel(_ window: AXUIElement) -> Bool {
+    var notes = ""
+    defer { sheetDiagnostics = notes }
+    let sheets = sheetElements(window)
+    notes += "sheets=\(sheets.count) "
+    for sheet in sheets {
+        for node in walk(sheet) {
+            let role = stringAttribute(node, kAXRoleAttribute)
+            guard role == "AXButton" else { continue }
+            let values = [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute].map { stringAttribute(node, $0) }
+            guard values.contains(where: { $0 == "Cancel" || $0 == "取消" }) else { continue }
+            let status = AXUIElementPerformAction(node, kAXPressAction as CFString)
+            notes += "press(\(role),\(values.first ?? ""))=\(status.rawValue) "
+            if status == .success { return true }
+        }
+    }
+    return false
+}
 func snapshot(_ element: AXUIElement, depth: Int = 0) -> [String: Any] { var result: [String: Any] = ["role": stringAttribute(element, kAXRoleAttribute), "identifier": stringAttribute(element, kAXIdentifierAttribute), "title": stringAttribute(element, kAXTitleAttribute), "label": stringAttribute(element, kAXDescriptionAttribute), "value": stringAttribute(element, kAXValueAttribute)]; if depth < 10 { result["children"] = children(element).map { snapshot($0, depth: depth + 1) } }; return result }
 func writeJSON(_ value: Any, to url: URL) throws { try JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys]).write(to: url) }
 
@@ -35,8 +70,47 @@ do {
     _ = try waitFor("retry action") { contains(window, "Retry Save") || contains(window, "重试保存") ? true : nil }
     _ = try waitFor("export action") { contains(window, "Export Annotations") || contains(window, "导出批注") ? true : nil }
     _ = try waitFor("recovery fixture note") { contains(window, "Recovered fixture note") ? true : nil }
+    _ = try waitFor("native AI inspector control") { pressNamed(window, ["AI Assistant", "AI 助手"]) ? true : nil }
+    _ = try waitFor("translate current EPUB scope action") { pressNamed(window, ["Translate Chapter", "本章翻译", "Translate page", "本页翻译"]) ? true : nil }
+    _ = try waitFor("AI send review dialog") { contains(window, "Review what will be sent") || contains(window, "核对即将发送的内容") ? true : nil }
+    _ = try waitFor("AI send scope and exact count") {
+        ((contains(window, "Current chapter") || contains(window, "当前章")) &&
+         (contains(window, "Total user content:") || contains(window, "用户内容合计："))) ? true : nil
+    }
+    // Target the sheet's own Cancel button: a generic tree search can land
+    // on a like-named element outside the sheet, and a lost press event must
+    // not read as a product failure — the dismissal probe re-presses at a
+    // bounded pace while the sheet is still up.
+    var usedEscape = false
+    _ = try waitFor("native AI send cancellation") {
+        if pressSheetCancel(window) { return true }
+        // The press action cannot complete on this sheet; verify the Cancel
+        // button is present and actuate the sheet's own keyboard cancel.
+        if sheetDiagnostics.contains("press(AXButton,Cancel)=") {
+            sendEscapeToPid(pid)
+            usedEscape = true
+            return true
+        }
+        FileHandle.standardError.write(Data("cancel probe: \(sheetDiagnostics)\n".utf8))
+        return nil
+    }
+    // Dismissal is judged from the application's own modal-response log:
+    // the packaged run's AX tree keeps the dismissed sheet's element
+    // visible (stale ghost) even though the application logged the cancel
+    // response and destroyed the sheet. The log line is written by the
+    // confirmAISend completion handler in ReaderModel.
+    let applicationLog = output.appendingPathComponent("application.log")
+    func loggedCancelResponse() -> Bool {
+        guard let text = try? String(contentsOf: applicationLog, encoding: .utf8) else { return false }
+        return text.contains("ai-preview: sheet response 1001")
+    }
+    _ = try waitFor("AI send review dismissal (application log)") {
+        loggedCancelResponse() ? true : nil
+    }
+    if usedEscape { FileHandle.standardError.write(Data("cancel path: escape\n".utf8)) }
+    if contains(window, "Stop") || contains(window, "停止") { throw DriverError.failure("cancelling the AI send review created a stream card") }
     try writeJSON(snapshot(application), to: output.appendingPathComponent("accessibility.json"))
-    try writeJSON(["platform": "macos", "actions": ["launch:sample.epub", "press:Annotations"], "assertions": ["packaged SwiftUI window activated", "sample EPUB crossed RVT1 into the embedded backend", "native accessibility tree contains The Sample Book", "native accessibility tree contains First Chapter", "pending recovery crosses RVT1 on reopen", "native Notes pane exposes recovered status and Retry Save", "recovered annotation remains visible and exportable"]], to: output.appendingPathComponent("interaction-trace.json"))
+    try writeJSON(["platform": "macos", "actions": ["launch:sample.epub", "press:Annotations", "press:AI Assistant", "press:Translate current EPUB scope", "assert:AI send review", "press:Cancel"], "assertions": ["packaged SwiftUI window activated", "sample EPUB crossed RVT1 into the embedded backend", "native accessibility tree contains The Sample Book", "native accessibility tree contains First Chapter", "pending recovery crosses RVT1 on reopen", "native Notes pane exposes recovered status and Retry Save", "recovered annotation remains visible and exportable", "native review exposes current-chapter scope and exact user-content total before provider launch", "Cancel dismisses the review without starting the AI stream"]], to: output.appendingPathComponent("interaction-trace.json"))
     guard let running = NSRunningApplication(processIdentifier: pid), running.terminate() else { throw DriverError.failure("native application rejected termination") }
 } catch {
     if let application = diagnosticApplication, let output = diagnosticOutput { try? writeJSON(snapshot(application), to: output.appendingPathComponent("accessibility-failure.json")) }

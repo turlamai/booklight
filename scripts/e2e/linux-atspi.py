@@ -21,9 +21,19 @@ def text(node):
         value = node.queryText(); return value.getText(0, value.characterCount)
     except Exception: return ""
 def contains(root, fragment): return any(fragment in (node.name or "") or fragment in text(node) for node in walk(root))
+def showing(node):
+    try: return node.getState().contains(pyatspi.STATE_SHOWING)
+    except Exception: return False
+def contains_showing(root, fragment): return any(showing(node) and (fragment in (node.name or "") or fragment in text(node)) for node in walk(root))
 def press(node):
     try:
         actions = node.queryAction()
+        names = [actions.getName(i) for i in range(actions.nActions)]
+        # GTK4 buttons expose "press", "release" and "click"; acting on
+        # "press" alone never completes the activation, so prefer "click".
+        for preferred in ("click", "press"):
+            if preferred in names and actions.doAction(names.index(preferred)):
+                return
         for index in range(actions.nActions):
             if actions.doAction(index): return
     except Exception:
@@ -89,8 +99,27 @@ def main():
         wait_for("retry action", lambda: contains(window, "Retry Save"))
         wait_for("export action", lambda: contains(window, "Export Annotations"))
         wait_for("recovery fixture note", lambda: contains(window, "Recovered fixture note"))
+        # The file-first host starts with the AI sidebar hidden (reading
+        # canvas first). Open it through the named header-bar toggle — the
+        # same surface an assistive-technology user would use. (GtkMenuButton
+        # popups do not open through AT-SPI actions on headless Wayland, so
+        # the toolbar button is the accessibility contract, not the menu.)
+        ai_button = wait_for("AI sidebar toggle", lambda: next((node for node in walk(window) if role(node) == "push button" and (node.name or "") in ("AI Assistant", "AI 助手")), None))
+        press(ai_button)
+        translate_tab = wait_for("native Translate page", lambda: next((node for node in walk(window) if role(node) == "page tab" and (node.name or "") in ("Translate", "翻译")), None))
+        select_page_tab(translate_tab)
+        translate_chapter = wait_for("translate current EPUB scope action", lambda: next((node for node in walk(window) if role(node) == "push button" and (node.name or "") in ("Translate Chapter", "本章翻译", "Translate page", "本页翻译")), None))
+        press(translate_chapter)
+        # GTK exposes transient native dialogs as application-level siblings
+        # of their parent frame, not reliably as descendants of the frame.
+        wait_for("AI send review dialog", lambda: contains(application, "Review what will be sent") or contains(application, "核对即将发送的内容"))
+        wait_for("AI send scope and exact count", lambda: (contains(application, "Current chapter") or contains(application, "当前章")) and (contains(application, "Total user content:") or contains(application, "用户内容合计：")))
+        cancel = wait_for("native AI send cancellation", lambda: next((node for node in walk(application) if role(node) == "push button" and (node.name or "") in ("Cancel", "取消")), None))
+        press(cancel)
+        wait_for("AI send review dismissal", lambda: not contains(application, "Review what will be sent") and not contains(application, "核对即将发送的内容"))
+        if contains_showing(window, "Stop") or contains_showing(window, "停止"): raise AssertionError("cancelling the AI send review created a visible stream card")
         (args.output / "accessibility.json").write_text(json.dumps(snapshot(application), ensure_ascii=False, indent=2), encoding="utf-8")
-        (args.output / "interaction-trace.json").write_text(json.dumps({"platform":"linux","actions":["launch:sample.epub","select:Outline","select:Notes"],"assertions":["packaged GTK4 frame activated on native Wayland","sample EPUB crossed RVT1 into the embedded backend","native accessibility tree contains The Sample Book","native accessibility tree contains First Chapter","pending recovery crosses RVT1 on reopen","native Notes pane exposes recovered status and Retry Save","recovered annotation remains visible and exportable"]}, indent=2), encoding="utf-8")
+        (args.output / "interaction-trace.json").write_text(json.dumps({"platform":"linux","actions":["launch:sample.epub","select:Outline","select:Notes","press:AI Assistant","select:Translate","press:Translate current EPUB scope","assert:AI send review","press:Cancel"],"assertions":["packaged GTK4 frame activated on native Wayland","sample EPUB crossed RVT1 into the embedded backend","native accessibility tree contains The Sample Book","native accessibility tree contains First Chapter","pending recovery crosses RVT1 on reopen","native Notes pane exposes recovered status and Retry Save","recovered annotation remains visible and exportable","native review exposes current-chapter scope and exact user-content total before provider launch","Cancel dismisses the review without starting the AI stream"]}, indent=2), encoding="utf-8")
     except Exception:
         if application is not None: (args.output / "accessibility-failure.json").write_text(json.dumps(snapshot(application), ensure_ascii=False, indent=2), encoding="utf-8")
         raise

@@ -788,6 +788,89 @@ bool AiPanel::ensure_provider(GtkListBox* notice_list) {
   return ok;
 }
 
+void AiPanel::confirm_ai_send(
+    rivet_app::AISendAction action, rivet_app::AISendScope scope,
+    std::string const& content,
+    std::vector<std::vector<std::string>> const& history,
+    std::string const& message, std::function<void()> on_continue) {
+  (void)ctx_->api->preview_ai_send_async(
+      action, scope, content, history, message,
+      [this, on_continue = std::move(on_continue)](
+          rivet_app::Result<rivet_app::AISendPreview> result) mutable {
+        host::dispatch_ui(
+            [this, result = std::move(result),
+             on_continue = std::move(on_continue)]() mutable {
+              if (!result.succeeded()) {
+                ctx_->alert(Trf("ui.ai-preview.failed",
+                                describe_error(result.error)));
+                return;
+              }
+              auto const& preview = result.get();
+              char const* action_key = "ui.ai-preview.action.chat";
+              switch (preview.action) {
+                case rivet_app::AISendAction::translate:
+                  action_key = "ui.ai-preview.action.translate";
+                  break;
+                case rivet_app::AISendAction::summarize:
+                  action_key = "ui.ai-preview.action.summarize";
+                  break;
+                case rivet_app::AISendAction::chat: break;
+              }
+              char const* scope_key = "ui.ai-preview.scope.page";
+              switch (preview.scope) {
+                case rivet_app::AISendScope::selection:
+                  scope_key = "ui.ai-preview.scope.selection";
+                  break;
+                case rivet_app::AISendScope::page: break;
+                case rivet_app::AISendScope::chapter:
+                  scope_key = "ui.ai-preview.scope.chapter";
+                  break;
+                case rivet_app::AISendScope::document:
+                  scope_key = "ui.ai-preview.scope.document";
+                  break;
+              }
+              std::string const body = Trf(
+                  "ui.ai-preview.body", Tr(action_key), Tr(scope_key),
+                  std::to_string(preview.content_chars),
+                  std::to_string(preview.history_chars),
+                  std::to_string(preview.message_chars),
+                  std::to_string(preview.total_chars));
+              auto* root = gtk_widget_get_root(root_);
+              auto* parent = GTK_IS_WINDOW(root) ? GTK_WINDOW(root) : nullptr;
+              auto* dialog = gtk_dialog_new_with_buttons(
+                  Tr("ui.ai-preview.title").c_str(), parent, GTK_DIALOG_MODAL,
+                  Tr("ui.ai-preview.cancel").c_str(), GTK_RESPONSE_CANCEL,
+                  Tr("ui.ai-preview.continue").c_str(), GTK_RESPONSE_ACCEPT,
+                  nullptr);
+              gtk_dialog_set_default_response(GTK_DIALOG(dialog),
+                                              GTK_RESPONSE_CANCEL);
+              auto* label = gtk_label_new(body.c_str());
+              gtk_label_set_wrap(GTK_LABEL(label), TRUE);
+              gtk_label_set_xalign(GTK_LABEL(label), 0.0f);
+              gtk_widget_set_margin_top(label, 16);
+              gtk_widget_set_margin_bottom(label, 16);
+              gtk_widget_set_margin_start(label, 16);
+              gtk_widget_set_margin_end(label, 16);
+              gtk_box_append(GTK_BOX(gtk_dialog_get_content_area(
+                                 GTK_DIALOG(dialog))),
+                             label);
+              auto* continuation =
+                  new std::function<void()>(std::move(on_continue));
+              hook(dialog, "response",
+                   +[](GtkDialog* dialog, int response, gpointer data) {
+                     std::unique_ptr<std::function<void()>> continuation(
+                         static_cast<std::function<void()>*>(data));
+                     gtk_window_destroy(GTK_WINDOW(dialog));
+                     if (response == GTK_RESPONSE_ACCEPT && *continuation) {
+                       (*continuation)();
+                     }
+                   },
+                   continuation);
+              gtk_window_present(GTK_WINDOW(dialog));
+            });
+      });
+}
+
 // Shared completion body for the four stream launchers: success attaches
 // the card into the event registry; failure turns the card into the error
 // surface. Runs on the reader thread, dispatches to the UI thread.
@@ -816,15 +899,20 @@ void AiPanel::do_translate_selection() {
 
 // Notes-pane excerpt translation (mac translateSelectionText).
 void AiPanel::do_translate_text(std::string const& text) {
+  if (!ensure_provider(translate_list_)) return;
   auto const lang = language_name(ctx_->settings.target_language);
-  auto* card =
-      new_card(translate_list_, Tr("ui.menu.translate"), "→ " + lang, false);
-  card->source_text = text;
   auto const target = ctx_->settings.target_language;
-  (void)ctx_->api->translate_text_async(
-      text, target,
-      [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
-        complete_stream_start(this, card, std::move(result));
+  confirm_ai_send(
+      rivet_app::AISendAction::translate, rivet_app::AISendScope::selection,
+      text, {}, "", [this, text, lang, target] {
+        auto* card = new_card(translate_list_, Tr("ui.menu.translate"),
+                              "→ " + lang, false);
+        card->source_text = text;
+        (void)ctx_->api->translate_text_async(
+            text, target,
+            [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
+              complete_stream_start(this, card, std::move(result));
+            });
       });
 }
 
@@ -836,21 +924,29 @@ void AiPanel::do_translate_page() {
     return;
   }
   auto const lang = language_name(ctx_->settings.target_language);
-  auto* card = new_card(
-      translate_list_,
-      Trf("ui.translate.page-title", std::to_string(source->page)),
-      "→ " + lang, false);
-  card->source_text = source->text;
   // Model-facing prompt wrapper (windows hardcodes the same Chinese
   // markers; the domain prompt expects them) — deliberately not localized.
   std::string const payload = "以下是 PDF 第 " +
                               std::to_string(source->page) +
                               " 页提取的文本：\n\n" + source->text;
   auto const target = ctx_->settings.target_language;
-  (void)ctx_->api->translate_text_async(
-      payload, target,
-      [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
-        complete_stream_start(this, card, std::move(result));
+  auto const preview_scope =
+      ctx_->epub_active && ctx_->epub_active()
+          ? rivet_app::AISendScope::chapter
+          : rivet_app::AISendScope::page;
+  confirm_ai_send(
+      rivet_app::AISendAction::translate, preview_scope, payload, {}, "",
+      [this, source = *source, payload, lang, target] {
+        auto* card = new_card(
+            translate_list_,
+            Trf("ui.translate.page-title", std::to_string(source.page)),
+            "→ " + lang, false);
+        card->source_text = source.text;
+        (void)ctx_->api->translate_text_async(
+            payload, target,
+            [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
+              complete_stream_start(this, card, std::move(result));
+            });
       });
 }
 
@@ -862,15 +958,22 @@ void AiPanel::do_summarize_page() {
     return;
   }
   auto const lang = language_name(ctx_->settings.target_language);
-  auto* card = new_card(
-      summarize_list_,
-      Trf("ui.summarize.page-title", std::to_string(source->page)), lang,
-      false);
-  card->source_text = source->text;
-  (void)ctx_->api->summarize_text_async(
-      source->text, rivet_app::SummarizeMode::page,
-      [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
-        complete_stream_start(this, card, std::move(result));
+  confirm_ai_send(
+      rivet_app::AISendAction::summarize,
+      ctx_->epub_active && ctx_->epub_active()
+          ? rivet_app::AISendScope::chapter
+          : rivet_app::AISendScope::page,
+      source->text, {}, "", [this, source = *source, lang] {
+        auto* card = new_card(
+            summarize_list_,
+            Trf("ui.summarize.page-title", std::to_string(source.page)), lang,
+            false);
+        card->source_text = source.text;
+        (void)ctx_->api->summarize_text_async(
+            source.text, rivet_app::SummarizeMode::page,
+            [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
+              complete_stream_start(this, card, std::move(result));
+            });
       });
 }
 
@@ -882,13 +985,18 @@ void AiPanel::do_summarize_selection() {
   }
   if (!ensure_provider(summarize_list_)) return;
   auto const lang = language_name(ctx_->settings.target_language);
-  auto* card =
-      new_card(summarize_list_, Tr("ui.summarize.selection"), lang, false);
-  card->source_text = text;
-  (void)ctx_->api->summarize_text_async(
-      text, rivet_app::SummarizeMode::selection,
-      [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
-        complete_stream_start(this, card, std::move(result));
+  confirm_ai_send(
+      rivet_app::AISendAction::summarize,
+      rivet_app::AISendScope::selection, text, {}, "",
+      [this, text, lang] {
+        auto* card = new_card(summarize_list_, Tr("ui.summarize.selection"),
+                              lang, false);
+        card->source_text = text;
+        (void)ctx_->api->summarize_text_async(
+            text, rivet_app::SummarizeMode::selection,
+            [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
+              complete_stream_start(this, card, std::move(result));
+            });
       });
 }
 
@@ -900,15 +1008,21 @@ void AiPanel::do_summarize_doc() {
     return;
   }
   auto const lang = language_name(ctx_->settings.target_language);
-  auto* card = new_card(
-      summarize_list_, Tr("ui.summarize.doc"),
-      lang + " · " + Trf("ui.summarize.doc-meta", std::to_string(source->page)),
-      false);
-  card->source_text = source->text;
-  (void)ctx_->api->summarize_text_async(
-      source->text, rivet_app::SummarizeMode::doc,
-      [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
-        complete_stream_start(this, card, std::move(result));
+  confirm_ai_send(
+      rivet_app::AISendAction::summarize,
+      rivet_app::AISendScope::document, source->text, {}, "",
+      [this, source = *source, lang] {
+        auto* card = new_card(
+            summarize_list_, Tr("ui.summarize.doc"),
+            lang + " · " +
+                Trf("ui.summarize.doc-meta", std::to_string(source.page)),
+            false);
+        card->source_text = source.text;
+        (void)ctx_->api->summarize_text_async(
+            source.text, rivet_app::SummarizeMode::doc,
+            [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
+              complete_stream_start(this, card, std::move(result));
+            });
       });
 }
 
@@ -979,45 +1093,61 @@ void AiPanel::do_send_chat() {
     }
   }
 
-  // user bubble
-  auto* user_row = gtk_list_box_row_new();
-  auto* user_label = gtk_label_new(
-      ("<b>" + Tr("ui.chat.you") + ":</b> " + escape_markup(question))
-          .c_str());
-  gtk_label_set_use_markup(GTK_LABEL(user_label), TRUE);
-  gtk_label_set_wrap(GTK_LABEL(user_label), TRUE);
-  gtk_label_set_xalign(GTK_LABEL(user_label), 0.0f);
-  gtk_widget_set_margin_top(user_row, 4);
-  gtk_widget_set_margin_start(user_row, 8);
-  gtk_widget_set_margin_end(user_row, 8);
-  gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(user_row), user_label);
-  gtk_box_append(chat_list_, user_row);
-
-  auto* card = new_card(nullptr, "chat",
-                        language_name(ctx_->settings.target_language), true);
-  chat_live_ = card;
-  chat_pending_question_ = question;
-  chat_busy_ = true;
-  gtk_widget_set_sensitive(GTK_WIDGET(chat_stop_), TRUE);
-  gtk_entry_buffer_set_text(gtk_entry_get_buffer(chat_entry_), "", -1);
-
   // keep the last 12 turns (mac parity)
   std::vector<std::vector<std::string>> history(
       chat_history_.end() - std::min<std::size_t>(chat_history_.size(), 12),
       chat_history_.end());
-  (void)ctx_->api->chat_async(
-      context_text, context_label, history, question,
-      [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
-        host::dispatch_ui([this, card, result]() mutable {
-          if (result.succeeded()) {
-            attach_card(card, result.get());
-          } else {
-            card->phase = StreamCard::Phase::error;
-            card->content = describe_error(result.error);
-            refresh_card(card);
-            finalize_chat(card);
-          }
-        });
+  auto const preview_scope =
+      scope == 1
+          ? rivet_app::AISendScope::selection
+          : scope == 2
+                ? rivet_app::AISendScope::document
+                : (ctx_->epub_active && ctx_->epub_active()
+                       ? rivet_app::AISendScope::chapter
+                       : rivet_app::AISendScope::page);
+  confirm_ai_send(
+      rivet_app::AISendAction::chat, preview_scope, context_text, history,
+      question,
+      [this, question, context_text, context_label,
+       history = std::move(history)]() mutable {
+        // The user bubble appears only after confirmation; cancelling leaves
+        // both the conversation and the typed question untouched.
+        auto* user_row = gtk_list_box_row_new();
+        auto* user_label = gtk_label_new(
+            ("<b>" + Tr("ui.chat.you") + ":</b> " + escape_markup(question))
+                .c_str());
+        gtk_label_set_use_markup(GTK_LABEL(user_label), TRUE);
+        gtk_label_set_wrap(GTK_LABEL(user_label), TRUE);
+        gtk_label_set_xalign(GTK_LABEL(user_label), 0.0f);
+        gtk_widget_set_margin_top(user_row, 4);
+        gtk_widget_set_margin_start(user_row, 8);
+        gtk_widget_set_margin_end(user_row, 8);
+        gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(user_row), user_label);
+        gtk_box_append(chat_list_, user_row);
+
+        auto* card = new_card(
+            nullptr, "chat", language_name(ctx_->settings.target_language),
+            true);
+        chat_live_ = card;
+        chat_pending_question_ = question;
+        chat_busy_ = true;
+        gtk_widget_set_sensitive(GTK_WIDGET(chat_stop_), TRUE);
+        gtk_entry_buffer_set_text(gtk_entry_get_buffer(chat_entry_), "", -1);
+
+        (void)ctx_->api->chat_async(
+            context_text, context_label, history, question,
+            [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
+              host::dispatch_ui([this, card, result]() mutable {
+                if (result.succeeded()) {
+                  attach_card(card, result.get());
+                } else {
+                  card->phase = StreamCard::Phase::error;
+                  card->content = describe_error(result.error);
+                  refresh_card(card);
+                  finalize_chat(card);
+                }
+              });
+            });
       });
 }
 

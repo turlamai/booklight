@@ -91,6 +91,7 @@ struct Host {
   GtkStack* left_stack{nullptr};
   GtkWidget* left_sidebar{nullptr};
   GtkWidget* right_sidebar{nullptr};
+  GtkWidget* inner_paned{nullptr};
   GtkFlowBox* thumbs{nullptr};
   GtkListBox* outline_list{nullptr};
   GtkScrolledWindow* outline_scroll{nullptr};
@@ -3433,9 +3434,32 @@ void toggle_left_sidebar() {
   if (visible) populate_thumbs();
 }
 
+// The paned clamps its divider while the end child is hidden, so the first
+// reveal would hand the AI sidebar a zero-width allocation and GTK would
+// never realize it (its whole AT-SPI subtree disappears). Re-request the
+// sidebar's width from the paned's actual allocation once it is showing.
+static gboolean reposition_ai_paned(gpointer data) {
+  auto* paned = GTK_PANED(data);
+  GtkAllocation allocation{};
+  gtk_widget_get_allocation(GTK_WIDGET(paned), &allocation);
+  if (allocation.width > kAiSidebarWidth + 32) {
+    gtk_paned_set_position(paned, allocation.width - kAiSidebarWidth - 6);
+  }
+  return G_SOURCE_REMOVE;
+}
+
+void reveal_ai_sidebar() {
+  gtk_widget_set_visible(g_host.right_sidebar, TRUE);
+  g_idle_add(reposition_ai_paned, g_host.inner_paned);
+}
+
 void toggle_ai_sidebar() {
   bool const visible = !gtk_widget_get_visible(g_host.right_sidebar);
-  gtk_widget_set_visible(g_host.right_sidebar, visible);
+  if (visible) {
+    reveal_ai_sidebar();
+  } else {
+    gtk_widget_set_visible(g_host.right_sidebar, FALSE);
+  }
   host::save_pref_int("ai-sidebar", visible ? 1 : 0);
 }
 
@@ -3807,6 +3831,10 @@ void build_primary_menu() {
   g_menu_append(view, Tr("ui.menu.zoom-reset").c_str(), "app.zoom-reset");
   g_menu_append(view, Tr("ui.viewer.fit").c_str(), "app.fit-width");
   g_menu_append(view, Tr("ui.toolbar.split").c_str(), "app.split-toggle");
+  // The AI sidebar starts hidden (reading canvas first); without a named
+  // menu entry the only way to open it is the hidden accelerator, which
+  // neither assistive technology nor the packaged journey can reach.
+  g_menu_append(view, Tr("ui.toolbar.ai").c_str(), "app.toggle-ai");
   g_menu_append_section(menu, nullptr, G_MENU_MODEL(view));
   g_object_unref(view);
   {
@@ -4017,6 +4045,17 @@ void on_activate(GtkApplication* app, gpointer) {
                                  "app.tts-toggle");
   gtk_header_bar_pack_start(GTK_HEADER_BAR(header), tts_button);
   g_host.header_tts = tts_button;
+
+  // AI sidebar toggle: the sidebar starts hidden (reading canvas first),
+  // so it needs a discoverable surface — same as the mac and Windows
+  // hosts. The explicit accessible label is the packaged journey's handle.
+  auto* ai_button = gtk_button_new_from_icon_name("starred-symbolic");
+  gtk_actionable_set_action_name(GTK_ACTIONABLE(ai_button), "app.toggle-ai");
+  gtk_widget_set_tooltip_text(ai_button, Tr("ui.toolbar.ai").c_str());
+  gtk_accessible_update_property(GTK_ACCESSIBLE(ai_button),
+                                 GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                 Tr("ui.toolbar.ai").c_str(), -1);
+  gtk_header_bar_pack_start(GTK_HEADER_BAR(header), ai_button);
 
   // split view toggle
   auto* split_button = gtk_button_new_from_icon_name("view-dual-symbolic");
@@ -4303,6 +4342,7 @@ void on_activate(GtkApplication* app, gpointer) {
   g_host.panel_ctx.selection_text = selection_text;
   g_host.panel_ctx.page_text = current_page_text;
   g_host.panel_ctx.doc_text = doc_text;
+  g_host.panel_ctx.epub_active = [] { return g_host.epub_active(); };
   g_host.ai_panel = std::make_unique<AiPanel>(&g_host.panel_ctx);
   g_host.right_sidebar = g_host.ai_panel->widget();
   gtk_widget_set_size_request(g_host.right_sidebar, kAiSidebarWidth, -1);
@@ -4334,6 +4374,7 @@ void on_activate(GtkApplication* app, gpointer) {
 
   // panes: sidebar | notebook | AI
   auto* inner = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+  g_host.inner_paned = inner;
   gtk_paned_set_start_child(GTK_PANED(inner), notebook);
   gtk_paned_set_shrink_start_child(GTK_PANED(inner), FALSE);
   gtk_paned_set_end_child(GTK_PANED(inner), g_host.right_sidebar);
@@ -4372,8 +4413,8 @@ void on_activate(GtkApplication* app, gpointer) {
   if (host::pref_int("left-sidebar", 1) == 0) {
     gtk_widget_set_visible(left_sidebar, FALSE);
   }
-  if (host::pref_int("ai-sidebar", 0) == 0) {
-    gtk_widget_set_visible(g_host.right_sidebar, FALSE);
+  if (host::pref_int("ai-sidebar", 0) != 0) {
+    reveal_ai_sidebar();
   }
 
   // notebook events
