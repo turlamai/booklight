@@ -25,6 +25,11 @@ func sendEscapeToPid(_ pid: Int32) {
 }
 
 var sheetDiagnostics = ""
+// Window transitions (inspector toggles, sheets) can detach the subtree a
+// long-held window element reports; re-fetch for every probe.
+func freshWindow(_ application: AXUIElement) -> AXUIElement? {
+    (attribute(application, kAXWindowsAttribute) as? [AXUIElement])?.first
+}
 func sheetElements(_ window: AXUIElement) -> [AXUIElement] {
     // Sheets surface as AXSheet-role descendants of the window, not through
     // a dedicated window attribute.
@@ -70,12 +75,22 @@ do {
     _ = try waitFor("retry action") { contains(window, "Retry Save") || contains(window, "重试保存") ? true : nil }
     _ = try waitFor("export action") { contains(window, "Export Annotations") || contains(window, "导出批注") ? true : nil }
     _ = try waitFor("recovery fixture note") { contains(window, "Recovered fixture note") ? true : nil }
-    _ = try waitFor("native AI inspector control") { pressNamed(window, ["AI Assistant", "AI 助手"]) ? true : nil }
-    _ = try waitFor("translate current EPUB scope action") { pressNamed(window, ["Translate Chapter", "本章翻译", "Translate page", "本页翻译"]) ? true : nil }
-    _ = try waitFor("AI send review dialog") { contains(window, "Review what will be sent") || contains(window, "核对即将发送的内容") ? true : nil }
-    _ = try waitFor("AI send scope and exact count") {
-        ((contains(window, "Current chapter") || contains(window, "当前章")) &&
-         (contains(window, "Total user content:") || contains(window, "用户内容合计："))) ? true : nil
+    _ = try waitFor("native AI inspector control") { () -> Bool? in
+        guard let w = freshWindow(application) else { return nil }
+        return pressNamed(w, ["AI Assistant", "AI 助手"]) ? true : nil
+    }
+    _ = try waitFor("translate current EPUB scope action") { () -> Bool? in
+        guard let w = freshWindow(application) else { return nil }
+        return pressNamed(w, ["Translate Chapter", "本章翻译", "Translate page", "本页翻译"]) ? true : nil
+    }
+    _ = try waitFor("AI send review dialog") { () -> Bool? in
+        guard let w = freshWindow(application) else { return nil }
+        return contains(w, "Review what will be sent") || contains(w, "核对即将发送的内容") ? true : nil
+    }
+    _ = try waitFor("AI send scope and exact count") { () -> Bool? in
+        guard let w = freshWindow(application) else { return nil }
+        return ((contains(w, "Current chapter") || contains(w, "当前章")) &&
+                (contains(w, "Total user content:") || contains(w, "用户内容合计："))) ? true : nil
     }
     // Target the sheet's own Cancel button: a generic tree search can land
     // on a like-named element outside the sheet, and a lost press event must
