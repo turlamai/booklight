@@ -199,9 +199,9 @@ do {
             .contains { contains($0, "sample-guard") } ? true : nil
     }
     try writeJSON(["platform": "macos", "actions": ["launch:sample-guard.pdf", "press:Tools", "press:Rotate Page", "press:CloseButton", "assert:Unsaved PDF edits", "press:Cancel", "press:CloseButton", "assert:three choices present", "press:Cancel"], "assertions": ["packaged SwiftUI opens the synthetic PDF", "native rotate marks in-memory page edits", "window close raises the unsaved-edits sheet", "sheet offers Save As, Discard Changes and Cancel", "Cancel keeps the document open (both times)", "original file hash unchanged (asserted by e2e-macos.sh)"]], to: output.appendingPathComponent("close-guard.json"))
-    if let running = NSRunningApplication(processIdentifier: pid), !running.isTerminated {
-        guard running.terminate() else { throw DriverError.failure("native application rejected termination") }
-    }
+    // Do not terminate here: both close requests were explicitly cancelled.
+    // The shell journey verifies the document is still open and then shuts
+    // down the isolated test process after its source-integrity assertion.
 } catch {
     if let output = diagnosticOutput {
         try? writeJSON(snapshotOfDiagnostic(), to: output.appendingPathComponent("close-guard-failure.json"))
