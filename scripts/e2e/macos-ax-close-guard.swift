@@ -135,15 +135,18 @@ do {
         // and synthesized keyboard events are the one input channel this
         // runner answers reliably (the Escape cancels all landed).
         FileHandle.standardError.write(Data("rotate: falling back to the keyboard shortcut\n".utf8))
+        // Chorded events must go through the global HID tap: postToPid
+        // events reach the app without their modifier flags, which is why
+        // bare Escape works while chorded shortcuts never arrive.
         guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 13, keyDown: true),
               let up = CGEvent(keyboardEventSource: nil, virtualKey: 13, keyDown: false) else {
             throw DriverError.failure("keyboard fallback unavailable")
         }
         down.flags = .maskCommand
         up.flags = .maskCommand
-        down.postToPid(pid)
+        down.post(tap: .cghidEventTap)
         usleep(80_000)
-        up.postToPid(pid)
+        up.post(tap: .cghidEventTap)
     }
     // The rotate RPC is async; the host logs once the in-memory edit is
     // actually pending. Closing earlier would skip the guard legitimately.
@@ -189,9 +192,10 @@ do {
     }
     dDown.flags = .maskCommand
     dUp.flags = .maskCommand
-    dDown.postToPid(pid)
+    // Global HID tap so the modifier flags survive routing (see above).
+    dDown.post(tap: .cghidEventTap)
     usleep(80_000)
-    dUp.postToPid(pid)
+    dUp.post(tap: .cghidEventTap)
     _ = try waitFor("close-guard discard response (application log)") {
         logContains(guardLog, "close-guard: sheet response 1001") ? true : nil
     }
