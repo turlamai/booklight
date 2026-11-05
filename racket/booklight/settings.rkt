@@ -199,14 +199,31 @@
 ;; config directory so ordinary recents writes never round-trip there.
 (define stored-key-cache (make-hash))
 
+;; A locked keychain or a missing Secret Service must never hang startup or a
+;; page-turn recents save. The desktop tools are bounded; the owner-only file
+;; fallback remains available immediately.
+(define (call-with-store-timeout seconds thunk fallback)
+  (define result (box fallback))
+  (define done (make-semaphore))
+  (thread
+   (lambda ()
+     (with-handlers ([exn:fail? void])
+       (set-box! result (thunk)))
+     (semaphore-post done)))
+  (sync/timeout seconds done)
+  (unbox result))
+
 (define (read-stored-api-key)
   (hash-ref!
    stored-key-cache
    (path->string (current-config-dir))
    (lambda ()
-     (with-handlers ([exn:fail? (lambda (_) "")])
-       (define value (secure-store-read (key-store) key-store-service key-store-account))
-       (if value (bytes->string/utf-8 value) "")))))
+     (call-with-store-timeout
+      3
+      (lambda ()
+        (define value (secure-store-read (key-store) key-store-service key-store-account))
+        (if value (bytes->string/utf-8 value) ""))
+      ""))))
 
 ;; Persists the key. Returns #t when it reached the OS store; #f means the
 ;; caller must fall back to the owner-only settings file.
@@ -216,12 +233,15 @@
     [(equal? (hash-ref stored-key-cache cache-key #f) key) #t]
     [else
      (define stored?
-       (with-handlers ([exn:fail? (lambda (_) #f)])
-         (if (string=? key "")
-             (begin (secure-store-delete (key-store) key-store-service key-store-account) #t)
-             (begin (secure-store-write (key-store) key-store-service key-store-account
-                                        (string->bytes/utf-8 key))
-                    #t))))
+       (call-with-store-timeout
+        5
+        (lambda ()
+          (if (string=? key "")
+              (begin (secure-store-delete (key-store) key-store-service key-store-account) #t)
+              (begin (secure-store-write (key-store) key-store-service key-store-account
+                                         (string->bytes/utf-8 key))
+                     #t)))
+        #f))
      (when stored? (hash-set! stored-key-cache cache-key key))
      stored?]))
 
