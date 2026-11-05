@@ -30,6 +30,9 @@
          racket/string)
 
 (provide (struct-out pdf-error)
+         (struct-out exn:fail:pdf:resource)
+         (struct-out pdf-resource-budget)
+         default-pdf-resource-budget
          (struct-out ref)
          (struct-out pstream)
          (struct-out pdfdoc)
@@ -50,6 +53,44 @@
 (struct ref (num gen) #:transparent)
 (struct pstream (dict payload) #:transparent)
 (struct pdfdoc (objects root-ref) #:transparent)
+
+;; Hostile or damaged PDFs are bounded before they can exhaust memory or the
+;; stack. Limits are deliberately far above ordinary documents (a 1000-page
+;; scan is still tiny) while stopping xref storms, decompression bombs and
+;; cyclic page/Length references.
+(struct exn:fail:pdf:resource exn:fail (code limit actual) #:transparent)
+(struct pdf-resource-budget
+  (file-bytes xref-entries objects stream-bytes page-count nesting-depth)
+  #:transparent
+  #:guard
+  (lambda (file-bytes xref-entries objects stream-bytes page-count nesting-depth _)
+    (for ([value (in-list (list file-bytes xref-entries objects stream-bytes
+                                page-count nesting-depth))])
+      (unless (exact-nonnegative-integer? value)
+        (raise-argument-error 'pdf-resource-budget
+                              "exact-nonnegative-integer?" value)))
+    (values file-bytes xref-entries objects stream-bytes page-count nesting-depth)))
+
+(define default-pdf-resource-budget
+  (pdf-resource-budget (* 256 1024 1024) ; file bytes
+                       2000000          ; xref entries
+                       2000000          ; materialized objects
+                       (* 1024 1024 1024) ; expanded stream bytes
+                       100000           ; pages
+                       64))             ; tree/reference nesting
+
+(define (pdf-resource-error code limit actual)
+  (raise
+   (exn:fail:pdf:resource
+    (format "PDF_RESOURCE_LIMIT[~a]: limit ~a, observed at least ~a"
+            code limit actual)
+    (current-continuation-marks)
+    code limit actual)))
+
+(define current-pdf-expanded-used (make-parameter #f))
+(define current-pdf-expanded-limit (make-parameter #f))
+(define current-pdf-nesting-limit
+  (make-parameter (pdf-resource-budget-nesting-depth default-pdf-resource-budget)))
 
 ;; ------------------------------------------------------------------ zlib
 
@@ -73,10 +114,19 @@
 ;; Inflate a zlib (RFC 1950) stream. Buffer grows until Z_OK (0).
 (define (zlib-inflate data)
   (define len (bytes-length data))
+  (define (accept out)
+    (define used (current-pdf-expanded-used))
+    (define limit (current-pdf-expanded-limit))
+    (when (and used limit)
+      (define next (+ (unbox used) (bytes-length out)))
+      (when (> next limit)
+        (pdf-resource-error 'stream-bytes limit next))
+      (set-box! used next))
+    out)
   (let loop ((cap (max 4096 (* 4 len))))
     (define-values (rc out used) (uncompress cap data len))
     (cond
-      ((= rc 0) out)
+      ((= rc 0) (accept out))
       ((= rc -5) ; Z_BUF_ERROR: try a bigger buffer
        (if (> cap (expt 2 30))
            (raise (pdf-error 'parse "zlib output too large"))
@@ -334,9 +384,19 @@
 ;; -------------------------------------------------------------- parsing
 
 ;; Read whole document: xref chain walk -> object offset table -> parse.
-(define (parse-pdf data)
-  (define-values (entries trailer) (parse-xref-chain data))
+(define (parse-pdf data #:budget [budget default-pdf-resource-budget])
+  (define file-bytes (bytes-length data))
+  (when (> file-bytes (pdf-resource-budget-file-bytes budget))
+    (pdf-resource-error 'file-bytes (pdf-resource-budget-file-bytes budget) file-bytes))
+  (parameterize ([current-pdf-expanded-used (box 0)]
+                 [current-pdf-expanded-limit (pdf-resource-budget-stream-bytes budget)]
+                 [current-pdf-nesting-limit (pdf-resource-budget-nesting-depth budget)])
+    (define-values (entries trailer) (parse-xref-chain data budget))
+    (parse-pdf-with-entries data entries trailer budget)))
+
+(define (parse-pdf-with-entries data entries trailer budget)
   (define objects (make-hash))             ; (cons num gen) -> obj
+  (define object-limit (pdf-resource-budget-objects budget))
   (define root-ref (dict-get trailer '/Root))
   (unless (ref? root-ref) (raise (pdf-error 'parse "no /Root in trailer")))
   (when (dict-get trailer '/Encrypt)
@@ -350,7 +410,9 @@
        (void)) ; handled below, batched per object stream
       (else
        (hash-set! objects (cons num gen)
-                  (parse-object-at data offset num gen objects)))))
+                  (parse-object-at data offset num gen objects))
+       (when (> (hash-count objects) object-limit)
+         (pdf-resource-error 'objects object-limit (hash-count objects))))))
   ;; object streams: group type-2 entries by stream object number
   (define by-stm (make-hash)) ; stm-num -> list of (num gen)
   (for (((num info) (in-hash entries)))
@@ -382,8 +444,12 @@
       (unless off (raise (pdf-error 'parse "object missing from ObjStm index")))
       (define op (open-input-bytes payload))
       (file-position op (+ first-off off))
-      (hash-set! objects (cons num gen) (read-obj! (lex op)))))
-  (pdfdoc objects root-ref))
+      (hash-set! objects (cons num gen) (read-obj! (lex op)))
+      (when (> (hash-count objects) object-limit)
+        (pdf-resource-error 'objects object-limit (hash-count objects)))))
+  (define doc (pdfdoc objects root-ref))
+  (pdf-page-refs doc #:budget budget)
+  doc)
 
 (define (dict-get d key (default #f))
   (if (and (hash? d) (hash-has-key? d key))
@@ -391,7 +457,11 @@
       default))
 
 ;; Walk /Prev chains: newest wins. Returns (values entries trailer).
-(define (parse-xref-chain data)
+(define (parse-xref-chain data budget)
+  (define xref-limit (pdf-resource-budget-xref-entries budget))
+  (define (check-xref!)
+    (when (> (hash-count entries) xref-limit)
+      (pdf-resource-error 'xref-entries xref-limit (hash-count entries))))
   (define start (find-startxref data))
   (define entries (make-hash)) ; num -> (list gen offset kind)
   (define trailer #f)
@@ -423,7 +493,8 @@
              (define num (+ start-num i))
              (unless (hash-has-key? entries num)
                (hash-set! entries num
-                          (list gen (string->number (bytes->string/latin-1 (cadr em))) kind))))
+                          (list gen (string->number (bytes->string/latin-1 (cadr em))) kind))
+               (check-xref!)))
            (read-sections)))
        ;; the trailer dict follows the entry sections
        (skip-ws! l)
@@ -466,6 +537,7 @@
              ((= ptype 1) payload)
              (else (raise (pdf-error 'parse "unsupported predictor"))))))
        (parse-xref-stream-entries! entries dict payload2)
+       (check-xref!)
        (unless trailer (set! trailer dict))))
     (define prev (dict-get trailer '/Prev))
     (cond
@@ -528,7 +600,10 @@
         (bytes->string/latin-1 (subbytes data (car best) (cdr best)))))
       (else (raise (pdf-error 'parse "no startxref marker"))))))
 
-(define (parse-object-at data offset num gen objects)
+(define (parse-object-at data offset num gen objects (depth 0))
+  (define nesting-limit (current-pdf-nesting-limit))
+  (when (> depth nesting-limit)
+    (pdf-resource-error 'nesting-depth nesting-limit depth))
   (define l (lex (open-input-bytes data)))
   (file-position (lex-port l) offset)
   (skip-ws! l)
@@ -551,7 +626,8 @@
          ((ref? lenv)
           (define target (parse-object-at data
                                           (xref-offset objects data lenv)
-                                          (ref-num lenv) (ref-gen lenv) objects))
+                                          (ref-num lenv) (ref-gen lenv) objects
+                                          (add1 depth)))
           (inexact->exact target))
          (else (raise (pdf-error 'parse "bad /Length")))))
      (pstream obj (read-bytes-n (lex-port l) len)))
@@ -606,20 +682,28 @@
 ;; ----------------------------------------------------------- page tree
 
 ;; Ordered page refs (flattens the tree via /Kids DFS).
-(define (pdf-page-refs doc)
+(define (pdf-page-refs doc #:budget [budget default-pdf-resource-budget])
+  (define page-limit (pdf-resource-budget-page-count budget))
+  (define depth-limit (pdf-resource-budget-nesting-depth budget))
   (define root (pdf-resolve doc (pdfdoc-root-ref doc)))
   (unless (hash? root) (raise (pdf-error 'parse "catalog missing")))
   (define pages-ref (dict-get root '/Pages))
   (unless (ref? pages-ref) (raise (pdf-error 'parse "no /Pages in catalog")))
   (define acc '())
+  (define page-total 0)
   (define visited (mutable-set))
-  (let walk ((v pages-ref))
+  (let walk ((v pages-ref) (depth 0))
+    (when (> depth depth-limit)
+      (pdf-resource-error 'nesting-depth depth-limit depth))
     (define node (pdf-resolve doc v))
     (unless (and (hash? node) (ref? v))
       (raise (pdf-error 'parse "bad page tree node")))
     (cond
       ((equal? (dict-get node '/Type) '/Page)
-       (set! acc (cons v acc)))
+       (set! acc (cons v acc))
+       (set! page-total (add1 page-total))
+       (when (> page-total page-limit)
+         (pdf-resource-error 'page-count page-limit page-total)))
       (else
        (set-add! visited (cons (ref-num v) (ref-gen v)))
        (define kids (dict-get node '/Kids))
@@ -627,7 +711,7 @@
        (for ((k (in-vector kids)))
          (when (ref? k)
            (unless (set-member? visited (cons (ref-num k) (ref-gen k)))
-             (walk k)))))))
+             (walk k (add1 depth))))))))
   (reverse acc))
 
 ;; --------------------------------------------------------------- writing
