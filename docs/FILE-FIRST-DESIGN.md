@@ -35,6 +35,32 @@ No automatic deletion of historical `library.json` or `covers/`: leave existing 
 4. Protect editing and annotations: check read-only folders, failures, atomic saving and recovery. Clarify explicit Replace Original versus Export semantics.
 5. Rework public docs, screenshots, i18n and packaging to describe the product actually shipped.
 
+## Hostile and damaged input
+
+Booklight is a local file reader, so a file may be damaged, truncated or
+deliberately hostile. The domain core bounds work before allocating without
+limit:
+
+- EPUB: 256 MiB archive, 10,000 entries, 64 MiB per expanded entry and 512 MiB
+  aggregate, with stable `EPUB_RESOURCE_LIMIT[...]` errors.
+- PDF: 256 MiB source, 2,000,000 xref entries, 2,000,000 materialized objects,
+  1 GiB of expanded stream data, 100,000 pages and 64 levels of page/reference
+  nesting, with `PDF_RESOURCE_LIMIT[...]` errors.
+- A limit failure is reported as an open error; the original file is never
+  modified or copied. Annotation recovery drafts are not created for a file
+  that never opened.
+
+## Credentials
+
+The BYOK provider key is not written to `settings.json`. It goes through the
+secure-store seam: macOS Keychain, Linux Secret Service, or Windows DPAPI.
+When no desktop credential store is available (headless CI, locked session),
+the owner-only fallback file is used and the UI still works; `settings.json`
+keeps an empty `api_key` field for v1 schema compatibility. Provider error
+bodies are redacted before they reach a stream error, a settings message or a
+support log. A legacy plaintext key is read for compatibility and migrated on
+the next settings save.
+
 ## Acceptance gates
 
 - On a fresh profile: opening PDF/EPUB creates no `library.json`, `covers/`, source-document copy or reading stats ledger.

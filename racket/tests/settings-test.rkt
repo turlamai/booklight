@@ -11,7 +11,8 @@
          "../booklight/jsonw.rkt"
          "../booklight/providers.rkt"
          (prefix-in recents: "../booklight/recents.rkt")
-         "../booklight/settings.rkt")
+         "../booklight/settings.rkt"
+         "../booklight/secure-store.rkt")
 
 (define temp-root (make-temporary-file "pdfgist-settings-~a" 'directory))
 
@@ -30,7 +31,9 @@
 (dynamic-wind
  void
  (lambda ()
-   (parameterize ([current-config-dir temp-root])
+   (define memory-store (make-memory-secure-store))
+   (parameterize ([current-config-dir temp-root]
+                  [current-secure-store memory-store])
      ;; ---- defaults on a missing file ----
      (check-false (settings-file-exists?))
      (define defaults (load-settings))
@@ -112,6 +115,23 @@
       (lambda (current) (set-api-key! current "sk-persisted")))
      (check-equal? (api-key-of (load-settings)) "sk-persisted")
      (check-equal? (settings-view-mode (load-settings)) "double")
+     ;; The durable credential is the secure-store value, never the JSON.
+     (check-equal?
+      (bytes->string/utf-8
+       (secure-store-read memory-store key-store-service key-store-account))
+      "sk-persisted")
+     (check-false
+      (string-contains?
+       (bytes->string/utf-8 (file->bytes (settings-file-path)))
+       "sk-persisted"))
+     (when (eq? (system-type) 'unix)
+       (check-equal? (file-or-directory-permissions (settings-file-path) 'bits)
+                     #o600))
+     ;; Clearing the key removes both the secure-store item and the file field.
+     (update-settings!
+      (lambda (current) (set-api-key! current "")))
+     (check-false (secure-store-read memory-store key-store-service key-store-account))
+     (check-equal? (api-key-of (load-settings)) "")
 
      ;; ---- lenient parse: bad fields fall back per-field ----
      (define parsed

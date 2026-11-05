@@ -5,13 +5,15 @@
 | Data | Location | Purpose |
 |---|---|---|
 | PDF and EPUB source | User's existing folder | Read in place; no copy, auto-move or database |
-| App preferences | `<config-dir>/settings.json` | View/theme/provider configuration and up to 12 recent file paths/pages |
+| App preferences | `<config-dir>/settings.json` | View/theme/provider configuration and up to 12 recent file paths/pages; `api_key` is always empty |
+| Provider API key | OS credential store (macOS Keychain / Linux Secret Service / Windows DPAPI) | BYOK secret; never serialized into `settings.json` |
+| Fallback API key file | `<config-dir>/api-key` (mode 0600) | Only when no desktop credential store is available; read only by this user |
 | Default annotations for new profiles | `<document>.booklight.json` | Highlights, notes and bookmarks, when the first annotation is saved |
 | Existing centrally configured annotations | `<config-dir>/annotations/<path-hash>.json` | Kept readable for existing users, without automatic conversion |
 | Recovery draft | `<config-dir>/annotations/recovery/` | Temporary journal if the primary annotation save fails |
 | Old catalog and covers | Existing `library.json` / `covers/` | Historical user data left untouched, no longer read/written by the new file-first workflow |
 
-`settings.json` still uses the existing per-user config-directory convention. The `recent_files` section records the original path, title, last page, scroll ratio and last-open timestamp for resume. It does **not** store reading durations, goals, streaks or library membership.
+`settings.json` still uses the existing per-user config-directory convention and is written atomically with mode 0600 (the config directory is 0700 on Unix). The `recent_files` section records the original path, title, last page, scroll ratio and last-open timestamp for resume. It does **not** store reading durations, goals, streaks or library membership, and the provider key is kept out of it. `api_key` remains present as an empty string so older schema readers can still parse the file; a legacy plaintext value is migrated to the credential store on the next settings save.
 
 ## Existing PDFGist profiles (zero-copy compatibility)
 

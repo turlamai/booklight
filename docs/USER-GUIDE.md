@@ -55,9 +55,11 @@ Reading is local. AI requests send selected text and conversation context to you
 
 Before every translation, summary or chat request, Booklight shows a native review dialog with the action, the selected scope and exact Unicode-character counts for document content, conversation history, your question and their total. Only **Continue** starts the provider request; **Cancel** leaves the typed question and conversation unchanged. The displayed total covers your content, not Booklight's additional provider instructions.
 
+Your API key is not written to `settings.json`. Booklight stores it in the operating system credential store (macOS Keychain, Linux Secret Service, or Windows DPAPI) and falls back to an owner-only file only when no desktop store is available. Provider error text is redacted before it can appear in a dialog or support log; `settings.json` keeps an empty `api_key` field for compatibility with older releases.
+
 ## Known limits
 
-Damaged-book recovery and AI cancellation/secret storage remain release qualification work (#20). Annotation persistence recovery is implemented for the next release but remains subject to native-platform acceptance before release. A new multi-document research workbench is not delivered.
+Damaged or hostile PDF/EPUB inputs are bounded by explicit resource budgets and fail with a clear open error instead of exhausting memory; the limits are documented in [the file-first design](FILE-FIRST-DESIGN.md#hostile-and-damaged-input). The macOS visual system is implemented in this line; Windows and Linux keep their first-party Fluent and Adwaita chrome and still require their own packaged accessibility acceptance before a design change is claimed as shipped. A new multi-document research workbench is not delivered.
 
 ## Updates and removal
 

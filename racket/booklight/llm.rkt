@@ -31,7 +31,8 @@
          max-sse-line-bytes
          default-connect-timeout-seconds
          list-models-timeout-seconds
-         messages->jsexpr)
+         messages->jsexpr
+         redact-secret)
 
 ;; ---- constants (parity with llm.rs) ----
 
@@ -127,6 +128,17 @@
   (custodian-shutdown-all (http-connection-custodian conn)))
 
 ;; ---- request/response plumbing ----
+
+;; Diagnostics must never quote a credential back to the user or a log.
+;; Provider error bodies occasionally echo the Authorization header.
+(define (redact-secret text secret)
+  (cond
+    [(or (not (string? text)) (not (string? secret)) (string=? secret "")) text]
+    [else
+     (string-replace
+      (string-replace text secret "[redacted]")
+      (string-append "Bearer " secret)
+      "Bearer [redacted]")]))
 
 (define (send-request! conn method url-string api-key body)
   (define u (parse-url! url-string))
@@ -357,7 +369,7 @@
         (raise-backend-error!
          (tf "backend.error.http-status-body"
              (status-display status)
-             (truncate-chars (string-trim error-body) 400)
+             (redact-secret (truncate-chars (string-trim error-body) 400) api-key)
              url-string)))
       (pump-sse! conn headers on-chunk))
     (lambda ()
