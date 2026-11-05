@@ -1,9 +1,9 @@
 import SwiftUI
 import AppKit
 
-/// AI provider settings (设置 tab) — preset picker with per-preset stash,
-/// base URL / API key / model, connection test, target language, storage and
-/// appearance options. Split into small sections to keep the type-checker sane.
+/// App-wide preferences, using the platform's grouped form rather than a
+/// hand-built column: native labels, focus rings, section spacing and
+/// keyboard traversal come for free and match System Settings.
 struct SettingsPane: View {
     @EnvironmentObject private var app: AppModel
 
@@ -23,18 +23,160 @@ struct SettingsPane: View {
     @State private var loadedLanguage = "system"
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                providerSection
-                Divider().overlay(Theme.border)
-                readingSection
-                Divider().overlay(Theme.border)
-                languageSection
-                Divider().overlay(Theme.border)
-                privacyFooter
+        Form {
+            Section {
+                Picker(L10n.t("ui.settings.preset"), selection: Binding(
+                    get: { providerID },
+                    set: { switchPreset($0) })) {
+                    ForEach(app.presets, id: \.id) { preset in
+                        Text(preset.label).tag(preset.id)
+                    }
+                }
+
+                TextField(L10n.t("ui.settings.base-url"), text: $baseURL,
+                          prompt: Text(verbatim: "https://…"))
+                    .textContentType(.URL)
+                    .autocorrectionDisabled()
+
+                TextField(L10n.t("ui.settings.model"), text: $modelField,
+                          prompt: Text(verbatim: "deepseek-chat"))
+
+                if !modelSuggestions.isEmpty {
+                    Picker(L10n.t("ui.settings.suggested-models"), selection: Binding(
+                        get: { modelField },
+                        set: { modelField = $0 })) {
+                        ForEach(modelSuggestions, id: \.self) { suggestion in
+                            Text(suggestion).tag(suggestion)
+                        }
+                    }
+                }
+
+                SecureField(
+                    L10n.t("ui.settings.api-key"),
+                    text: $apiKey,
+                    prompt: Text(app.settings.has_api_key
+                                 ? L10n.t("ui.settings.api-key-saved") : "sk-…"))
+
+                HStack(spacing: 8) {
+                    Button(L10n.t("ui.settings.save-key")) {
+                        Task { await saveKey() }
+                    }
+                    .disabled(apiKey.isEmpty || busy)
+
+                    Button(L10n.t("ui.settings.test")) {
+                        Task { await testConnection() }
+                    }
+                    .disabled(busy || !canTest)
+
+                    Button(L10n.t("ui.settings.fetch-models")) {
+                        Task { await testConnection() }
+                    }
+                    .disabled(busy || !canTest)
+
+                    if busy {
+                        ProgressView().controlSize(.small)
+                    }
+                    Spacer()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                if !status.isEmpty {
+                    Text(status)
+                        .font(.footnote)
+                        .foregroundStyle(statusIsError ? Theme.danger : Theme.textDim)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } header: {
+                Text(L10n.t("ui.settings.ai-section"))
+            } footer: {
+                Text(L10n.t("ui.settings.privacy"))
+                    .font(.footnote)
+                    .foregroundStyle(Theme.textFaint)
             }
-            .padding(12)
+
+            Section(L10n.t("ui.settings.appearance")) {
+                Picker(L10n.t("ui.settings.target-language"), selection: $target) {
+                    ForEach(RivetTypes.TargetLanguage.allCasesArray, id: \.self) { code in
+                        Text(languageName(code)).tag(code)
+                    }
+                }
+
+                Picker(L10n.t("ui.settings.view-mode"), selection: $viewMode) {
+                    Text(L10n.t("ui.settings.view-single")).tag("single")
+                    Text(L10n.t("ui.settings.view-double")).tag("double")
+                }
+                .pickerStyle(.segmented)
+
+                Picker(L10n.t("ui.reading.theme"), selection: Binding(
+                    get: { app.settings.reading_theme },
+                    set: { newValue in
+                        Task { _ = await app.saveReadingPrefs(theme: newValue) }
+                    })) {
+                    Text(L10n.t("ui.reading.theme.system")).tag(RivetTypes.ReadingTheme.system)
+                    Text(L10n.t("ui.reading.theme.paper")).tag(RivetTypes.ReadingTheme.paper)
+                    Text(L10n.t("ui.reading.theme.sepia")).tag(RivetTypes.ReadingTheme.sepia)
+                    Text(L10n.t("ui.reading.theme.night")).tag(RivetTypes.ReadingTheme.night)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("settings.reading-theme")
+
+                Toggle(L10n.t("ui.settings.sidecar"), isOn: Binding(
+                    get: { sidecar },
+                    set: { sidecar = $0 }))
+
+                HStack {
+                    Spacer()
+                    Button(L10n.t("ui.settings.save")) {
+                        Task { await save() }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(busy)
+                }
+            }
+
+            Section(L10n.t("ui.settings.language")) {
+                Picker(L10n.t("ui.settings.language"), selection: Binding(
+                    get: { app.languageSetting },
+                    set: { app.setLanguage($0) })) {
+                    Text(L10n.t("ui.settings.language-system")).tag("system")
+                    Text(verbatim: "中文").tag("zh")
+                    Text(verbatim: "English").tag("en")
+                }
+                .pickerStyle(.segmented)
+
+                Text(L10n.t("ui.settings.language-note"))
+                    .font(.footnote)
+                    .foregroundStyle(Theme.textFaint)
+
+                if app.languageSetting != loadedLanguage {
+                    Button(L10n.t("ui.settings.relaunch")) {
+                        app.relaunchNow()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+
+            Section {
+                LabeledContent(L10n.t("app.name"), value: "\(RivetGeneratedConfig.version) (\(RivetGeneratedConfig.build))")
+                HStack(spacing: 16) {
+                    Link(L10n.t("ui.about.website"),
+                         destination: URL(string: "https://booklight.jrtx.site")!)
+                    Link(L10n.t("ui.about.issue"),
+                         destination: URL(string: "https://github.com/turlamai/booklight/issues")!)
+                }
+                .font(.footnote)
+                Text(L10n.t("ui.about.license"))
+                    .font(.footnote)
+                    .foregroundStyle(Theme.textFaint)
+            }
         }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(Theme.bg)
         .onAppear {
             if !loaded {
                 loadFromSettings()
@@ -44,202 +186,11 @@ struct SettingsPane: View {
         }
     }
 
-    // MARK: sections
-
-    private var providerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            settingLabel(L10n.t("ui.settings.preset"))
-            Picker("", selection: Binding(
-                get: { providerID },
-                set: { switchPreset($0) })) {
-                ForEach(app.presets, id: \.id) { preset in
-                    Text(preset.label).tag(preset.id)
-                }
-            }
-            .labelsHidden()
-
-            settingLabel(L10n.t("ui.settings.base-url"))
-            TextField("https://…", text: $baseURL)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: 12))
-
-            settingLabel(L10n.t("ui.settings.model"))
-            TextField("", text: $modelField)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: 12))
-            if !modelSuggestions.isEmpty {
-                Picker("", selection: Binding(
-                    get: { modelField },
-                    set: { modelField = $0 })) {
-                    ForEach(modelSuggestions, id: \.self) { suggestion in
-                        Text(suggestion).tag(suggestion)
-                    }
-                }
-                .labelsHidden()
-                .font(.system(size: 11))
-            }
-
-            settingLabel(L10n.t("ui.settings.api-key"))
-            HStack(spacing: 6) {
-                SecureField(
-                    app.settings.has_api_key ? L10n.t("ui.settings.api-key-saved") : "",
-                    text: $apiKey)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 12))
-                smallButton(L10n.t("ui.settings.save")) {
-                    Task { await saveKey() }
-                }
-                .disabled(apiKey.isEmpty || busy)
-            }
-
-            HStack(spacing: 6) {
-                smallButton(L10n.t("ui.settings.fetch-models")) {
-                    Task { await testConnection() }
-                }
-                .disabled(busy || !canTest)
-                smallButton(L10n.t("ui.settings.test")) {
-                    Task { await testConnection() }
-                }
-                .disabled(busy || !canTest)
-                if busy {
-                    ProgressView().controlSize(.small)
-                }
-            }
-            if !status.isEmpty {
-                Text(status)
-                    .font(.system(size: 11))
-                    .foregroundStyle(statusIsError ? Theme.danger : Theme.textDim)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-    }
-
-    private var readingSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            settingLabel(L10n.t("ui.settings.target-language"))
-            Picker("", selection: Binding(
-                get: { target },
-                set: { target = $0 })) {
-                ForEach(RivetTypes.TargetLanguage.allCasesArray, id: \.self) { code in
-                    Text(languageName(code)).tag(code)
-                }
-            }
-            .labelsHidden()
-
-            settingLabel(L10n.t("ui.settings.view-mode"))
-            Picker("", selection: Binding(
-                get: { viewMode },
-                set: { viewMode = $0 })) {
-                Text(L10n.t("ui.settings.view-single")).tag("single")
-                Text(L10n.t("ui.settings.view-double")).tag("double")
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
-            Toggle(isOn: Binding(
-                get: { sidecar },
-                set: { sidecar = $0 })) {
-                Text(L10n.t("ui.settings.sidecar"))
-                    .font(.system(size: 12))
-            }
-
-            // Reading theme re-skins open books immediately (no Save button
-            // round-trip); persistence goes through save-reading-prefs.
-            settingLabel(L10n.t("ui.reading.theme"))
-            Picker("", selection: Binding(
-                get: { app.settings.reading_theme },
-                set: { newValue in
-                    Task { _ = await app.saveReadingPrefs(theme: newValue) }
-                })) {
-                Text(L10n.t("ui.reading.theme.system")).tag(RivetTypes.ReadingTheme.system)
-                Text(L10n.t("ui.reading.theme.paper")).tag(RivetTypes.ReadingTheme.paper)
-                Text(L10n.t("ui.reading.theme.sepia")).tag(RivetTypes.ReadingTheme.sepia)
-                Text(L10n.t("ui.reading.theme.night")).tag(RivetTypes.ReadingTheme.night)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .accessibilityIdentifier("settings.reading-theme")
-
-            smallButton(L10n.t("ui.settings.save")) {
-                Task { await save() }
-            }
-            .disabled(busy)
-        }
-    }
-
-    private var languageSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            settingLabel(L10n.t("ui.settings.language"))
-            Picker("", selection: Binding(
-                get: { app.languageSetting },
-                set: { app.setLanguage($0) })) {
-                Text(L10n.t("ui.settings.language-system")).tag("system")
-                Text("中文").tag("zh")
-                Text("English").tag("en")
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            Text(L10n.t("ui.settings.language-note"))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textFaint)
-            if app.languageSetting != loadedLanguage {
-                smallButton(L10n.t("ui.settings.relaunch")) {
-                    app.relaunchNow()
-                }
-            }
-        }
-    }
-
-
-    private var privacyFooter: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(L10n.t("ui.settings.privacy"))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textFaint)
-            Text("PDFGist \(RivetGeneratedConfig.version) · Rivet protocol v\(RivetGeneratedConfig.build)")
-                .font(.system(size: 10))
-                .foregroundStyle(Theme.textFaint)
-            // Support surface (the taskly About facts): a bug report starts
-            // one click away from the failure it describes.
-            HStack(spacing: 14) {
-                Link(L10n.t("ui.about.website"),
-                     destination: URL(string: "https://booklight.jrtx.site")!)
-                Link(L10n.t("ui.about.issue"),
-                     destination: URL(string: "https://github.com/turinglambdaai/booklight/issues")!)
-            }
-            .font(.system(size: 11))
-            Text(L10n.t("ui.about.license"))
-                .font(.system(size: 10))
-                .foregroundStyle(Theme.textFaint)
-        }
-    }
-
     // MARK: helpers
 
     private var canTest: Bool {
         !baseURL.trimmingCharacters(in: .whitespaces).isEmpty
             && (!modelField.trimmingCharacters(in: .whitespaces).isEmpty || app.settings.has_api_key)
-    }
-
-    private func settingLabel(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(Theme.textDim)
-    }
-
-    private func smallButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 12))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(Theme.text)
-        .background(RoundedRectangle(cornerRadius: 5).fill(Theme.panelAlt))
-        .overlay(RoundedRectangle(cornerRadius: 5).stroke(Theme.border))
     }
 
     private func loadFromSettings() {
@@ -272,6 +223,7 @@ struct SettingsPane: View {
 
     private func saveKey() async {
         busy = true
+        status = L10n.t("ui.settings.saving-key")
         defer { busy = false }
         status = await app.saveApiKey(apiKey.trimmingCharacters(in: .whitespaces))
         statusIsError = !status.hasPrefix("✓")
@@ -310,7 +262,4 @@ extension RivetTypes.TargetLanguage {
     static var allCasesArray: [RivetTypes.TargetLanguage] {
         [.zh, .zh_hant, .en, .ja, .ko, .fr, .de, .es]
     }
-
-
 }
-

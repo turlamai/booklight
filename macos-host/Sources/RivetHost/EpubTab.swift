@@ -234,17 +234,27 @@ final class EpubTab: ObservableObject, Identifiable {
         :root[data-theme="dark"] { --fg: #D6D3D1; --bg: #171412; }
         html { background: var(--bg); }
         body { margin: 0; padding: 0 0 40vh; color: var(--fg);
-          font-family: Georgia, "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif;
-          font-size: calc(16px * var(--fs)); line-height: 1.9; }
-        p { margin: 0 0 1em; text-align: justify; }
-        h1, h2, h3, h4 { line-height: 1.35; margin: 1.4em 0 0.6em; }
+          font-family: "New York", "Iowan Old Style", Georgia,
+            "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif;
+          font-size: calc(17px * var(--fs)); line-height: 1.75;
+          -webkit-font-smoothing: antialiased; }
+        p { margin: 0 0 1.05em; text-align: left; text-wrap: pretty; }
+        h1, h2, h3, h4 { line-height: 1.3; margin: 1.6em 0 0.55em;
+          font-weight: 600; letter-spacing: -0.01em; }
+        h1 { font-size: 1.9em; }
+        h2 { font-size: 1.45em; }
+        h3 { font-size: 1.18em; }
         img, svg { max-width: 100%; height: auto; }
-        blockquote { margin: 1em 0; padding-left: 1em; border-left: 3px solid #8884; }
+        blockquote { margin: 1.2em 0; padding-left: 1em;
+          border-left: 3px solid #8884; color: #888; }
         a { color: inherit; pointer-events: none; }
-        .epub-book-title { padding: 18vh 8vw 10vh; text-align: center; }
-        .book-title-text { font-size: 2em; font-weight: 700; }
-        .epub-chapter { padding: 0 8vw; }
-        mark.epub-hit { background: #FFD500; color: inherit; }
+        ::selection { background: rgba(196, 98, 62, 0.22); }
+        .epub-book-title { max-width: 38rem; margin: 0 auto;
+          padding: 16vh 28px 8vh; text-align: center; }
+        .book-title-text { font-size: 2.1em; font-weight: 600;
+          letter-spacing: -0.02em; }
+        .epub-chapter { max-width: 38rem; margin: 0 auto; padding: 0 28px; }
+        mark.epub-hit { background: #FFD500; color: inherit; border-radius: 2px; }
         """
         let script = """
         function clearMarks(root) {

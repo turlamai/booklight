@@ -34,7 +34,7 @@ struct DocumentWindowView: View {
                 await model.openPath(launch)
             }
         }
-        .onChange(of: path) { newPath in
+        .onChange(of: path) { _, newPath in
             guard let newPath, let reader,
                   reader.documentPath != newPath else { return }
             Task { await reader.openPath(newPath) }
@@ -260,7 +260,7 @@ struct ReaderWindowView: View {
         .sheet(isPresented: $reader.showWatermark) {
             WatermarkSheet(reader: reader)
         }
-        .onChange(of: reader.sidebarMode) { _ in
+        .onChange(of: reader.sidebarMode) { _, _ in
             // Picking a view — from the toolbar picker or the Tools menu —
             // while the sidebar is collapsed opens it.
             if sidebarVisibility == .detailOnly {
@@ -286,26 +286,41 @@ struct ReaderWindowView: View {
     private var readerChrome: some View {
         NavigationSplitView(columnVisibility: $sidebarVisibility) {
             ReaderSidebar(reader: reader)
-                .navigationSplitViewColumnWidth(min: 180, ideal: 232, max: 440)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 440)
         } detail: {
             detail
         }
         .inspector(isPresented: $reader.aiVisible) {
             AISidebar(reader: reader)
         }
-        // The SwiftUI-owned window title (macOS: navigationTitle drives the
-        // title bar and native tab labels).
-        .navigationTitle(reader.documentTitle ?? RivetGeneratedConfig.displayName)
+        // The document owns the window title. The sidebar's view switcher
+        // lives inside the sidebar, so it cannot push the title out of the
+        // native titlebar position.
+        .navigationTitle(reader.documentTitle ?? L10n.t("app.name"))
+        .navigationSubtitle(readerSubtitle)
         .toolbar { readerToolbar }
         .environmentObject(reader)
-        .overlay {
+        .overlay(alignment: .top) {
             if reader.findVisible {
                 FindBarView(reader: reader)
-                    .padding(.top, 4)
+                    .padding(.top, 10)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .animation(.easeInOut(duration: 0.15), value: reader.findVisible)
+    }
+
+    /// One quiet line of document context under the title (Preview model):
+    /// file kind and size on the left of the titlebar, never a second toolbar.
+    private var readerSubtitle: String {
+        if reader.epubActive, let epub = reader.epub {
+            return L10n.t("ui.viewer.epub-subtitle",
+                          "\(epub.currentPage)", "\(max(epub.chapters, 1))")
+        }
+        if let tab = reader.pdf {
+            return L10n.t("ui.viewer.pdf-info", "\(tab.pageCount)")
+        }
+        return ""
     }
 
     private func dropOpened(_ urls: [URL]) {
@@ -344,28 +359,6 @@ struct ReaderWindowView: View {
 
     @ToolbarContentBuilder
     private var readerToolbar: some ToolbarContent {
-        // Sidebar view switcher in the Preview position: next to the
-        // sidebar toggle, never bolted onto the sidebar itself. Picking a
-        // mode while the sidebar is collapsed opens it.
-        ToolbarItem(placement: .navigation) {
-            Picker("", selection: $reader.sidebarMode) {
-                if reader.epubActive {
-                    Text(L10n.t("ui.viewer.outline")).tag(1)
-                    Text(L10n.t("ui.sidebar.annotations")).tag(2)
-                } else {
-                    Text(L10n.t("ui.viewer.thumbs")).tag(0)
-                    Text(L10n.t("ui.viewer.outline")).tag(1)
-                    Text(L10n.t("ui.sidebar.annotations")).tag(2)
-                    Text(L10n.t("ui.sidebar.forms")).tag(3)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .disabled(reader.pdf == nil && reader.epub == nil)
-            .help(L10n.t("ui.toolbar.panel"))
-        }
-
         ToolbarItemGroup(placement: .primaryAction) {
             if let epub = reader.epub, reader.epubActive {
                 PageNavControl(
@@ -417,6 +410,7 @@ struct ReaderWindowView: View {
                         help: L10n.t("ui.toolbar.ai")) {
                 reader.aiVisible.toggle()
             }
+            .accessibilityIdentifier("booklight.ai.toggle")
         }
     }
 
@@ -482,9 +476,16 @@ struct PageNavControl: View {
                 .textFieldStyle(.plain)
                 .multilineTextAlignment(.center)
                 .font(.system(size: 12).monospacedDigit())
-                .frame(width: 30)
+                .frame(width: 32, height: 20)
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Theme.panelAlt))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .stroke(Theme.border, lineWidth: 0.5))
                 .focused($fieldFocused)
                 .onSubmit(submit)
+                .accessibilityLabel(L10n.t("ui.viewer.page-status", "\(current)", "\(total)"))
             Text(verbatim: "/ \(total)")
                 .font(.system(size: 12).monospacedDigit())
                 .foregroundStyle(Theme.textFaint)
@@ -499,7 +500,7 @@ struct PageNavControl: View {
             .disabled(current >= total)
         }
         .onAppear { pageInput = "\(current)" }
-        .onChange(of: current) { pageInput = "\($0)" }
+        .onChange(of: current) { _, value in pageInput = "\(value)" }
     }
 
     private func submit() {
@@ -580,11 +581,14 @@ struct FindBarView: View {
             .buttonStyle(.plain)
             .foregroundStyle(Theme.textDim)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.borderStrong))
-        .shadow(color: Color.black.opacity(0.18), radius: 8, y: 2)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(.regularMaterial,
+                    in: RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                .stroke(Theme.borderStrong, lineWidth: 0.5))
+        .shadow(color: Color.black.opacity(0.16), radius: 10, y: 3)
     }
 }
 

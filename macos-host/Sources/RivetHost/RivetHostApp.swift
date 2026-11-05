@@ -6,6 +6,41 @@ final class BooklightAppDelegate: NSObject, NSApplicationDelegate {
     weak var appModel: AppModel?
     private var terminationInFlight = false
 
+#if DEBUG
+    /// Design-review helper: `BOOKLIGHT_SNAPSHOT_DIR` renders the key window
+    /// (content and full frame) to PNG after the UI settles, without needing
+    /// Screen Recording permission. Development-only and inert in normal use.
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        if let appearance = ProcessInfo.processInfo.environment["BOOKLIGHT_APPEARANCE"] {
+            NSApp.appearance = NSAppearance(named: appearance == "light" ? .aqua : .darkAqua)
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        guard let directory = ProcessInfo.processInfo.environment["BOOKLIGHT_SNAPSHOT_DIR"],
+              !directory.isEmpty else { return }
+        let delay = Double(ProcessInfo.processInfo.environment["BOOKLIGHT_SNAPSHOT_DELAY"] ?? "6") ?? 6
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(delay))
+            if ProcessInfo.processInfo.environment["BOOKLIGHT_SNAPSHOT_SETTINGS"] == "1" {
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                try? await Task.sleep(for: .seconds(2))
+            }
+            let root = URL(fileURLWithPath: directory)
+            var index = 0
+            for window in NSApp.windows where window.isVisible && window.contentView != nil {
+                guard let content = window.contentView else { continue }
+                let name = "window-\(index)"
+                BooklightSnapshot.write(view: content,
+                                        to: root.appendingPathComponent(name + ".png"))
+                if let frame = content.superview {
+                    BooklightSnapshot.write(view: frame,
+                                            to: root.appendingPathComponent(name + "-frame.png"))
+                }
+                index += 1
+            }
+        }
+    }
+#endif
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let appModel else { return .terminateNow }
         if terminationInFlight { return .terminateLater }
@@ -231,3 +266,19 @@ struct AppCommands: Commands {
         .disabled(app.recents.isEmpty)
     }
 }
+
+#if DEBUG
+/// Off-screen window render used only by the design-review environment
+/// variable above. AppKit caches the existing backing store, so this needs no
+/// Screen Recording permission and never changes what the user sees.
+@MainActor
+private enum BooklightSnapshot {
+    static func write(view: NSView, to url: URL) {
+        guard view.bounds.width > 0, view.bounds.height > 0,
+              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        guard let png = rep.representation(using: .png, properties: [:]) else { return }
+        try? png.write(to: url)
+    }
+}
+#endif

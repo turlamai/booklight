@@ -1,6 +1,6 @@
 # Booklight UX baseline — file-first document reader
 
-Decision: **2026-10-29-file-first**. The previous Apple Books/iBooks shelf and reading-goals benchmark is retired. The design target is a good native document reader/editor, not a book collection or habit tracker. [Product contract](FILE-FIRST-DESIGN.md).
+Decision: **2026-10-29-file-first**. Visual contract: [`DESIGN.md`](DESIGN.md). The previous Apple Books/iBooks shelf and reading-goals benchmark is retired. The design target is a good native document reader/editor, not a book collection or habit tracker. [Product contract](FILE-FIRST-DESIGN.md).
 
 ## Benchmarks worth learning from
 
