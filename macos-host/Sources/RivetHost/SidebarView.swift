@@ -56,6 +56,7 @@ struct ReaderSidebar: View {
                 .labelStyle(.iconOnly)
                 .labelsHidden()
                 .controlSize(.small)
+                .fixedSize()
                 .help(L10n.t("ui.toolbar.panel"))
                 .accessibilityIdentifier("booklight.sidebar.picker")
             } else if reader.pdf != nil {
@@ -74,6 +75,7 @@ struct ReaderSidebar: View {
                 .labelStyle(.iconOnly)
                 .labelsHidden()
                 .controlSize(.small)
+                .fixedSize()
                 .help(L10n.t("ui.toolbar.panel"))
                 .accessibilityIdentifier("booklight.sidebar.picker")
             }
