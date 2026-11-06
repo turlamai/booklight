@@ -158,7 +158,7 @@ MainWindow::MainWindow() {
     pdfgist::SetUiLanguage(PRIMARYLANGID(lang) == LANG_CHINESE ? "zh" : "en");
   }
 
-  OpenLabel().Text(pdfgist::Tr("ui.toolbar.open"));
+  OpenLabel().Text(pdfgist::Tr("ui.menu.open"));
   auto set_tip = [](mux::FrameworkElement const& element,
                     std::wstring const& text) {
     muxc::ToolTipService::SetToolTip(element, winrt::box_value(text));
@@ -172,6 +172,7 @@ MainWindow::MainWindow() {
   set_tip(TtsButton(), pdfgist::Tr("ui.toolbar.tts"));
   set_tip(PrintButton(), pdfgist::Winize(pdfgist::Tr("ui.toolbar.print")));
   set_tip(ToolsButton(), pdfgist::Tr("ui.menu.tools"));
+  ToolsFillFormItem().Text(pdfgist::Tr("ui.menu.fill-forms"));
   ToolsWatermarkItem().Text(pdfgist::Tr("ui.tools.watermark"));
   ToolsSavePdfItem().Text(pdfgist::Tr("ui.dialog.save") + L" PDF…");
   ToolsExportPageItem().Text(pdfgist::Tr("ui.tools.export-page"));
@@ -179,9 +180,34 @@ MainWindow::MainWindow() {
   set_tip(AiToggle(), pdfgist::Tr("ui.toolbar.ai"));
   set_tip(ThemeButton(), pdfgist::Tr("ui.toolbar.theme-light") + L" / " +
                              pdfgist::Tr("ui.toolbar.theme-dark"));
-  ThumbsModeLabel().Text(pdfgist::Tr("ui.viewer.thumbs"));
-  OutlineModeLabel().Text(pdfgist::Tr("ui.viewer.outline"));
-  NotesModeLabel().Text(pdfgist::Tr("ui.sidebar.annotations"));
+  // Icon-only sidebar switcher: the accessible name carries the localized
+  // label (and is the packaged journey's control handle).
+  auto set_name = [](mux::FrameworkElement const& element,
+                     std::wstring const& text) {
+    winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+        element, text);
+    winrt::Microsoft::UI::Xaml::Controls::ToolTipService::SetToolTip(
+        element, winrt::box_value(text));
+  };
+  set_name(ThumbsMode(), pdfgist::Tr("ui.viewer.thumbs"));
+  set_name(OutlineMode(), pdfgist::Tr("ui.viewer.outline"));
+  set_name(NotesMode(), pdfgist::Tr("ui.sidebar.annotations"));
+  set_name(FormsMode(), pdfgist::Tr("ui.sidebar.forms"));
+  set_name(OpenButton(), pdfgist::Tr("ui.menu.open"));
+  set_name(LeftToggle(), pdfgist::Tr("ui.toolbar.panel"));
+  set_name(RecentsButton(), pdfgist::Tr("ui.viewer.recents"));
+  set_name(FindToggle(), pdfgist::Tr("ui.toolbar.find"));
+  set_name(BookmarkToggle(), pdfgist::Winize(pdfgist::Tr("ui.toolbar.bookmark")));
+  set_name(SplitToggle(), pdfgist::Tr("ui.toolbar.split"));
+  set_name(TtsButton(), pdfgist::Tr("ui.toolbar.tts"));
+  set_name(PrintButton(), pdfgist::Winize(pdfgist::Tr("ui.toolbar.print")));
+  set_name(ToolsButton(), pdfgist::Tr("ui.menu.tools"));
+  set_name(AiToggle(), pdfgist::Tr("ui.toolbar.ai"));
+  set_name(ThemeButton(), pdfgist::Tr("ui.toolbar.theme-light") + L" / " +
+                                pdfgist::Tr("ui.toolbar.theme-dark"));
+  set_name(SettingsButton(), pdfgist::Tr("ui.tab.settings"));
+  WelcomePrivacy().Text(pdfgist::Tr("ui.welcome.privacy"));
+  WelcomeRecentEmpty().Text(pdfgist::Tr("ui.welcome.no-recent"));
   FindInput().PlaceholderText(pdfgist::Tr("ui.viewer.find-placeholder"));
   FitWidthLabel().Text(pdfgist::Tr("ui.viewer.fit"));
   ChatSendLabel().Text(pdfgist::Tr("ui.chat.send"));
@@ -192,7 +218,13 @@ MainWindow::MainWindow() {
   ApplyTheme();
   BuildAiSidebar();
   BuildSettingsPane();
+  // The settings child is appended after the initial AI-pane visibility pass;
+  // keep it hidden until the Settings tab is selected.
+  if (AiContent().Children().Size() > 3) {
+    AiContent().Children().GetAt(3).Visibility(Visibility::Collapsed);
+  }
   BuildPageOpsRow();
+  BuildFormsPane();
   BuildKeyboardAccelerators();
   RefreshLeftPanel();
   UpdateChrome();
@@ -626,6 +658,14 @@ void MainWindow::SaveReadingFontScale(double scale) {
       });
 }
 
+void MainWindow::Settings_Click(winrt::Windows::Foundation::IInspectable const&,
+                               mux::RoutedEventArgs const&) {
+  ai_visible_ = true;
+  AiToggle().IsChecked(true);
+  ShowAiPane(3);
+  UpdateChrome();
+}
+
 void MainWindow::Theme_Click(winrt::Windows::Foundation::IInspectable const&,
                              mux::RoutedEventArgs const&) {
   ToggleTheme();
@@ -785,6 +825,25 @@ void MainWindow::NotesMode_Click(winrt::Windows::Foundation::IInspectable const&
                                  mux::RoutedEventArgs const&) {
   left_mode_ = 2;
   RefreshLeftPanel();
+}
+
+void MainWindow::FormsMode_Click(winrt::Windows::Foundation::IInspectable const&,
+                                 mux::RoutedEventArgs const&) {
+  left_mode_ = 3;
+  RefreshLeftPanel();
+  RefreshFormFields();
+}
+
+void MainWindow::ToolsFillForm_Click(
+    winrt::Windows::Foundation::IInspectable const&,
+    mux::RoutedEventArgs const&) {
+  if (epub_active_ || !active_pdf_) return;
+  left_mode_ = 3;
+  left_visible_ = true;
+  LeftToggle().IsChecked(true);
+  RefreshLeftPanel();
+  RefreshFormFields();
+  UpdateChrome();
 }
 
 void MainWindow::Bookmark_Click(winrt::Windows::Foundation::IInspectable const&,
@@ -2216,17 +2275,20 @@ void MainWindow::RefreshLeftPanel() {
   bool const has_reader = epub_now || active_pdf_ != nullptr;
   LeftModeRow().Visibility(has_reader ? Visibility::Visible : Visibility::Collapsed);
   ThumbsMode().Visibility(epub_now ? Visibility::Collapsed : Visibility::Visible);
+  FormsMode().Visibility(epub_now ? Visibility::Collapsed : Visibility::Visible);
   NotesMode().Visibility(has_reader ? Visibility::Visible : Visibility::Collapsed);
   ThumbsMode().IsChecked(!epub_now && left_mode_ == 0);
   OutlineMode().IsChecked(!epub_now && left_mode_ == 1 ? true
                           : epub_now && left_mode_ != 2);
   NotesMode().IsChecked(left_mode_ == 2);
+  FormsMode().IsChecked(!epub_now && left_mode_ == 3);
   // EPUB: TOC or notes (mac sidebarMode parity)
   int const effective_mode =
       epub_now ? (left_mode_ == 2 ? 2 : 1) : left_mode_;
 
   // page ops row (PDF only — page surgery is a PDF concern)
-  page_ops_row_.Visibility(!epub_now && active_pdf_ != nullptr
+  page_ops_row_.Visibility(!epub_now && active_pdf_ != nullptr &&
+                                   effective_mode != 3
                                ? Visibility::Visible
                                : Visibility::Collapsed);
 
@@ -2241,7 +2303,18 @@ void MainWindow::RefreshLeftPanel() {
     }
   } else
   if (active_pdf_) {
-    if (effective_mode == 0) {
+    if (effective_mode == 3) {
+      if (forms_pane_) {
+        if (forms_pane_.Parent()) {
+          forms_pane_.Parent().as<muxc::Panel>().Children().Clear();
+        }
+        content.Children().Append(forms_pane_);
+      }
+      if (forms_doc_ != active_pdf_) {
+        forms_doc_ = active_pdf_;
+        if (forms_pane_) RefreshFormFields();
+      }
+    } else if (effective_mode == 0) {
       // thumbnails (rendered lazily at thumbnail scale)
       auto strip = muxc::StackPanel();
       strip.Spacing(4);
@@ -2384,23 +2457,68 @@ void MainWindow::RefreshRecentsRows() {
   // A recent document is an ordinary file path, not a catalog entry.
   auto const children = WelcomeRecentStack().Children();
   children.Clear();
-  WelcomeRecentSection().Visibility(
-      recents_.empty() ? mux::Visibility::Collapsed : mux::Visibility::Visible);
+  bool const empty = recents_.empty();
+  WelcomeRecentSection().Visibility(mux::Visibility::Visible);
+  WelcomeRecentEmpty().Visibility(empty ? mux::Visibility::Visible
+                                        : mux::Visibility::Collapsed);
   WelcomeRecentTitle().Text(pdfgist::Tr("ui.viewer.recents"));
   for (auto const& entry : recents_) {
     auto const path = to_wide(entry.path);
     auto const last = path.find_last_of(L"/\\");
     auto label = path.substr(last == std::wstring::npos ? 0 : last + 1);
-    auto button = muxc::Button();
-    button.Content(winrt::box_value(label));
-    button.HorizontalAlignment(mux::HorizontalAlignment::Stretch);
-    button.HorizontalContentAlignment(mux::HorizontalAlignment::Left);
-    button.Click([weak = get_weak(), path = to_wide(entry.path),
-                  page = static_cast<int>(entry.page)](
-                     auto const&, auto const&) {
+    auto folder = last == std::wstring::npos ? std::wstring{} : path.substr(0, last);
+
+    auto row = muxc::Button();
+    row.HorizontalAlignment(mux::HorizontalAlignment::Stretch);
+    row.HorizontalContentAlignment(mux::HorizontalAlignment::Stretch);
+    row.Padding({10, 8, 10, 8});
+    row.CornerRadius({8, 8, 8, 8});
+    row.Background(ThemePanelBrush());
+    row.BorderThickness({0, 0, 0, 0});
+
+    auto line = muxc::StackPanel();
+    line.Orientation(muxc::Orientation::Horizontal);
+    line.Spacing(10);
+    auto glyph = muxc::FontIcon();
+    glyph.FontFamily(winrt::Microsoft::UI::Xaml::Media::FontFamily(
+        L"Segoe Fluent Icons"));
+    glyph.FontSize(18);
+    glyph.Glyph(has_extension(path, L".epub") ? L"\uE82D" : L"\uE8A5");
+    glyph.Foreground(ThemeBrush(AccentColor()));
+    line.Children().Append(glyph);
+    auto text = muxc::StackPanel();
+    text.Spacing(2);
+    auto title = muxc::TextBlock();
+    title.Text(label);
+    title.FontSize(13);
+    title.FontWeight(wut::FontWeights::SemiBold());
+    title.MaxWidth(300);
+    title.TextTrimming(mux::TextTrimming::CharacterEllipsis);
+    text.Children().Append(title);
+    auto sub = muxc::TextBlock();
+    sub.Text(folder);
+    sub.FontSize(11);
+    sub.Opacity(0.55);
+    sub.MaxWidth(300);
+    sub.TextTrimming(mux::TextTrimming::CharacterEllipsis);
+    text.Children().Append(sub);
+    line.Children().Append(text);
+    if (entry.page > 1) {
+      auto badge = muxc::TextBlock();
+      badge.Text(pdfgist::Trf("ui.welcome.resume",
+                              std::to_wstring(entry.page)));
+      badge.FontSize(11);
+      badge.Opacity(0.55);
+      badge.VerticalAlignment(mux::VerticalAlignment::Center);
+      badge.Margin({8, 0, 0, 0});
+      line.Children().Append(badge);
+    }
+    row.Content(line);
+    row.Click([weak = get_weak(), path = to_wide(entry.path),
+               page = static_cast<int>(entry.page)](auto const&, auto const&) {
       if (auto window = weak.get()) window->OpenPath(path, std::max(page, 1));
     });
-    children.Append(button);
+    children.Append(row);
   }
 }
 

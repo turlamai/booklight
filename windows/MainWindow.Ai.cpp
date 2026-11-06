@@ -33,8 +33,8 @@ void MainWindow::BuildAiSidebar() {
       AiToggle(), winrt::box_value(pdfgist::Tr("ui.toolbar.ai")));
 
   char const* tabs[] = {"ui.tab.translate", "ui.tab.summarize",
-                        "ui.tab.chat", "ui.tab.forms", "ui.tab.settings"};
-  for (int i = 0; i < 5; ++i) {
+                        "ui.tab.chat", "ui.tab.settings"};
+  for (int i = 0; i < 4; ++i) {
     auto button = muxcp::ToggleButton();
     muxc::TextBlock label;
     label.Text(pdfgist::Tr(tabs[i]));
@@ -175,28 +175,25 @@ void MainWindow::BuildAiSidebar() {
   AiContent().Children().Append(translate_pane);
   AiContent().Children().Append(summarize_pane);
   AiContent().Children().Append(chat_pane);
-  BuildFormsPane();  // appends the forms pane as the fourth child
-  AiContent().Children().Append(forms_pane_);
   ShowAiPane(ai_pane_);
 }
 
 void MainWindow::ShowAiPane(int index) {
-  ai_pane_ = std::clamp(index, 0, 4);
+  ai_pane_ = std::clamp(index, 0, 3);
   for (std::size_t i = 0; i < ai_tab_buttons_.size(); ++i) {
     ai_tab_buttons_[i].IsChecked(static_cast<int>(i) == ai_pane_);
   }
-  if (ai_pane_ == 4 && !settings_built_) {
-    BuildSettingsPane();  // appends the settings pane as the fifth child
+  if (ai_pane_ == 3 && !settings_built_) {
+    BuildSettingsPane();  // appends the settings pane as the fourth child
   }
-  // children: 0 translate / 1 summarize / 2 chat / 3 forms / 4 settings
+  // children: 0 translate / 1 summarize / 2 chat / 3 settings
   for (std::uint32_t i = 0; i < AiContent().Children().Size(); ++i) {
     auto child = AiContent().Children().GetAt(i);
     child.Visibility(static_cast<int>(i) == ai_pane_ ? Visibility::Visible
                                                      : Visibility::Collapsed);
   }
   UpdateChrome();
-  if (ai_pane_ == 4) LoadSettingsIntoPane();
-  if (ai_pane_ == 3) RefreshFormFields();
+  if (ai_pane_ == 3) LoadSettingsIntoPane();
 }
 
 void MainWindow::RefreshChatScopeButtons() {

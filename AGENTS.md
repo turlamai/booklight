@@ -59,7 +59,7 @@ raco rivet acceptance --json # 当前平台的打包产品验收
 - **PDF 页级操作走领域核心**：`racket/booklight/pdfdoc.rkt` 是自研最小读写器，不引第三方 PDF 库；编辑全在内存，宿主负责落盘
 - **BYOK 密钥**：走 `racket/booklight/secure-store.rkt`（macOS Keychain / Linux Secret Service / Windows DPAPI，失败时仅本人可读文件回退）；不得写入 `settings.json`，错误与诊断必须经 `llm.rkt` 的 `redact-secret` 脱敏
 - **损坏输入预算**：EPUB 与 PDF 都必须在领域核心内先校验资源预算（`EPUB_RESOURCE_LIMIT[...]` / `PDF_RESOURCE_LIMIT[...]`），失败即报错，不得先分配再失败
-- **视觉契约**：`docs/DESIGN.md` 是设计系统的单一说明；macOS 本轮实现，Windows/Linux 必须按 Fluent/Adwaita 原生惯例跟进，不能直接搬 macOS 样式
+- **视觉契约**：`docs/DESIGN.md` 是设计系统的单一说明；三端共享同一信息架构与操作语义，各自使用 SwiftUI/WinUI/GTK 原生外壳。不得把 macOS 样式照搬到 Windows/Linux，也不得以“尊重平台”为由各做一套交互
 - **Rivet 改动走上游**：缺能力先提 issue/PR 到 turinglambdaai/rivet
 
 ## 项目结构
