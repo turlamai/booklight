@@ -55,7 +55,7 @@ API Key 不会写入 `settings.json`。Booklight 将其保存在操作系统凭�
 
 ## 已知限制
 
-损坏或恶意 PDF / EPUB 输入受明确的资源预算约束，会以清晰的打开错误结束，而不是耗尽内存；限额见[文件优先设计](FILE-FIRST-DESIGN.md#hostile-and-damaged-input)。本轮在 macOS 上实现了新的视觉系统；Windows 与 Linux 保留各自原生的 Fluent 和 Adwaita 界面，仍需通过各自的打包可访问性验收后，才能宣称设计已发布。新增多文档研究工作台尚未交付。
+损坏或恶意 PDF / EPUB 输入受明确的资源预算约束，会以清晰的打开错误结束，而不是耗尽内存；限额见[文件优先设计](FILE-FIRST-DESIGN.md#hostile-and-damaged-input)。macOS、Windows 与 Linux 采用同一套欢迎页、阅读器、侧栏、批注、AI 与设置信息架构，界面外壳分别使用各平台原生控件。每个平台仍需通过各自的打包可访问性验收后，才能宣称设计已发布。新增多文档研究工作台尚未交付。
 
 ## 更新与卸载
 

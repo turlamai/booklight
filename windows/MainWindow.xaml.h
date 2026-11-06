@@ -214,12 +214,18 @@ struct MainWindow : MainWindowT<MainWindow> {
                       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void Theme_Click(winrt::Windows::Foundation::IInspectable const&,
                    winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void Settings_Click(winrt::Windows::Foundation::IInspectable const&,
+                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void ThumbsMode_Click(winrt::Windows::Foundation::IInspectable const&,
                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OutlineMode_Click(winrt::Windows::Foundation::IInspectable const&,
                          winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void NotesMode_Click(winrt::Windows::Foundation::IInspectable const&,
                        winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void FormsMode_Click(winrt::Windows::Foundation::IInspectable const&,
+                       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void ToolsFillForm_Click(winrt::Windows::Foundation::IInspectable const&,
+                           winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void Bookmark_Click(winrt::Windows::Foundation::IInspectable const&,
                       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void Split_Click(winrt::Windows::Foundation::IInspectable const&,
@@ -544,6 +550,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::vector<FormField> form_fields_;
   std::map<std::wstring, std::wstring> form_text_values_;
   std::map<std::wstring, bool> form_check_values_;
+  std::shared_ptr<PdfTab> forms_doc_;
   winrt::Microsoft::UI::Xaml::Controls::StackPanel forms_pane_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::StackPanel forms_list_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock forms_status_{nullptr};
@@ -587,7 +594,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   bool window_close_prompt_active_ = false;
 
   bool left_visible_ = false;
-  int left_mode_ = 0;  // 0 thumbnails / 1 outline / 2 notes
+  int left_mode_ = 0;  // 0 thumbnails / 1 outline / 2 notes / 3 forms
   bool ai_visible_ = false;  // reading canvas first; user pref may override
   int ai_pane_ = 0;
   std::string theme_ = "system";  // system | light | dark

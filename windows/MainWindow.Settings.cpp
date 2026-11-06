@@ -34,10 +34,10 @@ wu::Color PanelAltColor(bool dark) {
 muxc::TextBlock SettingLabel(std::wstring const& text) {
   muxc::TextBlock label;
   label.Text(text);
-  label.FontSize(11);
+  label.FontSize(12);
   label.FontWeight(wut::FontWeights::SemiBold());
-  label.Opacity(0.7);
-  label.Margin({0, 6, 0, 2});
+  label.Opacity(0.8);
+  label.Margin({0, 12, 0, 4});
   return label;
 }
 
@@ -82,9 +82,9 @@ void MainWindow::BuildSettingsPane() {
 
   auto pane = muxc::ScrollViewer();
   auto stack = muxc::StackPanel();
-  stack.Spacing(6);
-  stack.Padding({8, 8, 8, 8});
-  stack.MaxWidth(380);
+  stack.Spacing(8);
+  stack.Padding({16, 16, 16, 16});
+  stack.MaxWidth(560);
 
   // ---- provider section ----
   stack.Children().Append(SettingLabel(pdfgist::Tr("ui.settings.preset")));

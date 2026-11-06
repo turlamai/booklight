@@ -5,6 +5,16 @@ All notable changes to Booklight are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Windows and Linux now use the same welcome, reader, sidebar, annotation and
+  settings information architecture as macOS while keeping their native
+  WinUI/Fluent and GTK/Adwaita chrome. Windows moves Forms into the left
+  sidebar, adopts a four-mode icon switcher, a two-column welcome and a
+  grouped command row; Linux adopts the two-column welcome with a product
+  mark and recent-file rows. Terms, ordering and shortcut semantics stay
+  shared across the three hosts.
+
 ## [0.9.0] - 2026-11-04
 
 ### Added

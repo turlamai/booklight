@@ -59,7 +59,7 @@ Your API key is not written to `settings.json`. Booklight stores it in the opera
 
 ## Known limits
 
-Damaged or hostile PDF/EPUB inputs are bounded by explicit resource budgets and fail with a clear open error instead of exhausting memory; the limits are documented in [the file-first design](FILE-FIRST-DESIGN.md#hostile-and-damaged-input). The macOS visual system is implemented in this line; Windows and Linux keep their first-party Fluent and Adwaita chrome and still require their own packaged accessibility acceptance before a design change is claimed as shipped. A new multi-document research workbench is not delivered.
+Damaged or hostile PDF/EPUB inputs are bounded by explicit resource budgets and fail with a clear open error instead of exhausting memory; the limits are documented in [the file-first design](FILE-FIRST-DESIGN.md#hostile-and-damaged-input). The same welcome, reader, sidebar, annotation, AI and settings information architecture is implemented on macOS, Windows and Linux, with each host using its own native chrome. Each host still needs its packaged accessibility acceptance before a design change is claimed as shipped. A new multi-document research workbench is not delivered.
 
 ## Updates and removal
 

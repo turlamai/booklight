@@ -120,6 +120,7 @@ struct Host {
   GtkLabel* find_count{nullptr};
   GtkWidget* main_stack{nullptr};
   GtkBox* welcome_recents{nullptr};
+  GtkLabel* welcome_empty{nullptr};
   GtkLabel* status_label{nullptr};
   GtkLabel* page_label{nullptr};
   GtkLabel* zoom_label{nullptr};
@@ -3375,27 +3376,75 @@ void update_main_stack() {
 
 void build_primary_menu();
 
+void init_welcome_css() {
+  static bool done = false;
+  if (done) return;
+  done = true;
+  auto* provider = gtk_css_provider_new();
+  gtk_css_provider_load_from_string(
+      provider,
+      ".brand-mark { background-color: #b45309; border-radius: 15px; "
+      "color: white; }"
+      ".welcome-row { padding: 4px 2px; }");
+  gtk_style_context_add_provider_for_display(
+      gdk_display_get_default(), GTK_STYLE_PROVIDER(provider),
+      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  g_object_unref(provider);
+}
+
 void rebuild_welcome_recents() {
   if (g_host.welcome_recents == nullptr) return;
   auto* box = GTK_WIDGET(g_host.welcome_recents);
   while (GtkWidget* child = gtk_widget_get_first_child(box)) {
     gtk_box_remove(g_host.welcome_recents, child);
   }
-  gtk_widget_set_visible(box, !g_host.recents.empty());
-  if (g_host.recents.empty()) return;
-  auto* title = gtk_label_new(Tr("ui.viewer.recents").c_str());
-  gtk_widget_add_css_class(title, "heading");
-  gtk_widget_set_halign(title, GTK_ALIGN_START);
-  gtk_box_append(g_host.welcome_recents, title);
+  bool const empty = g_host.recents.empty();
+  if (g_host.welcome_empty != nullptr) {
+    gtk_widget_set_visible(GTK_WIDGET(g_host.welcome_empty), empty);
+  }
+  gtk_widget_set_visible(box, !empty);
+  if (empty) return;
   int count = 0;
   for (auto const& recent : g_host.recents) {
     if (++count > 10) break;
     gchar* name = g_path_get_basename(recent.path.c_str());
-    auto* button = gtk_button_new_with_label(name);
-    g_free(name);
+    gchar* folder = g_path_get_dirname(recent.path.c_str());
+    auto* button = gtk_button_new();
     gtk_button_set_has_frame(GTK_BUTTON(button), FALSE);
+    gtk_widget_add_css_class(button, "flat");
+    gtk_widget_add_css_class(button, "welcome-row");
     gtk_widget_set_halign(button, GTK_ALIGN_FILL);
+    gtk_widget_set_hexpand(button, TRUE);
     gtk_widget_set_tooltip_text(button, recent.path.c_str());
+
+    auto* row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    auto* icon = gtk_image_new_from_icon_name("x-office-document-symbolic");
+    gtk_image_set_pixel_size(GTK_IMAGE(icon), 18);
+    gtk_box_append(GTK_BOX(row), icon);
+    auto* text = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_widget_set_hexpand(text, TRUE);
+    auto* title = gtk_label_new(name);
+    gtk_label_set_xalign(GTK_LABEL(title), 0.0f);
+    gtk_label_set_ellipsize(GTK_LABEL(title), PANGO_ELLIPSIZE_END);
+    gtk_box_append(GTK_BOX(text), title);
+    auto* sub = gtk_label_new(folder);
+    gtk_widget_add_css_class(sub, "caption");
+    gtk_widget_add_css_class(sub, "dim-label");
+    gtk_label_set_xalign(GTK_LABEL(sub), 0.0f);
+    gtk_label_set_ellipsize(GTK_LABEL(sub), PANGO_ELLIPSIZE_MIDDLE);
+    gtk_box_append(GTK_BOX(text), sub);
+    gtk_box_append(GTK_BOX(row), text);
+    if (recent.page > 1) {
+      auto* page = gtk_label_new(
+          Trf("ui.welcome.resume",
+              std::to_string(static_cast<int>(recent.page))).c_str());
+      gtk_widget_add_css_class(page, "caption");
+      gtk_widget_add_css_class(page, "dim-label");
+      gtk_box_append(GTK_BOX(row), page);
+    }
+    gtk_button_set_child(GTK_BUTTON(button), row);
+    g_free(name);
+    g_free(folder);
     g_object_set_data_full(G_OBJECT(button), "booklight-recent-path",
                            g_strdup(recent.path.c_str()), g_free);
     hook(button, "clicked", +[](GtkButton* b, gpointer) {
@@ -4176,30 +4225,88 @@ void on_activate(GtkApplication* app, gpointer) {
 
   // Empty-document welcome. Documents stay at their original paths;
   // this screen never imports or copies them into an application library.
-  auto* welcome = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
+  init_welcome_css();
+  auto* welcome = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_widget_set_halign(welcome, GTK_ALIGN_CENTER);
   gtk_widget_set_valign(welcome, GTK_ALIGN_CENTER);
-  gtk_widget_set_margin_start(welcome, 32);
-  gtk_widget_set_margin_end(welcome, 32);
+  gtk_widget_set_margin_start(welcome, 48);
+  gtk_widget_set_margin_end(welcome, 48);
+  auto* welcome_columns = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 56);
+  gtk_widget_set_halign(welcome_columns, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(welcome_columns, GTK_ALIGN_CENTER);
+
+  auto* welcome_left = gtk_box_new(GTK_ORIENTATION_VERTICAL, 18);
+  gtk_widget_set_size_request(welcome_left, 340, -1);
+  gtk_widget_set_valign(welcome_left, GTK_ALIGN_START);
+  auto* mark = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_widget_set_size_request(mark, 60, 60);
+  gtk_widget_set_halign(mark, GTK_ALIGN_START);
+  gtk_widget_add_css_class(mark, "brand-mark");
+  auto* mark_icon =
+      gtk_image_new_from_icon_name("x-office-document-symbolic");
+  gtk_image_set_pixel_size(GTK_IMAGE(mark_icon), 28);
+  gtk_widget_set_halign(mark_icon, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(mark_icon, GTK_ALIGN_CENTER);
+  gtk_widget_set_hexpand(mark_icon, TRUE);
+  gtk_widget_set_vexpand(mark_icon, TRUE);
+  gtk_box_append(GTK_BOX(mark), mark_icon);
+  gtk_box_append(GTK_BOX(welcome_left), mark);
+
   auto* welcome_title = gtk_label_new("Booklight");
   gtk_widget_add_css_class(welcome_title, "title-1");
-  gtk_box_append(GTK_BOX(welcome), welcome_title);
+  gtk_label_set_xalign(GTK_LABEL(welcome_title), 0.0f);
+  gtk_box_append(GTK_BOX(welcome_left), welcome_title);
+
   auto* welcome_hint = gtk_label_new(Tr("ui.welcome.open-any").c_str());
-  gtk_box_append(GTK_BOX(welcome), welcome_hint);
+  gtk_label_set_xalign(GTK_LABEL(welcome_hint), 0.0f);
+  gtk_label_set_wrap(GTK_LABEL(welcome_hint), TRUE);
+  gtk_label_set_max_width_chars(GTK_LABEL(welcome_hint), 42);
+  gtk_box_append(GTK_BOX(welcome_left), welcome_hint);
+
   auto* welcome_open = gtk_button_new_with_label(Tr("ui.menu.open").c_str());
   gtk_widget_add_css_class(welcome_open, "suggested-action");
-  gtk_widget_set_halign(welcome_open, GTK_ALIGN_CENTER);
+  gtk_widget_set_halign(welcome_open, GTK_ALIGN_START);
   hook(welcome_open, "clicked",
        +[](GtkButton*, gpointer) { pick_and_open(); }, nullptr);
-  gtk_box_append(GTK_BOX(welcome), welcome_open);
+  gtk_box_append(GTK_BOX(welcome_left), welcome_open);
+
   auto* welcome_drop = gtk_label_new(Tr("ui.welcome.linux-hint").c_str());
+  gtk_widget_add_css_class(welcome_drop, "caption");
   gtk_widget_add_css_class(welcome_drop, "dim-label");
-  gtk_box_append(GTK_BOX(welcome), welcome_drop);
-  auto* recent_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+  gtk_label_set_xalign(GTK_LABEL(welcome_drop), 0.0f);
+  gtk_label_set_wrap(GTK_LABEL(welcome_drop), TRUE);
+  gtk_box_append(GTK_BOX(welcome_left), welcome_drop);
+
+  auto* welcome_privacy = gtk_label_new(Tr("ui.welcome.privacy").c_str());
+  gtk_widget_add_css_class(welcome_privacy, "caption");
+  gtk_widget_add_css_class(welcome_privacy, "dim-label");
+  gtk_label_set_xalign(GTK_LABEL(welcome_privacy), 0.0f);
+  gtk_label_set_wrap(GTK_LABEL(welcome_privacy), TRUE);
+  gtk_label_set_max_width_chars(GTK_LABEL(welcome_privacy), 42);
+  gtk_box_append(GTK_BOX(welcome_left), welcome_privacy);
+
+  auto* welcome_right = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+  gtk_widget_set_size_request(welcome_right, 420, -1);
+  gtk_widget_set_valign(welcome_right, GTK_ALIGN_START);
+  auto* recent_title = gtk_label_new(Tr("ui.viewer.recents").c_str());
+  gtk_widget_add_css_class(recent_title, "heading");
+  gtk_label_set_xalign(GTK_LABEL(recent_title), 0.0f);
+  gtk_box_append(GTK_BOX(welcome_right), recent_title);
+  auto* recent_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
   g_host.welcome_recents = GTK_BOX(recent_box);
-  gtk_widget_set_margin_top(recent_box, 18);
   gtk_widget_set_visible(recent_box, FALSE);
-  gtk_box_append(GTK_BOX(welcome), recent_box);
+  gtk_box_append(GTK_BOX(welcome_right), recent_box);
+  auto* welcome_empty = gtk_label_new(Tr("ui.welcome.no-recent").c_str());
+  g_host.welcome_empty = GTK_LABEL(welcome_empty);
+  gtk_widget_add_css_class(welcome_empty, "caption");
+  gtk_widget_add_css_class(welcome_empty, "dim-label");
+  gtk_label_set_xalign(GTK_LABEL(welcome_empty), 0.0f);
+  gtk_label_set_wrap(GTK_LABEL(welcome_empty), TRUE);
+  gtk_box_append(GTK_BOX(welcome_right), welcome_empty);
+
+  gtk_box_append(GTK_BOX(welcome_columns), welcome_left);
+  gtk_box_append(GTK_BOX(welcome_columns), welcome_right);
+  gtk_box_append(GTK_BOX(welcome), welcome_columns);
   gtk_stack_add_named(GTK_STACK(main_stack), welcome, "shelf");
 
   // reader page: left sidebar | notebook | AI panel
@@ -4313,7 +4420,7 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_box_append(GTK_BOX(notes_box), notes_undo_bar);
   gtk_box_append(GTK_BOX(notes_box), notes_scroll);
   gtk_stack_add_titled(GTK_STACK(left_stack), notes_box, "notes",
-                       Tr("ui.tab.notes").c_str());
+                       Tr("ui.sidebar.annotations").c_str());
   hook(notes, "row-activated", on_note_row_activated, nullptr);
 
   // forms (AcroForm fill + export) — mac FormsPane, sidebar mode
@@ -4327,7 +4434,7 @@ void on_activate(GtkApplication* app, gpointer) {
             }
           }});
   gtk_stack_add_titled(GTK_STACK(left_stack), g_host.forms_pane->widget(),
-                       "forms", Tr("ui.tab.forms").c_str());
+                       "forms", Tr("ui.sidebar.forms").c_str());
 
   // notebook
   auto* notebook = gtk_notebook_new();

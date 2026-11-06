@@ -1,9 +1,10 @@
 # Booklight visual system
 
-**Status:** macOS implementation landed in the file-first line; Windows and
-Linux keep their first-party Fluent and Adwaita chrome and consume the same
-information hierarchy. This is a design contract, not a claim that every host
-already renders identically.
+**Status:** the same information architecture is implemented in the macOS,
+Windows and Linux hosts. Each host uses its own native chrome — SwiftUI/AppKit,
+WinUI 3 and GTK4 — while sharing the welcome, reading, sidebar, annotation,
+AI and settings vocabulary. Packaged accessibility acceptance remains the
+evidence gate for each host.
 
 Booklight is a document reader, not a collection manager. The interface should
 feel like a well-made reading tool: quiet at rest, precise in motion, and
@@ -120,13 +121,21 @@ button skins or cramped fixed-width column.
 
 ## Platform boundary
 
-- **macOS:** SwiftUI/AppKit implementation of the system above.
-- **Windows:** WinUI 3 follows Fluent hierarchy (CommandBar, NavigationView,
-  Mica where available). Do not transplant macOS spacing or materials.
-- **Linux:** GTK4 follows Adwaita/libadwaita hierarchy and system accent.
-- Shared behavior, strings, recovery and security contracts stay in the Racket
-  core. A visual change on one platform is not evidence that another platform
-  is finished; each host still needs its packaged accessibility acceptance.
+- **macOS:** SwiftUI/AppKit split view, unified titlebar and inspector.
+- **Windows:** WinUI 3 grouped command row, Fluent controls and states, a
+  four-mode icon sidebar (Thumbnails / Outline / Annotations / Forms), a
+  two-column welcome and a native settings form. Do not transplant macOS
+  spacing or materials; keep Fluent hover, focus and theme behavior.
+- **Linux:** GTK4 header bar, Adwaita stack switcher with the same four modes,
+  two-column welcome and native `GtkListBox`/`GtkStack` content. Follow the
+  system accent and Adwaita focus states.
+- All three hosts keep the same order, labels and shortcuts for a document
+  workflow: open, read, switch sidebar view, annotate, edit/export, AI review,
+  settings, close. Shared behavior, strings, recovery and security contracts
+  stay in the Racket core.
+- A visual change on one host is not evidence that another host is finished;
+  each host still needs its packaged accessibility acceptance. Do not use
+  platform-priority wording in product or release documents.
 
 ## Verification
 
