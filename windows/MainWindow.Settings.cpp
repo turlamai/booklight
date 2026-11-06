@@ -441,7 +441,8 @@ void MainWindow::BuildSettingsPane() {
   stack.Children().Append(privacy);
 
   auto version = muxc::TextBlock();
-  version.Text(L"PDFGist " + to_wide(rivet_app::kVersion) + L" · Rivet protocol v" +
+  version.Text(pdfgist::Tr("app.name") + L" " +
+               to_wide(rivet_app::kVersion) + L" · Rivet protocol v" +
                std::to_wstring(rivet_app::kBuild));
   version.FontSize(10);
   version.Opacity(0.55);
@@ -457,7 +458,7 @@ void MainWindow::BuildSettingsPane() {
   website.Padding({0});
   website.Click([](winrt::Windows::Foundation::IInspectable const&,
                    mux::RoutedEventArgs const&) {
-    ::ShellExecuteW(nullptr, L"open", L"https://pdfgist.jrtx.site", nullptr,
+    ::ShellExecuteW(nullptr, L"open", L"https://booklight.jrtx.site", nullptr,
                     nullptr, SW_SHOWNORMAL);
   });
   links.Children().Append(website);
@@ -468,12 +469,12 @@ void MainWindow::BuildSettingsPane() {
   issues.Click([](winrt::Windows::Foundation::IInspectable const&,
                   mux::RoutedEventArgs const&) {
     ::ShellExecuteW(nullptr, L"open",
-                    L"https://github.com/turinglambdaai/pdfgist/issues", nullptr,
+                    L"https://github.com/turlamai/booklight/issues", nullptr,
                     nullptr, SW_SHOWNORMAL);
   });
   links.Children().Append(issues);
   auto about = muxc::HyperlinkButton();
-  about.Content(winrt::box_value(std::wstring(L"关于 PDFGist")));
+  about.Content(winrt::box_value(pdfgist::Tr("ui.menu.about")));
   about.FontSize(11);
   about.Padding({0});
   about.Click([weak = get_weak()](winrt::Windows::Foundation::IInspectable const&,
@@ -737,7 +738,8 @@ void MainWindow::ShowAboutDialog() {
   stack.Spacing(8);
 
   auto version = muxc::TextBlock();
-  version.Text(L"PDFGist v" + to_wide(rivet_app::kVersion));
+  version.Text(pdfgist::Tr("app.name") + L" v" +
+               to_wide(rivet_app::kVersion));
   version.FontSize(14);
   version.FontWeight(wut::FontWeights::SemiBold());
   stack.Children().Append(version);
@@ -758,7 +760,7 @@ void MainWindow::ShowAboutDialog() {
   website.Padding({0});
   website.Click([](winrt::Windows::Foundation::IInspectable const&,
                    mux::RoutedEventArgs const&) {
-    ::ShellExecuteW(nullptr, L"open", L"https://pdfgist.jrtx.site", nullptr,
+    ::ShellExecuteW(nullptr, L"open", L"https://booklight.jrtx.site", nullptr,
                     nullptr, SW_SHOWNORMAL);
   });
   links.Children().Append(website);
@@ -769,7 +771,7 @@ void MainWindow::ShowAboutDialog() {
   issues.Click([](winrt::Windows::Foundation::IInspectable const&,
                   mux::RoutedEventArgs const&) {
     ::ShellExecuteW(nullptr, L"open",
-                    L"https://github.com/turinglambdaai/pdfgist/issues", nullptr,
+                    L"https://github.com/turlamai/booklight/issues", nullptr,
                     nullptr, SW_SHOWNORMAL);
   });
   links.Children().Append(issues);

@@ -26,7 +26,7 @@
 ;; `hash`, not `hasheq`: the lookup keys arrive as string literals from
 ;; other modules, and eq? on strings across compilation units is luck.
 (define fallback-catalog-zh
-  (hash "app.name" "PDFGist"
+  (hash "app.name" "Booklight"
           "backend.error.connect" "连接失败：{0}"
           "backend.error.connect-timeout" "连接失败：连接超时（{0} 秒）"
           "backend.error.http-status" "HTTP {0}"
@@ -58,7 +58,7 @@
           "backend.provider.custom" "自定义"))
 
 (define fallback-catalog-en
-  (hash "app.name" "PDFGist"
+  (hash "app.name" "Booklight"
           "backend.error.connect" "Connection failed: {0}"
           "backend.error.connect-timeout" "Connection failed: timed out after {0} s"
           "backend.error.http-status" "HTTP {0}"
