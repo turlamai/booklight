@@ -131,6 +131,10 @@
   (define (write service account secret)
     (unless security
       (raise (exn:fail "macOS Keychain tool is unavailable" (current-continuation-marks))))
+    ;; `security` has no stdin form for a new password; -X keeps the secret out
+    ;; of shell history and the file, though a same-user process can briefly
+    ;; observe argv. The long-term fix belongs in the native host's
+    ;; RivetSecureStorage call, not a second credential format here.
     (define-values (status _out err)
       (run/capture security
                    (list "add-generic-password" "-U"
