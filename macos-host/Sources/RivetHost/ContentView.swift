@@ -64,6 +64,14 @@ private final class ReaderWindowCloseDelegate: NSObject, NSWindowDelegate {
         return super.forwardingTarget(for: selector)
     }
 
+    /// AppKit sends this after the window is gone. The SwiftUI delegate may
+    /// already be released, and relying on message forwarding alone produced
+    /// an "unrecognized selector" exception in packaged runs, so forward the
+    /// one lifecycle callback the host observes explicitly.
+    func windowWillClose(_ notification: Notification) {
+        originalDelegate?.windowWillClose?(notification)
+    }
+
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard !allowClose, let reader, reader.pdfEditsPending else {
             return originalDelegate?.windowShouldClose?(sender) ?? true
