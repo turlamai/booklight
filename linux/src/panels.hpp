@@ -36,6 +36,7 @@ struct PanelContext {
   std::function<std::optional<TextSource>()> page_text;   // current page
   std::function<std::optional<TextSource>()> doc_text;    // first-12-pages cap
   std::function<bool()> epub_active;                      // page means chapter
+  std::function<void(GtkWidget*)> open_settings_window;   // host-owned dialog
   std::string ui_language{"system"};                      // host pref mirror
   double tts_rate{1.0};                                   // host pref mirror
 };
@@ -120,6 +121,7 @@ class AiPanel {
  private:
   PanelContext* ctx_;
   GtkWidget* root_{nullptr};
+  GtkWidget* settings_tab_{nullptr};
   GtkWidget* stack_{nullptr};
 
   // translate / summarize

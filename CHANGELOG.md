@@ -14,6 +14,10 @@ All notable changes to Booklight are documented here. Format follows
   grouped command row; Linux adopts the two-column welcome with a product
   mark and recent-file rows. Terms, ordering and shortcut semantics stay
   shared across the three hosts.
+- Settings is now an app-level surface on all three hosts: the macOS Settings
+  scene, the Windows gear-opened dialog and the Linux gear-opened window. The
+  AI inspector keeps only Translate / Summarize / Chat, so the entry and the
+  navigation model match instead of hiding Settings in a fourth AI tab.
 
 ## [0.9.0] - 2026-11-04
 

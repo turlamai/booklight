@@ -119,6 +119,7 @@ struct Host {
   GtkSearchEntry* find_entry{nullptr};
   GtkLabel* find_count{nullptr};
   GtkWidget* main_stack{nullptr};
+  GtkWidget* settings_window{nullptr};
   GtkBox* welcome_recents{nullptr};
   GtkLabel* welcome_empty{nullptr};
   GtkLabel* status_label{nullptr};
@@ -4123,6 +4124,20 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_header_bar_pack_start(GTK_HEADER_BAR(header), print_button);
   g_host.header_print = print_button;
 
+  auto* settings_button =
+      gtk_button_new_from_icon_name("emblem-system-symbolic");
+  gtk_widget_set_tooltip_text(settings_button,
+                              Tr("ui.tab.settings").c_str());
+  gtk_accessible_update_property(GTK_ACCESSIBLE(settings_button),
+                                 GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                 Tr("ui.tab.settings").c_str(), -1);
+  hook(settings_button, "clicked",
+       +[](GtkButton*, gpointer) {
+         if (g_host.ai_panel != nullptr) g_host.ai_panel->open_settings_tab();
+       },
+       nullptr);
+  gtk_header_bar_pack_end(GTK_HEADER_BAR(header), settings_button);
+
   auto* toc_button = GTK_MENU_BUTTON(gtk_menu_button_new());
   gtk_menu_button_set_icon_name(toc_button, "view-list-symbolic");
   gtk_widget_set_tooltip_text(GTK_WIDGET(toc_button),
@@ -4453,6 +4468,35 @@ void on_activate(GtkApplication* app, gpointer) {
   g_host.panel_ctx.doc_text = doc_text;
   g_host.panel_ctx.epub_active = [] { return g_host.epub_active(); };
   g_host.ai_panel = std::make_unique<AiPanel>(&g_host.panel_ctx);
+  g_host.panel_ctx.open_settings_window = [](GtkWidget* content) {
+    if (g_host.settings_window != nullptr) {
+      gtk_window_present(GTK_WINDOW(g_host.settings_window));
+      return;
+    }
+    auto* settings_window = gtk_window_new();
+    gtk_window_set_title(GTK_WINDOW(settings_window),
+                         Tr("ui.tab.settings").c_str());
+    gtk_window_set_transient_for(GTK_WINDOW(settings_window), g_host.window);
+    gtk_window_set_destroy_with_parent(GTK_WINDOW(settings_window), TRUE);
+    gtk_window_set_default_size(GTK_WINDOW(settings_window), 560, 680);
+    auto* settings_header = gtk_header_bar_new();
+    auto* settings_title = gtk_label_new(Tr("ui.tab.settings").c_str());
+    gtk_widget_add_css_class(settings_title, "title");
+    gtk_header_bar_set_title_widget(GTK_HEADER_BAR(settings_header),
+                                    settings_title);
+    gtk_window_set_titlebar(GTK_WINDOW(settings_window), settings_header);
+    gtk_window_set_child(GTK_WINDOW(settings_window), content);
+    g_host.settings_window = settings_window;
+    hook(settings_window, "close-request",
+         +[](GtkWindow* window, gpointer) {
+           g_host.settings_window = nullptr;
+           // Detach the pane so the same widget can be shown again.
+           gtk_window_set_child(window, nullptr);
+           return FALSE;
+         },
+         nullptr);
+    gtk_window_present(GTK_WINDOW(settings_window));
+  };
   g_host.right_sidebar = g_host.ai_panel->widget();
   gtk_widget_set_size_request(g_host.right_sidebar, kAiSidebarWidth, -1);
   g_host.ai_panel->on_theme_changed = [](std::string const& theme) {

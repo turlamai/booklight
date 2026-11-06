@@ -85,8 +85,9 @@ AiPanel::AiPanel(PanelContext* ctx) : ctx_(ctx) {
                        Tr("ui.tab.summarize").c_str());
   gtk_stack_add_titled(GTK_STACK(stack_), make_chat_tab(), "chat",
                        Tr("ui.tab.chat").c_str());
-  gtk_stack_add_titled(GTK_STACK(stack_), make_settings_tab(), "settings",
-                       Tr("ui.tab.settings").c_str());
+  // Settings is an app-level window on macOS and Windows; keep the same
+  // surface here instead of a fourth AI tab.
+  settings_tab_ = make_settings_tab();
   gtk_stack_switcher_set_stack(GTK_STACK_SWITCHER(switcher),
                                GTK_STACK(stack_));
   auto* switcher_wrap = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
@@ -498,7 +499,11 @@ GtkWidget* AiPanel::make_settings_tab() {
 }
 
 void AiPanel::open_settings_tab() {
-  gtk_stack_set_visible_child_name(GTK_STACK(stack_), "settings");
+  if (settings_tab_ == nullptr) settings_tab_ = make_settings_tab();
+  sync_settings();
+  if (ctx_ != nullptr && ctx_->open_settings_window) {
+    ctx_->open_settings_window(settings_tab_);
+  }
 }
 
 void AiPanel::sync_settings() {

@@ -217,12 +217,6 @@ MainWindow::MainWindow() {
   LoadHostPrefs();
   ApplyTheme();
   BuildAiSidebar();
-  BuildSettingsPane();
-  // The settings child is appended after the initial AI-pane visibility pass;
-  // keep it hidden until the Settings tab is selected.
-  if (AiContent().Children().Size() > 3) {
-    AiContent().Children().GetAt(3).Visibility(Visibility::Collapsed);
-  }
   BuildPageOpsRow();
   BuildFormsPane();
   BuildKeyboardAccelerators();
@@ -660,10 +654,7 @@ void MainWindow::SaveReadingFontScale(double scale) {
 
 void MainWindow::Settings_Click(winrt::Windows::Foundation::IInspectable const&,
                                mux::RoutedEventArgs const&) {
-  ai_visible_ = true;
-  AiToggle().IsChecked(true);
-  ShowAiPane(3);
-  UpdateChrome();
+  ShowSettingsDialog();
 }
 
 void MainWindow::Theme_Click(winrt::Windows::Foundation::IInspectable const&,
