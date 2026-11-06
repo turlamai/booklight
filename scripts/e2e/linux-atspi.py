@@ -93,7 +93,7 @@ def main():
         outline = wait_for("native EPUB outline page", lambda: next((node for node in walk(window) if role(node) == "page tab" and (node.name or "") == "Outline"), None))
         select_page_tab(outline)
         wait_for("EPUB table of contents parsed by the embedded backend", lambda: contains(window, "First Chapter"))
-        notes = wait_for("native Notes page", lambda: next((node for node in walk(window) if role(node) == "page tab" and (node.name or "") == "Notes"), None))
+        notes = wait_for("native Annotations page", lambda: next((node for node in walk(window) if role(node) == "page tab" and (node.name or "") in ("Annotations", "批注")), None))
         select_page_tab(notes)
         wait_for("recovered annotation status", lambda: contains(window, "Recovered unsaved annotations"))
         wait_for("retry action", lambda: contains(window, "Retry Save"))
@@ -119,7 +119,7 @@ def main():
         wait_for("AI send review dismissal", lambda: not contains(application, "Review what will be sent") and not contains(application, "核对即将发送的内容"))
         if contains_showing(window, "Stop") or contains_showing(window, "停止"): raise AssertionError("cancelling the AI send review created a visible stream card")
         (args.output / "accessibility.json").write_text(json.dumps(snapshot(application), ensure_ascii=False, indent=2), encoding="utf-8")
-        (args.output / "interaction-trace.json").write_text(json.dumps({"platform":"linux","actions":["launch:sample.epub","select:Outline","select:Notes","press:AI Assistant","select:Translate","press:Translate current EPUB scope","assert:AI send review","press:Cancel"],"assertions":["packaged GTK4 frame activated on native Wayland","sample EPUB crossed RVT1 into the embedded backend","native accessibility tree contains The Sample Book","native accessibility tree contains First Chapter","pending recovery crosses RVT1 on reopen","native Notes pane exposes recovered status and Retry Save","recovered annotation remains visible and exportable","native review exposes current-chapter scope and exact user-content total before provider launch","Cancel dismisses the review without starting the AI stream"]}, indent=2), encoding="utf-8")
+        (args.output / "interaction-trace.json").write_text(json.dumps({"platform":"linux","actions":["launch:sample.epub","select:Outline","select:Annotations","press:AI Assistant","select:Translate","press:Translate current EPUB scope","assert:AI send review","press:Cancel"],"assertions":["packaged GTK4 frame activated on native Wayland","sample EPUB crossed RVT1 into the embedded backend","native accessibility tree contains The Sample Book","native accessibility tree contains First Chapter","pending recovery crosses RVT1 on reopen","native Notes pane exposes recovered status and Retry Save","recovered annotation remains visible and exportable","native review exposes current-chapter scope and exact user-content total before provider launch","Cancel dismisses the review without starting the AI stream"]}, indent=2), encoding="utf-8")
     except Exception:
         if application is not None: (args.output / "accessibility-failure.json").write_text(json.dumps(snapshot(application), ensure_ascii=False, indent=2), encoding="utf-8")
         raise

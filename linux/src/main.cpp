@@ -4420,7 +4420,7 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_box_append(GTK_BOX(notes_box), notes_undo_bar);
   gtk_box_append(GTK_BOX(notes_box), notes_scroll);
   gtk_stack_add_titled(GTK_STACK(left_stack), notes_box, "notes",
-                       Tr("ui.tab.notes").c_str());
+                       Tr("ui.sidebar.annotations").c_str());
   hook(notes, "row-activated", on_note_row_activated, nullptr);
 
   // forms (AcroForm fill + export) — mac FormsPane, sidebar mode
@@ -4434,7 +4434,7 @@ void on_activate(GtkApplication* app, gpointer) {
             }
           }});
   gtk_stack_add_titled(GTK_STACK(left_stack), g_host.forms_pane->widget(),
-                       "forms", Tr("ui.tab.forms").c_str());
+                       "forms", Tr("ui.sidebar.forms").c_str());
 
   // notebook
   auto* notebook = gtk_notebook_new();
