@@ -150,6 +150,12 @@ struct WindowAccessor: NSViewRepresentable {
                 ?? NSApp.windows.first(where: \.isVisible)
             guard let window = candidate else { return }
             self.window = window
+            // If the window was already key before this accessor attached,
+            // the didBecomeKey notification has already fired and would leave
+            // menu actions targeting no reader. Adopt the key window now.
+            if window.isKeyWindow {
+                parent.app.activeReader = parent.reader
+            }
             let closeGuard = ReaderWindowCloseDelegate()
             closeGuard.originalDelegate = window.delegate
             closeGuard.reader = parent.reader
@@ -197,6 +203,9 @@ struct WindowAccessor: NSViewRepresentable {
             // Use macOS' native titlebar edited dot. This tracks page edits,
             // which are distinct from annotation sidecar save status.
             window.isDocumentEdited = parent.reader.pdfEditsPending
+            if window.isKeyWindow {
+                parent.app.activeReader = parent.reader
+            }
             closeGuard?.reader = parent.reader
             if let path = parent.reader.documentPath {
                 let url = URL(fileURLWithPath: path)
