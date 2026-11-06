@@ -214,3 +214,22 @@
 ;; math via png-unfilter-test above; the full xref-stream path is exercised
 ;; by pdfgist e2e against a PDFKit-generated file (macOS host verification).
 
+
+;; --- resource budgets ---------------------------------------------------------
+
+(test-case "resource budgets reject oversized and hostile documents"
+  (define (budget file-bytes xref-entries objects stream-bytes page-count nesting)
+    (pdf-resource-budget file-bytes xref-entries objects stream-bytes
+                         page-count nesting))
+  (check-true (pdfdoc? (parse-pdf fixture-bytes)))
+  (check-exn exn:fail:pdf:resource?
+             (lambda () (parse-pdf fixture-bytes #:budget (budget 1 100 100 100 100 8))))
+  (check-exn exn:fail:pdf:resource?
+             (lambda () (parse-pdf fixture-bytes #:budget (budget 100000 1 100 100 100 8))))
+  (check-exn exn:fail:pdf:resource?
+             (lambda () (parse-pdf fixture-bytes #:budget (budget 100000 100 1 100 100 8))))
+  (check-exn exn:fail:pdf:resource?
+             (lambda () (parse-pdf fixture-bytes #:budget (budget 100000 100 100 100 0 8))))
+  (check-exn exn:fail:pdf:resource?
+             (lambda () (parse-pdf fixture-bytes #:budget (budget 100000 100 100 100 100 0))))
+  (check-true (pdfdoc? (parse-pdf fixture-bytes #:budget (budget 100000 100 100 100 100 8)))))

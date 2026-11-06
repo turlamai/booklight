@@ -12,41 +12,86 @@ struct ReaderSidebar: View {
     @ObservedObject var reader: ReaderModel
 
     var body: some View {
-        Group {
-            if reader.epubActive, let epub = reader.epub {
-                if reader.sidebarMode == 2 {
-                    EpubNotesPane(epub: epub, reader: reader, onExport: {
-                        reader.exportEpubAnnotations()
-                    })
+        VStack(spacing: 0) {
+            sidebarHeader
+            Divider().overlay(Theme.border)
+            Group {
+                if reader.epubActive, let epub = reader.epub {
+                    if reader.sidebarMode == 2 {
+                        EpubNotesPane(epub: epub, reader: reader, onExport: {
+                            reader.exportEpubAnnotations()
+                        })
+                    } else {
+                        EpubTocList(tab: epub)
+                    }
+                } else if let tab = reader.pdf {
+                    panelContent(tab)
                 } else {
-                    EpubTocList(tab: epub)
+                    emptyHint
                 }
-            } else if let tab = reader.pdf {
-                pdfSidebar(tab)
-            } else {
-                emptyHint
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        // iBooks form: the sidebar is the same white as the content — no
-        // gray sidebar material.
-        .scrollContentBackground(.hidden)
-        .background(Theme.bg)
+        .background(Theme.sidebar)
     }
 
-    @ViewBuilder
-    private func pdfSidebar(_ tab: PDFTab) -> some View {
-        panelContent(tab)
+    /// The sidebar owns its view switcher. Keeping it out of the titlebar
+    /// leaves the document title in the native centered position and makes
+    /// the control's scope unambiguous.
+    private var sidebarHeader: some View {
+        HStack(spacing: 8) {
+            if reader.epubActive, reader.epub != nil {
+                Picker("", selection: Binding(
+                    get: { reader.sidebarMode == 2 ? 2 : 1 },
+                    set: { reader.sidebarMode = $0 })) {
+                    Label(L10n.t("ui.viewer.outline"), systemImage: "list.bullet.indent")
+                        .tag(1)
+                        .accessibilityLabel(Text(L10n.t("ui.viewer.outline")))
+                    Label(L10n.t("ui.sidebar.annotations"), systemImage: "highlighter")
+                        .tag(2)
+                        .accessibilityLabel(Text(L10n.t("ui.sidebar.annotations")))
+                        .accessibilityIdentifier("booklight.sidebar.annotations")
+                }
+                .pickerStyle(.segmented)
+                .labelStyle(.iconOnly)
+                .labelsHidden()
+                .controlSize(.small)
+                .fixedSize()
+                .help(L10n.t("ui.toolbar.panel"))
+                .accessibilityIdentifier("booklight.sidebar.picker")
+            } else if reader.pdf != nil {
+                Picker("", selection: $reader.sidebarMode) {
+                    Label(L10n.t("ui.viewer.thumbs"), systemImage: "square.grid.2x2").tag(0)
+                    Label(L10n.t("ui.viewer.outline"), systemImage: "list.bullet.indent")
+                        .tag(1)
+                        .accessibilityLabel(Text(L10n.t("ui.viewer.outline")))
+                    Label(L10n.t("ui.sidebar.annotations"), systemImage: "highlighter")
+                        .tag(2)
+                        .accessibilityLabel(Text(L10n.t("ui.sidebar.annotations")))
+                        .accessibilityIdentifier("booklight.sidebar.annotations")
+                    Label(L10n.t("ui.sidebar.forms"), systemImage: "list.bullet.rectangle").tag(3)
+                }
+                .pickerStyle(.segmented)
+                .labelStyle(.iconOnly)
+                .labelsHidden()
+                .controlSize(.small)
+                .fixedSize()
+                .help(L10n.t("ui.toolbar.panel"))
+                .accessibilityIdentifier("booklight.sidebar.picker")
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder
     private func panelContent(_ tab: PDFTab) -> some View {
         switch reader.sidebarMode {
         case 0:
-            ScrollView {
-                ThumbnailStrip(tab: tab)
-                    .frame(height: 140)
-                    .padding(.horizontal, 6)
-            }
+            ThumbnailStrip(tab: tab)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
         case 1:
             OutlineList(tab: tab)
         case 2:
@@ -59,14 +104,10 @@ struct ReaderSidebar: View {
     }
 
     private var emptyHint: some View {
-        VStack {
-            Spacer()
-            Text(L10n.t("ui.welcome.open-any"))
-                .font(.footnote)
-                .foregroundStyle(Theme.textFaint)
-            Spacer()
+        ContentUnavailableView {
+            Label(L10n.t("ui.welcome.open-any"), systemImage: "doc.text")
         }
-        .frame(maxWidth: .infinity)
+        .foregroundStyle(Theme.textFaint)
     }
 }
 
@@ -76,8 +117,6 @@ struct OutlineList: View {
     @EnvironmentObject private var app: AppModel
     let tab: PDFTab
 
-    // Flattened view (depth + 0-based page index) for the active-entry
-    // lookup: the deepest entry at or before the current page.
     private struct FlatEntry {
         let id: UUID
         let pageIndex: Int
@@ -109,27 +148,34 @@ struct OutlineList: View {
         return best?.id
     }
 
+    private var selection: Binding<UUID?> {
+        Binding(
+            get: { activeID },
+            set: { id in
+                guard let id, let node = Self.find(id, in: tab.outline) else { return }
+                app.activeReader?.goToOutline(node)
+            })
+    }
+
     var body: some View {
         if tab.outline.isEmpty {
-            VStack {
-                Spacer()
-                Text(L10n.t("ui.viewer.outline-empty"))
-                    .font(.footnote)
-                    .foregroundStyle(Theme.textFaint)
-                Spacer()
+            ContentUnavailableView {
+                Label(L10n.t("ui.viewer.outline-empty"), systemImage: "list.bullet.indent")
             }
-            .frame(maxWidth: .infinity)
         } else {
             ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(tab.outline) { node in
-                            OutlineRow(node: node, depth: 0, activeID: activeID)
-                        }
+                List(selection: selection) {
+                    OutlineGroup(tab.outline, children: \.subitems) { node in
+                        Text(node.label.isEmpty ? " " : node.label)
+                            .font(.system(size: 12))
+                            .lineLimit(2)
+                            .tag(node.id)
+                            .id(node.id)
                     }
-                    .padding(.horizontal, 8)
                 }
-                .onChange(of: tab.currentPage) { _ in
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
+                .onChange(of: tab.currentPage) { _, _ in
                     if let id = activeID {
                         withAnimation(.easeIn(duration: 0.15)) {
                             proxy.scrollTo(id, anchor: .center)
@@ -142,98 +188,81 @@ struct OutlineList: View {
             }
         }
     }
-}
 
-struct OutlineRow: View {
-    @EnvironmentObject private var app: AppModel
-    let node: OutlineNode
-    let depth: Int
-    let activeID: UUID?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if !node.label.isEmpty {
-                Text(node.label)
-                    .font(.system(size: 12, weight: node.id == activeID ? .semibold : .regular))
-                    .lineLimit(1)
-                    .foregroundStyle(node.id == activeID ? Theme.accent : Theme.text)
-                    .padding(.leading, CGFloat(8 + depth * 14))
-                    .padding(.vertical, 3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture { app.activeReader?.goToOutline(node) }
-            }
-            ForEach(node.children) { child in
-                OutlineRow(node: child, depth: depth + 1, activeID: activeID)
-            }
+    private static func find(_ id: UUID, in nodes: [OutlineNode]) -> OutlineNode? {
+        for node in nodes {
+            if node.id == id { return node }
+            if let hit = find(id, in: node.children) { return hit }
         }
+        return nil
     }
 }
 
-// MARK: - EPUB table of contents (domain-provided spine mapping)
+private extension OutlineNode {
+    var subitems: [OutlineNode]? {
+        children.isEmpty ? nil : children
+    }
+}
 
 struct EpubTocList: View {
     @ObservedObject var tab: EpubTab
 
+    private var selection: Binding<Int?> {
+        Binding(
+            get: { tab.currentPage },
+            set: { chapter in
+                if let chapter { tab.goToChapter(chapter) }
+            })
+    }
+
+    /// Some EPUBs repeat a chapter entry as its own child (or duplicate the
+    /// same target twice). Collapse exact duplicates before handing the list
+    /// to SwiftUI, which would otherwise render a stale twin row.
+    private var tocItems: [RivetTypes.EpubTocItem] {
+        var seen = Set<String>()
+        return tab.toc.filter { item in
+            let key = "\(item.chapter)|\(item.title)"
+            guard !seen.contains(key) else { return false }
+            seen.insert(key)
+            return true
+        }
+    }
+
     var body: some View {
-        ScrollViewReader { proxy in
-            tocList
-                .onChange(of: tab.currentPage) { chapter in
+        if tab.toc.isEmpty && tab.chapters <= 1 {
+            ContentUnavailableView {
+                Label(L10n.t("ui.epub.toc-empty"), systemImage: "list.bullet.indent")
+            }
+        } else {
+            ScrollViewReader { proxy in
+                List(selection: selection) {
+                    if tab.toc.isEmpty {
+                        ForEach(1...max(1, tab.chapters), id: \.self) { chapter in
+                            Text(L10n.t("ui.epub.chapter-n", "\(chapter)"))
+                                .font(.system(size: 12))
+                                .tag(chapter)
+                                .id(chapter)
+                        }
+                    } else {
+                        ForEach(Array(tocItems.enumerated()), id: \.offset) { _, item in
+                            Text(item.title)
+                                .font(.system(size: 12))
+                                .lineLimit(2)
+                                .padding(.leading, CGFloat(item.level) * 12)
+                                .tag(Int(item.chapter))
+                                .id(Int(item.chapter))
+                        }
+                    }
+                }
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
+                .onChange(of: tab.currentPage) { _, chapter in
                     withAnimation(.easeIn(duration: 0.15)) {
                         proxy.scrollTo(chapter, anchor: .center)
                     }
                 }
                 .onAppear { proxy.scrollTo(tab.currentPage, anchor: .center) }
-        }
-    }
-
-    private var tocList: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 1) {
-                if tab.toc.isEmpty {
-                    Text(L10n.t("ui.epub.toc-empty"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textFaint)
-                        .padding(10)
-                }
-                ForEach(Array(tab.toc.enumerated()), id: \.offset) { _, item in
-                    Button {
-                        tab.goToChapter(Int(item.chapter))
-                    } label: {
-                        Text(item.title)
-                            .font(.system(size: 12))
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.leading, CGFloat(10 + item.level * 12))
-                            .padding(.vertical, 4)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(
-                        tab.currentPage == Int(item.chapter) ? Theme.accent : Theme.text)
-                    .id(Int(item.chapter))
-                }
-                if tab.toc.isEmpty {
-                    ForEach(1...max(1, tab.chapters), id: \.self) { i in
-                        Button {
-                            tab.goToChapter(i)
-                        } label: {
-                            Text(L10n.t("ui.epub.chapter-n", "\(i)"))
-                                .font(.system(size: 12))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.leading, 10)
-                                .padding(.vertical, 4)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(
-                            tab.currentPage == i ? Theme.accent : Theme.text)
-                        .id(i)
-                    }
-                }
             }
-            .padding(.horizontal, 6)
-            .padding(.top, 4)
         }
     }
 }
@@ -241,7 +270,6 @@ struct EpubTocList: View {
 // MARK: - EPUB annotations (chapter+offset anchored; marks live in the page)
 
 struct EpubNotesPane: View {
-    @EnvironmentObject private var app: AppModel
     @ObservedObject var epub: EpubTab
     @ObservedObject var reader: ReaderModel
     let onExport: () -> Void
@@ -254,13 +282,12 @@ struct EpubNotesPane: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 8) {
+            LazyVStack(alignment: .leading, spacing: 10) {
                 AnnotationSaveBanner(reader: reader, onExport: onExport)
-                if let selection = epub.pendingSelection,
-                   selection.text.count > 1 {
-                    VStack(alignment: .leading, spacing: 6) {
+                if let selection = epub.pendingSelection, selection.text.count > 1 {
+                    VStack(alignment: .leading, spacing: 8) {
                         Text(L10n.t("ui.notes.epub-annotate"))
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.caption.weight(.semibold))
                             .foregroundStyle(Theme.textDim)
                         HStack(spacing: 6) {
                             annotatePill(L10n.t("ui.menu.highlight-yellow"), "yellow", "highlight")
@@ -270,35 +297,35 @@ struct EpubNotesPane: View {
                             annotatePill(L10n.t("ui.menu.strike"), "", "strike")
                         }
                     }
-                    .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border))
+                    .padding(10)
+                    .background(
+                        RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                            .fill(Theme.panel))
                 }
                 if reader.epubUndo != nil {
                     HStack(spacing: 8) {
                         Text(L10n.t("ui.notes.deleted"))
-                            .font(.system(size: 11))
+                            .font(.caption)
                             .foregroundStyle(Theme.textDim)
                         Spacer()
                         Button(L10n.t("ui.undo")) {
                             reader.undoDeleteEpubAnnotation()
                         }
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.accent)
                     }
-                    .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border))
+                    .padding(10)
+                    .background(
+                        RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                            .fill(Theme.panel))
                 }
                 if epub.docData.annotations.isEmpty {
-                    Text(L10n.t("ui.notes.empty"))
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textFaint)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border))
+                    ContentUnavailableView {
+                        Label(L10n.t("ui.notes.empty"), systemImage: "highlighter")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
                 }
                 ForEach(sorted) { annotation in
                     EpubNoteCard(annotation: annotation, reader: reader)
@@ -306,14 +333,14 @@ struct EpubNotesPane: View {
                 if !sorted.isEmpty {
                     Button(action: onExport) {
                         Label(L10n.t("ui.notes.export"), systemImage: "square.and.arrow.up")
-                            .font(.system(size: 11))
+                            .font(.caption)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Theme.accent)
-                    .padding(.bottom, 2)
+                    .padding(.top, 2)
                 }
             }
-            .padding(8)
+            .padding(10)
         }
     }
 
@@ -327,8 +354,8 @@ struct EpubNotesPane: View {
                 .font(.system(size: 11))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(Capsule().fill(Theme.panel))
-                .overlay(Capsule().stroke(Theme.border))
+                .background(Capsule().fill(Theme.panelAlt))
+                .overlay(Capsule().stroke(Theme.border, lineWidth: 0.5))
         }
         .buttonStyle(.plain)
         .foregroundStyle(Theme.text)
@@ -336,48 +363,67 @@ struct EpubNotesPane: View {
 }
 
 struct EpubNoteCard: View {
-    @EnvironmentObject private var app: AppModel
     let annotation: StoredAnnotation
     @ObservedObject var reader: ReaderModel
+    @State private var hovering = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(Theme.annotationSwiftUIColor(annotation.color))
+                    .frame(width: 8, height: 8)
                 Text(L10n.t("ui.epub.chapter-n", "\(annotation.page)"))
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(Theme.textDim)
-                Spacer()
-                Button {
-                    app.activeReader?.translateSelectionText(annotation.excerpt)
-                } label: {
-                    Text(L10n.t("ui.notes.translate-btn"))
-                        .font(.system(size: 10))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.accent)
-                .help(L10n.t("ui.menu.translate"))
-                Button {
-                    reader.removeEpubAnnotation(annotation.id)
-                } label: {
-                    Text(L10n.t("ui.notes.delete-btn"))
-                        .font(.system(size: 10))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.textFaint)
-                .help(L10n.t("ui.notes.delete-btn"))
+                Spacer(minLength: 0)
+                menu.opacity(hovering ? 1 : 0.45)
             }
             Text(annotation.excerpt)
                 .font(.system(size: 12))
                 .lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
             if !annotation.note.isEmpty {
                 Text(annotation.note)
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(Theme.textDim)
+                    .lineLimit(3)
             }
         }
-        .padding(8)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border))
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                .fill(hovering ? Theme.panelAlt : Theme.panel))
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .contextMenu { actions }
+    }
+
+    private var menu: some View {
+        Menu {
+            actions
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.textDim)
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        Button(L10n.t("ui.menu.translate")) {
+            reader.translateSelectionText(annotation.excerpt)
+        }
+        Divider()
+        Button(L10n.t("ui.notes.delete-annotation"), role: .destructive) {
+            reader.removeEpubAnnotation(annotation.id)
+        }
     }
 }
 
@@ -398,10 +444,14 @@ struct AISidebar: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .padding(8)
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
+            .accessibilityIdentifier("booklight.ai.tabs")
+            Divider().overlay(Theme.border)
             pane
         }
-        .background(Theme.bg)
+        .background(Theme.sidebar)
     }
 
     private func tabTitle(_ tab: AITab) -> String {
@@ -439,21 +489,17 @@ struct CardListPane: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Button {
-                    action()
-                } label: {
+                Button(action: action) {
                     Label(actionTitle, systemImage: "globe")
-                        .font(.system(size: 12))
+                        .font(.system(size: 12, weight: .medium))
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.accent)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(RoundedRectangle(cornerRadius: 5).fill(Theme.accentSoft))
-                .overlay(RoundedRectangle(cornerRadius: 5).stroke(Theme.accentBorder))
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(Theme.accent)
                 Spacer()
             }
-            .padding(8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
             cardList
         }
     }
@@ -464,12 +510,12 @@ struct CardListPane: View {
             EmptyHint(emptyHint)
         } else {
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: 10) {
                     ForEach(cards) { card in
                         StreamCardView(card: card)
                     }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 10)
                 .padding(.bottom, 12)
             }
         }
@@ -478,20 +524,18 @@ struct CardListPane: View {
 
 struct EmptyHint: View {
     let text: String
+    var symbol: String = "sparkles"
 
-    init(_ text: String) {
+    init(_ text: String, symbol: String = "sparkles") {
         self.text = text
+        self.symbol = symbol
     }
 
     var body: some View {
-        VStack {
-            Spacer()
+        ContentUnavailableView {
+            Label(L10n.t("ui.toolbar.ai"), systemImage: symbol)
+        } description: {
             Text(text)
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textFaint)
-                .multilineTextAlignment(.center)
-                .padding(20)
-            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -508,17 +552,18 @@ struct SummarizePane: View {
                 pillButton(L10n.t("ui.summarize.doc")) { reader.summarizeDoc() }
                 Spacer()
             }
-            .padding(8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
             if reader.summarizeCards.isEmpty {
                 EmptyHint(L10n.t("ui.welcome.feature1"))
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 8) {
+                    LazyVStack(spacing: 10) {
                         ForEach(reader.summarizeCards) { card in
                             StreamCardView(card: card)
                         }
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, 10)
                     .padding(.bottom, 12)
                 }
             }
@@ -529,13 +574,10 @@ struct SummarizePane: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 12))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(Theme.accent)
-        .background(RoundedRectangle(cornerRadius: 5).fill(Theme.accentSoft))
-        .overlay(RoundedRectangle(cornerRadius: 5).stroke(Theme.accentBorder))
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .tint(Theme.accent)
     }
 }
 
@@ -548,16 +590,15 @@ struct ChatPane: View {
     var body: some View {
         VStack(spacing: 0) {
             scopeRow
+            Divider().overlay(Theme.border)
             messageList
+            Divider().overlay(Theme.border)
             inputRow
         }
     }
 
     private var scopeRow: some View {
-        HStack(spacing: 6) {
-            Text(L10n.t("ui.chat.scope"))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textFaint)
+        HStack(spacing: 8) {
             Picker("", selection: $reader.chatScope) {
                 Text(reader.epubActive ? L10n.t("ui.epub.scope-page") : L10n.t("ui.chat.scope.page")).tag(0)
                 Text(L10n.t("ui.chat.scope.selection")).tag(1)
@@ -566,68 +607,87 @@ struct ChatPane: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .controlSize(.small)
-            Spacer()
+            .accessibilityLabel(L10n.t("ui.chat.scope"))
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 8)
-        .padding(.bottom, 6)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 
     private var messageList: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
+                LazyVStack(alignment: .leading, spacing: 10) {
                     if reader.chatBubbles.isEmpty {
-                        EmptyHint(L10n.t("ui.chat.placeholder"))
-                            .frame(height: 200)
+                        ContentUnavailableView {
+                            Label(L10n.t("ui.tab.chat"), systemImage: "bubble.left.and.bubble.right")
+                        } description: {
+                            Text(L10n.t("ui.chat.placeholder"))
+                        }
+                        .frame(minHeight: 220)
                     }
                     ForEach(reader.chatBubbles) { bubble in
                         ChatBubbleView(bubble: bubble)
                             .id(bubble.id)
                     }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
             }
-            .onChange(of: reader.chatBubbles.count) { _ in
+            .onChange(of: reader.chatBubbles.count) { _, _ in
                 if let last = reader.chatBubbles.last {
-                    proxy.scrollTo(last.id, anchor: .bottom)
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                    }
                 }
             }
         }
     }
 
     private var inputRow: some View {
-        HStack(alignment: .bottom, spacing: 6) {
+        HStack(alignment: .bottom, spacing: 8) {
             TextField(L10n.t("ui.chat.placeholder"), text: $draft, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
                 .lineLimit(1...4)
                 .font(.system(size: 13))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                        .fill(Theme.panel)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                                .stroke(Theme.border, lineWidth: 0.5)))
                 .onSubmit { send() }
+
             if reader.chatBusy {
                 Button {
                     reader.stopChat()
                 } label: {
                     Image(systemName: "stop.fill")
-                        .font(.system(size: 12))
+                        .font(.system(size: 11, weight: .bold))
                         .frame(width: 26, height: 26)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.danger)
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.circle)
+                .tint(Theme.danger)
                 .help(L10n.t("ui.chat.stop"))
             } else {
                 Button {
                     send()
                 } label: {
-                    Image(systemName: "paperplane.fill")
-                        .font(.system(size: 12))
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 12, weight: .bold))
                         .frame(width: 26, height: 26)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.white)
-                .background(Circle().fill(draft.trimmingCharacters(in: .whitespaces).isEmpty ? Theme.textFaint : Theme.accent))
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.circle)
+                .tint(Theme.accent)
                 .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
+                .help(L10n.t("ui.chat.send"))
             }
         }
-        .padding(8)
+        .padding(10)
     }
 
     private func send() {
@@ -644,14 +704,18 @@ struct ChatBubbleView: View {
     var body: some View {
         HStack {
             if bubble.isUser {
-                Spacer(minLength: 40)
+                Spacer(minLength: 36)
                 Text(bubble.text)
                     .font(.system(size: 13))
                     .textSelection(.enabled)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Theme.accent.opacity(0.16)))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.accentBorder))
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 7)
+                    .background(
+                        RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                            .fill(Theme.accentSoft))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                            .stroke(Theme.accentBorder, lineWidth: 0.5))
             } else if let card = bubble.card {
                 StreamCardView(card: card)
             } else {
@@ -660,7 +724,12 @@ struct ChatBubbleView: View {
                     .foregroundStyle(bubble.dimmed ? Theme.textFaint : Theme.text)
                     .italic(bubble.dimmed)
                     .textSelection(.enabled)
-                Spacer(minLength: 40)
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 7)
+                    .background(
+                        RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                            .fill(Theme.panel))
+                Spacer(minLength: 36)
             }
         }
         .frame(maxWidth: .infinity, alignment: bubble.isUser ? .trailing : .leading)
@@ -670,7 +739,6 @@ struct ChatBubbleView: View {
 // MARK: - notes (annotations + bookmarks — the sidebar's third mode)
 
 struct NotesPane: View {
-    @EnvironmentObject private var app: AppModel
     @ObservedObject var tab: PDFTab
     @ObservedObject var reader: ReaderModel
     let onExport: () -> Void
@@ -681,50 +749,60 @@ struct NotesPane: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 8) {
+            LazyVStack(alignment: .leading, spacing: 10) {
                 AnnotationSaveBanner(reader: reader, onExport: onExport)
                 if reader.pendingUndo != nil {
-                    HStack(spacing: 8) {
-                        Text(L10n.t("ui.notes.deleted"))
-                            .font(.system(size: 11))
+                    undoBanner
+                }
+                if hasAnything {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(L10n.t("ui.sidebar.annotations"))
+                            .font(.caption.weight(.semibold))
                             .foregroundStyle(Theme.textDim)
                         Spacer()
-                        Button(L10n.t("ui.undo")) {
-                            reader.undoDeleteAnnotation()
+                        Button(action: onExport) {
+                            Label(L10n.t("ui.notes.export"), systemImage: "square.and.arrow.up")
+                                .font(.caption)
                         }
-                        .font(.system(size: 11, weight: .semibold))
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.accent)
                     }
-                    .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border))
-                }
-                if hasAnything {
-                    Button(action: onExport) {
-                        Label(L10n.t("ui.notes.export"), systemImage: "square.and.arrow.up")
-                            .font(.system(size: 11))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Theme.accent)
-                    .padding(.bottom, 2)
+                    .padding(.top, 2)
                 }
                 if tab.docData.annotations.isEmpty {
-                    Text(L10n.t("ui.notes.empty"))
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textFaint)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border))
-                }
-                ForEach(sortedAnnotations) { annotation in
-                    NoteCard(annotation: annotation)
+                    ContentUnavailableView {
+                        Label(L10n.t("ui.notes.empty"), systemImage: "highlighter")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
+                } else {
+                    ForEach(sortedAnnotations) { annotation in
+                        NoteCard(annotation: annotation, reader: reader)
+                    }
                 }
                 bookmarkSection
             }
-            .padding(8)
+            .padding(10)
         }
+    }
+
+    private var undoBanner: some View {
+        HStack(spacing: 8) {
+            Text(L10n.t("ui.notes.deleted"))
+                .font(.caption)
+                .foregroundStyle(Theme.textDim)
+            Spacer()
+            Button(L10n.t("ui.undo")) {
+                reader.undoDeleteAnnotation()
+            }
+            .font(.caption.weight(.semibold))
+            .buttonStyle(.plain)
+            .foregroundStyle(Theme.accent)
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                .fill(Theme.panel))
     }
 
     private var sortedAnnotations: [StoredAnnotation] {
@@ -736,49 +814,55 @@ struct NotesPane: View {
     @ViewBuilder
     private var bookmarkSection: some View {
         Text(L10n.t("ui.notes.bookmarks"))
-            .font(.system(size: 11, weight: .semibold))
+            .font(.caption.weight(.semibold))
             .foregroundStyle(Theme.textDim)
             .padding(.top, 6)
         if tab.docData.bookmarks.isEmpty {
             Text(L10n.t("ui.notes.bookmark-empty"))
-                .font(.system(size: 11))
+                .font(.caption)
                 .foregroundStyle(Theme.textFaint)
                 .padding(.vertical, 2)
         }
         ForEach(tab.docData.bookmarks.sorted { $0.page < $1.page }) { bookmark in
-            HStack(spacing: 6) {
-                Text("\(bookmark.page)")
-                    .font(.system(size: 10, weight: .semibold))
+            HStack(spacing: 10) {
+                Image(systemName: "bookmark.fill")
+                    .font(.system(size: 10))
                     .foregroundStyle(Theme.accent)
-                    .frame(width: 22)
-                Text(bookmark.label.isEmpty ? L10n.t("ui.notes.page", "\(bookmark.page)") : bookmark.label)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
+                    .frame(width: 18)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(bookmark.label.isEmpty
+                         ? L10n.t("ui.notes.page", "\(bookmark.page)")
+                         : bookmark.label)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    Text(L10n.t("ui.notes.page", "\(bookmark.page)"))
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.textFaint)
+                }
                 Spacer()
                 Button {
-                    app.activeReader?.removeBookmark(bookmark.page)
+                    reader.removeBookmark(bookmark.page)
                 } label: {
-                    Text(L10n.t("ui.notes.delete-btn"))
-                        .font(.system(size: 10))
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Theme.textFaint)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Theme.textFaint)
                 .help(L10n.t("ui.notes.bookmark-remove"))
+                .accessibilityLabel(L10n.t("ui.notes.bookmark-remove"))
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(RoundedRectangle(cornerRadius: 6).fill(Theme.panel))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.border))
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
+                    .fill(Theme.panel))
             .contentShape(Rectangle())
             .onTapGesture { tab.goToPage(bookmark.page) }
         }
     }
 }
 
-/// Quiet while saved; visible in the Notes pane while a write is pending or
-/// failed. Failed/recovered edits stay exportable and get an explicit retry,
-/// without presenting a modal alert for every debounce attempt.
 struct AnnotationSaveBanner: View {
     @ObservedObject var reader: ReaderModel
     let onExport: () -> Void
@@ -788,7 +872,17 @@ struct AnnotationSaveBanner: View {
         case .saved:
             EmptyView()
         case .pending:
-            statusCard(L10n.t("ui.notes.save-pending"), error: false)
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(L10n.t("ui.notes.save-pending"))
+                    .font(.caption)
+                    .foregroundStyle(Theme.textDim)
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                    .fill(Theme.panel))
         case .recovered:
             recoveryCard(L10n.t("ui.notes.recovery-pending"))
         case .failed(let message):
@@ -796,94 +890,107 @@ struct AnnotationSaveBanner: View {
         }
     }
 
-    private func statusCard(_ message: String, error: Bool) -> some View {
-        Text(message)
-            .font(.system(size: 11))
-            .foregroundStyle(error ? Theme.danger : Theme.textDim)
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(error ? Theme.danger.opacity(0.35) : Theme.border))
-    }
-
     private func recoveryCard(_ message: String) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(message)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.danger)
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
+            Label {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(Theme.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Theme.danger)
+            }
+            HStack(spacing: 14) {
                 Button(L10n.t("ui.notes.retry-save")) {
                     reader.retryAnnotationSave()
                 }
                 Button(L10n.t("ui.notes.export"), action: onExport)
             }
             .buttonStyle(.plain)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.caption.weight(.semibold))
             .foregroundStyle(Theme.accent)
         }
-        .padding(8)
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.danger.opacity(0.35)))
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                .fill(Theme.danger.opacity(0.07)))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                .stroke(Theme.danger.opacity(0.28), lineWidth: 0.5))
     }
 }
 
 struct NoteCard: View {
-    @EnvironmentObject private var app: AppModel
     let annotation: StoredAnnotation
+    @ObservedObject var reader: ReaderModel
+    @State private var hovering = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 7) {
                 Circle()
                     .fill(Theme.annotationSwiftUIColor(annotation.color))
-                    .frame(width: 9, height: 9)
+                    .frame(width: 8, height: 8)
                 Text(L10n.t("ui.notes.page", "\(annotation.page)"))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption2.monospacedDigit().weight(.medium))
                     .foregroundStyle(Theme.textDim)
                 if annotation.kind != "highlight" {
-                    Text(annotation.kind)
-                        .font(.system(size: 9))
+                    Text(L10n.t("ui.kind.\(annotation.kind)"))
+                        .font(.caption2)
                         .foregroundStyle(Theme.textFaint)
                 }
-                Spacer()
-                Button {
-                    app.activeReader?.translateSelectionText(annotation.excerpt)
-                } label: {
-                    Text(L10n.t("ui.notes.translate-btn"))
-                        .font(.system(size: 10))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.accent)
-                .help(L10n.t("ui.menu.translate"))
-                Button {
-                    app.activeReader?.removeAnnotation(annotation.id)
-                } label: {
-                    Text(L10n.t("ui.notes.delete-btn"))
-                        .font(.system(size: 10))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.textFaint)
-                .help(L10n.t("ui.notes.delete-btn"))
+                Spacer(minLength: 0)
+                menu
+                    .opacity(hovering ? 1 : 0.45)
             }
             Text(annotation.excerpt)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.text)
                 .lineLimit(4)
-                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
             if !annotation.note.isEmpty {
                 Text(annotation.note)
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(Theme.textDim)
+                    .lineLimit(3)
             }
         }
-        .padding(8)
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border))
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                .fill(hovering ? Theme.panelAlt : Theme.panel))
         .contentShape(Rectangle())
-        .onTapGesture {
-            app.activeReader?.pdf?.goToPage(annotation.page)
+        .onHover { hovering = $0 }
+        .onTapGesture { reader.pdf?.goToPage(annotation.page) }
+        .contextMenu { actions }
+    }
+
+    private var menu: some View {
+        Menu {
+            actions
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.textDim)
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        Button(L10n.t("ui.menu.translate")) {
+            reader.translateSelectionText(annotation.excerpt)
+        }
+        Divider()
+        Button(L10n.t("ui.notes.delete-annotation"), role: .destructive) {
+            reader.removeAnnotation(annotation.id)
         }
     }
 }

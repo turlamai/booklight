@@ -4095,9 +4095,10 @@ void on_activate(GtkApplication* app, gpointer) {
   // The existing Open button and application menu handle document selection.
 
   auto* title_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  // launch state is the shelf; refresh_header_title keeps it in sync
+  // File-first launch state: the header names the product, not a shelf.
+  // refresh_header_title replaces it with the document title once one opens.
   g_host.title_label =
-      GTK_LABEL(gtk_label_new(Tr("ui.library.title").c_str()));
+      GTK_LABEL(gtk_label_new(Tr("app.name").c_str()));
   gtk_widget_add_css_class(GTK_WIDGET(g_host.title_label), "title");
   gtk_label_set_ellipsize(g_host.title_label, PANGO_ELLIPSIZE_END);
   g_host.subtitle_label = GTK_LABEL(gtk_label_new(nullptr));

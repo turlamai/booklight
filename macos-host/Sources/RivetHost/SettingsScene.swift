@@ -5,6 +5,6 @@ import SwiftUI
 struct SettingsSceneView: View {
     var body: some View {
         SettingsPane()
-            .frame(width: 460, height: 540)
+            .frame(width: 560, height: 680)
     }
 }

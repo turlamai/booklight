@@ -10,3 +10,7 @@ compiled/
 
 # macOS
 *.swp
+
+# SwiftPM scratch directories and local test homes
+macos-host/.build/
+.tmp-home/

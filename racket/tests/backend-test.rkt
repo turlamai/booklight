@@ -39,6 +39,9 @@
 
 (define requests-log (box '()))
 (define server-mode (box 'fast))
+;; Keep the wire test away from a real desktop keychain/Secret Service. The
+;; memory store is process-local, deterministic and exercises the same seam.
+(putenv "BOOKLIGHT_SECURE_STORE" "memory")
 
 (define (record-request! request)
   (set-box! requests-log (cons request (unbox requests-log))))
@@ -110,9 +113,17 @@
                     "200 OK"
                     "{\"data\":[{\"id\":\"mock-small\"},{\"id\":\"mock-large\"}]}")]
     [(string-prefix? request-line "POST /v1/chat/completions")
-     (if (eq? (unbox server-mode) 'slow)
-         (respond-sse-slow! cout)
-         (respond-sse-fast! cout))]
+     (case (unbox server-mode)
+       [(slow) (respond-sse-slow! cout)]
+       [(echo-auth)
+        (define auth
+          (for/first ([header (in-list (vector-ref request 1))]
+                      #:when (string-prefix? header "Authorization:"))
+            header))
+        (respond-json!
+         cout "500 Internal Server Error"
+         (format "{\"error\":\"provider echoed ~a\"}" (or auth "none")))]
+       [else (respond-sse-fast! cout)])]
     [else
      (respond-json! cout "404 Not Found" "{\"error\":\"not found\"}")])
   (close-input-port cin)
@@ -294,6 +305,28 @@
    (provider-config-api-key
     (settings-provider (load-settings))))
  "sk-test")
+;; The durable credential is the secure-store value, never settings.json.
+(check-false
+ (string-contains?
+  (bytes->string/utf-8 (file->bytes (build-path temp-config "settings.json")))
+  "sk-test"))
+
+;; A provider that echoes the bearer token must not leak it into a
+;; user-visible stream-error or a support log.
+(set-box! server-mode 'echo-auth)
+(define echo-id (send-request "translate-text" "redaction probe" "zh"))
+(define-values (echo-response echo-events) (read-terminal echo-id))
+(check-equal? (frame-type echo-response) message:response)
+(define echo-stream-id (list-ref (decode-value (frame-payload echo-response)) 0))
+(define echo-stream (await-stream-done echo-stream-id echo-events))
+(define echo-error
+  (for/first ([payload (in-list echo-stream)]
+              #:when (string=? (event-name payload) "stream-error"))
+    (list-ref (event-value payload) 1)))
+(check-true (string? echo-error))
+(check-false (string-contains? echo-error "sk-test"))
+(check-true (string-contains? echo-error "[redacted]"))
+(set-box! server-mode 'fast)
 
 ;; test-connection drives GET /v1/models through the fake server.
 (define-values (connection-ok _e5) (call "test-connection" fake-base-url "sk-test" "mock-small"))

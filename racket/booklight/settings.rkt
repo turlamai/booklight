@@ -26,7 +26,8 @@
          "i18n.rkt"
          "jsonw.rkt"
          "providers.rkt"
-         "recents.rkt")
+         "recents.rkt"
+         "secure-store.rkt")
 
 (provide current-config-dir
          config-dir-path
@@ -59,6 +60,8 @@
          update-settings!
          api-key-of
          set-api-key!
+         key-store-service
+         key-store-account
          settings->storage
          storage->settings
          settings-file-exists?)
@@ -167,14 +170,22 @@
 
 ;; ---- secure-store seam ----
 
-;; Reads the key out of a loaded settings value. The default keeps the key in
-;; settings.json (v1 compatibility).
+;; The key lives in the OS secure store, not in settings.json. The file keeps
+;; only the empty string so a copied settings.json cannot leak a credential.
+;; Existing v1 files with a plaintext key are read once and migrated on the
+;; next save.
+(define key-store-service "site.jrtx.booklight")
+(define key-store-account "api-key")
+
+(define (key-store)
+  (secure-store-current (current-config-dir)))
+
+;; Reads the key out of a loaded settings value.
 (define (api-key-of settings)
   (provider-config-api-key (settings-provider settings)))
 
-;; Returns a settings value with the key replaced. Implementations of a
-;; secure store would persist to the keychain here and return a value whose
-;; settings.json field holds a sentinel (e.g. ""), keeping the file portable.
+;; Returns a settings value with the key replaced; persistence happens in
+;; save-settings! through the secure-store seam.
 (define (set-api-key! settings key)
   (unless (string? key)
     (raise-argument-error 'set-api-key! "string?" key))
@@ -183,6 +194,56 @@
                [provider (struct-copy provider-config
                                       (settings-provider settings)
                                       [api-key key])]))
+
+;; The keychain/Secret Service is an IPC boundary. Cache the last value per
+;; config directory so ordinary recents writes never round-trip there.
+(define stored-key-cache (make-hash))
+
+;; A locked keychain or a missing Secret Service must never hang startup or a
+;; page-turn recents save. The desktop tools are bounded; the owner-only file
+;; fallback remains available immediately.
+(define (call-with-store-timeout seconds thunk fallback)
+  (define result (box fallback))
+  (define done (make-semaphore))
+  (thread
+   (lambda ()
+     (with-handlers ([exn:fail? void])
+       (set-box! result (thunk)))
+     (semaphore-post done)))
+  (sync/timeout seconds done)
+  (unbox result))
+
+(define (read-stored-api-key)
+  (hash-ref!
+   stored-key-cache
+   (path->string (current-config-dir))
+   (lambda ()
+     (call-with-store-timeout
+      3
+      (lambda ()
+        (define value (secure-store-read (key-store) key-store-service key-store-account))
+        (if value (bytes->string/utf-8 value) ""))
+      ""))))
+
+;; Persists the key. Returns #t when it reached the OS store; #f means the
+;; caller must fall back to the owner-only settings file.
+(define (write-stored-api-key key)
+  (define cache-key (path->string (current-config-dir)))
+  (cond
+    [(equal? (hash-ref stored-key-cache cache-key #f) key) #t]
+    [else
+     (define stored?
+       (call-with-store-timeout
+        5
+        (lambda ()
+          (if (string=? key "")
+              (begin (secure-store-delete (key-store) key-store-service key-store-account) #t)
+              (begin (secure-store-write (key-store) key-store-service key-store-account
+                                         (string->bytes/utf-8 key))
+                     #t)))
+        #f))
+     (when stored? (hash-set! stored-key-cache cache-key key))
+     stored?]))
 
 ;; ---- storage <-> model ----
 
@@ -200,15 +261,17 @@
     [(real? value) (exact->inexact value)]
     [else default]))
 
-;; settings value -> ordered storage value (serde field order).
-(define (settings->storage settings)
+;; settings value -> ordered storage value (serde field order). The serialized
+;; api_key is empty by default because the real key lives in the secure store;
+;; save-settings! passes the legacy value only when that store is unavailable.
+(define (settings->storage settings [serialized-api-key ""])
   (define provider (settings-provider settings))
   (jobj
    (list
     (cons "provider"
           (jobj (list (cons "name" (provider-config-name provider))
                       (cons "base_url" (provider-config-base-url provider))
-                      (cons "api_key" (provider-config-api-key provider))
+                      (cons "api_key" serialized-api-key)
                       (cons "model" (provider-config-model provider)))))
     (cons "target_language" (settings-target-language settings))
     (cons "recent_files"
@@ -306,7 +369,17 @@
                   (raise (exn:fail (tf "backend.error.parse-settings" (exn-message e))
                                    (current-continuation-marks))))])
             (read-json (open-input-string text))))
-        (storage->settings value))))
+        (define parsed (storage->settings value))
+        (define legacy-key (provider-config-api-key (settings-provider parsed)))
+        (define stored-key (read-stored-api-key))
+        (cond
+          ;; A secure-store value wins over a stale plaintext leftover.
+          [(not (string=? stored-key ""))
+           (set-api-key! parsed stored-key)]
+          ;; Legacy file: keep the key usable in memory; the next save writes
+          ;; it through the store and blanks the serialized field.
+          [(not (string=? legacy-key "")) parsed]
+          [else parsed]))))
 
 ;; Pretty-writes in serde_json field order so the file stays diffable
 ;; against v1 installs.
@@ -320,7 +393,15 @@
           (raise (exn:fail (tf "backend.error.write-settings" (exn-message e))
                            (current-continuation-marks))))])
     (make-directory* (current-config-dir))
-    (define data (json-value->bytes (settings->storage settings)))
+    (unless (eq? (system-type) 'windows)
+      (with-handlers ([exn:fail? void])
+        (file-or-directory-permissions (current-config-dir) #o700)))
+    (define key (api-key-of settings))
+    (define stored? (write-stored-api-key key))
+    ;; If no desktop store accepted the key, keep the v1 plaintext fallback in
+    ;; an owner-only file rather than silently losing the credential.
+    (define serialized-key (if stored? "" key))
+    (define data (json-value->bytes (settings->storage settings serialized-key)))
     ;; Stage the complete new preferences file and atomically rename it.
     ;; In particular, updating the last-open page must not truncate the
     ;; provider settings or recents if the process crashes during a write.
@@ -328,7 +409,10 @@
      path
      (lambda (out _temporary-path)
        (write-bytes data out)
-       (flush-output out))))
+       (flush-output out)))
+    (unless (eq? (system-type) 'windows)
+      (with-handlers ([exn:fail? void])
+        (file-or-directory-permissions path #o600))))
   (void))
 
 ;; Read-modify-write under an in-process lock; callers sharing this module
