@@ -333,7 +333,7 @@
 (define (fetch-sidecar-sha256! url)
   ;; sha256sum format: "<hex>  <filename>"; the first token is the digest.
   (define in (get-pure-port (string->url url)
-                            '("User-Agent: PDFGist-Updater/1")
+                            '("User-Agent: Booklight-Updater/1")
                             #:redirections 10))
   (dynamic-wind
     void
@@ -348,7 +348,7 @@
 
 (define (open-download-with-total! url)
   (define in (get-impure-port (string->url url)
-                              '("User-Agent: PDFGist-Updater/1"
+                              '("User-Agent: Booklight-Updater/1"
                                 "Connection: close")))
   (let loop ([total 0])
     (define line (read-line in 'return-linefeed))

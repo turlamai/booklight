@@ -1,4 +1,4 @@
-// PDFGist Linux host — GTK4 window over one embedded Racket CS backend.
+// Booklight Linux host — GTK4 window over one embedded Racket CS backend.
 //
 // The macOS host (macos-host/Sources/RivetHost) is the behavior spec; the
 // taskly Linux host donated the family patterns: boot the runtime off the
@@ -3326,9 +3326,9 @@ void show_about() {
   gtk_about_dialog_set_version(GTK_ABOUT_DIALOG(dialog),
                                rivet_app::kVersion);
   gtk_about_dialog_set_website(GTK_ABOUT_DIALOG(dialog),
-                               "https://pdfgist.jrtx.site");
+                               "https://booklight.jrtx.site");
   gtk_about_dialog_set_website_label(GTK_ABOUT_DIALOG(dialog),
-                                     "pdfgist.jrtx.site");
+                                     "booklight.jrtx.site");
   gtk_about_dialog_set_license_type(GTK_ABOUT_DIALOG(dialog),
                                     GTK_LICENSE_AGPL_3_0);
   gtk_about_dialog_set_comments(GTK_ABOUT_DIALOG(dialog),

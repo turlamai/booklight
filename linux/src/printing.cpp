@@ -58,7 +58,7 @@ std::string print_document(GtkWindow* parent,
                                        std::clamp(current_page, 1,
                                                   doc->page_count()) - 1);
   gtk_print_operation_set_unit(operation, GTK_UNIT_POINTS);
-  gtk_print_operation_set_job_name(operation, "PDFGist");
+  gtk_print_operation_set_job_name(operation, "Booklight");
   gtk_print_operation_set_embed_page_setup(operation, TRUE);
   g_signal_connect_data(operation, "draw-page",
                         reinterpret_cast<GCallback>(+[](GtkPrintOperation* op,

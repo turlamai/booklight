@@ -1,4 +1,4 @@
-// Online update flow for the PDFGist window, ported from taskly/podlens's
+// Online update flow for the Booklight window, ported from taskly/podlens's
 // MainWindow.Update.cpp. Differences from the family shape are dictated by
 // the backend: check-updates/update-state return jsexpr bytes (the mac host
 // JSON-decodes the same payloads), and the backend itself throttles the
@@ -29,7 +29,7 @@ namespace muxc = winrt::Microsoft::UI::Xaml::Controls;
 namespace {
 
 constexpr wchar_t kReleasesUrl[] =
-    L"https://github.com/turinglambdaai/pdfgist/releases";
+    L"https://github.com/turlamai/booklight/releases";
 
 std::int64_t epoch_seconds() {
   FILETIME now{};
@@ -93,7 +93,7 @@ std::string update_handoff_batch(unsigned long pid) {
   std::string const pid_text = std::to_string(pid);
   std::string batch;
   batch += "@echo off\r\n";
-  batch += "rem PDFGist update handoff - auto-generated, safe to delete.\r\n";
+  batch += "rem Booklight update handoff - auto-generated, safe to delete.\r\n";
   batch += "set /a n=0\r\n";
   batch += ":wait\r\n";
   batch += "tasklist /FI \"PID eq " + pid_text + "\" 2>nul | find \"" +
