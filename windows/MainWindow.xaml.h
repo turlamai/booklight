@@ -487,6 +487,7 @@ struct MainWindow : MainWindowT<MainWindow> {
 
   // ---- settings pane (MainWindow.Settings.cpp) ----
   void BuildSettingsPane();
+  void ShowSettingsDialog();
   void LoadSettingsIntoPane();
   void SwitchPreset(std::wstring const& id);
   std::wstring SelectedProviderId() const;
@@ -625,6 +626,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   winrt::Microsoft::UI::Xaml::Controls::ComboBox settings_view_mode_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::ComboBox settings_reading_theme_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::ComboBox settings_language_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::ScrollViewer settings_pane_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::ComboBox settings_tts_voice_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Slider settings_tts_rate_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::CheckBox settings_sidecar_{nullptr};
@@ -641,6 +643,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::vector<winrt::Microsoft::UI::Xaml::Controls::Primitives::ToggleButton> ai_tab_buttons_;
   std::vector<winrt::Microsoft::UI::Xaml::Controls::Primitives::ToggleButton> chat_scope_buttons_;
   bool settings_built_ = false;
+  bool settings_dialog_open_ = false;
 
   // timers
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer find_timer_{nullptr};

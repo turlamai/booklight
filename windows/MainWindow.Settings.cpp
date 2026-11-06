@@ -490,8 +490,46 @@ void MainWindow::BuildSettingsPane() {
   license.Opacity(0.55);
   stack.Children().Append(license);
 
+  pane.Width(520);
+  pane.Height(620);
   pane.Content(stack);
-  AiContent().Children().Append(pane);
+  settings_pane_ = pane;
+}
+
+void MainWindow::ShowSettingsDialog() {
+  if (!settings_built_) BuildSettingsPane();
+  LoadSettingsIntoPane();
+  if (settings_dialog_open_) return;
+  if (settings_pane_.Parent()) {
+    try {
+      settings_pane_.Parent().as<muxc::ContentControl>().Content(nullptr);
+    } catch (...) {
+    }
+  }
+  muxc::ContentDialog dialog;
+  dialog.Title(winrt::box_value(pdfgist::Tr("ui.tab.settings")));
+  dialog.Content(settings_pane_);
+  dialog.CloseButtonText(pdfgist::Tr("ui.update.close"));
+  dialog.XamlRoot(Content().XamlRoot());
+  settings_dialog_open_ = true;
+  dialog.Closed([weak = get_weak()](auto&&, auto&&) {
+    if (auto window = weak.get()) {
+      if (window->settings_pane_.Parent()) {
+        try {
+          window->settings_pane_.Parent()
+              .as<muxc::ContentControl>()
+              .Content(nullptr);
+        } catch (...) {
+        }
+      }
+      window->settings_dialog_open_ = false;
+    }
+  });
+  try {
+    (void)dialog.ShowAsync();
+  } catch (...) {
+    settings_dialog_open_ = false;
+  }
 }
 
 void MainWindow::LoadSettingsIntoPane() {

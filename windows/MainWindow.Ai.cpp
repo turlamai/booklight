@@ -33,8 +33,8 @@ void MainWindow::BuildAiSidebar() {
       AiToggle(), winrt::box_value(pdfgist::Tr("ui.toolbar.ai")));
 
   char const* tabs[] = {"ui.tab.translate", "ui.tab.summarize",
-                        "ui.tab.chat", "ui.tab.settings"};
-  for (int i = 0; i < 4; ++i) {
+                        "ui.tab.chat"};
+  for (int i = 0; i < 3; ++i) {
     auto button = muxcp::ToggleButton();
     muxc::TextBlock label;
     label.Text(pdfgist::Tr(tabs[i]));
@@ -179,21 +179,17 @@ void MainWindow::BuildAiSidebar() {
 }
 
 void MainWindow::ShowAiPane(int index) {
-  ai_pane_ = std::clamp(index, 0, 3);
+  ai_pane_ = std::clamp(index, 0, 2);
   for (std::size_t i = 0; i < ai_tab_buttons_.size(); ++i) {
     ai_tab_buttons_[i].IsChecked(static_cast<int>(i) == ai_pane_);
   }
-  if (ai_pane_ == 3 && !settings_built_) {
-    BuildSettingsPane();  // appends the settings pane as the fourth child
-  }
-  // children: 0 translate / 1 summarize / 2 chat / 3 settings
+  // children: 0 translate / 1 summarize / 2 chat
   for (std::uint32_t i = 0; i < AiContent().Children().Size(); ++i) {
     auto child = AiContent().Children().GetAt(i);
     child.Visibility(static_cast<int>(i) == ai_pane_ ? Visibility::Visible
                                                      : Visibility::Collapsed);
   }
   UpdateChrome();
-  if (ai_pane_ == 3) LoadSettingsIntoPane();
 }
 
 void MainWindow::RefreshChatScopeButtons() {
@@ -620,7 +616,7 @@ bool MainWindow::EnsureProviderConfigured(
   bool const ok = !settings_.base_url.empty() && !settings_.model.empty() &&
                   (settings_.has_api_key || settings_.provider == "ollama");
   if (!ok) {
-    ShowAiPane(3);
+    ShowSettingsDialog();
     auto notice = MakeNoticeCard(pdfgist::Tr("ui.settings.need-config"));
     if (ai_pane_ == 1) {
       InsertCard(summarize_cards_, notice);
@@ -918,7 +914,7 @@ void MainWindow::SendChat(std::wstring const& raw_question) {
                           !settings_.model.empty() &&
                           (settings_.has_api_key || settings_.provider == "ollama");
   if (!configured) {
-    ShowAiPane(3);
+    ShowSettingsDialog();
     AppendNoticeBubble(pdfgist::Tr("ui.settings.need-config"));
     return;
   }

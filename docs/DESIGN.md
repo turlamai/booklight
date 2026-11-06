@@ -124,11 +124,13 @@ button skins or cramped fixed-width column.
 - **macOS:** SwiftUI/AppKit split view, unified titlebar and inspector.
 - **Windows:** WinUI 3 grouped command row, Fluent controls and states, a
   four-mode icon sidebar (Thumbnails / Outline / Annotations / Forms), a
-  two-column welcome and a native settings form. Do not transplant macOS
-  spacing or materials; keep Fluent hover, focus and theme behavior.
+  two-column welcome and an app-level Settings dialog opened by the gear
+  command. Do not transplant macOS spacing or materials; keep Fluent hover,
+  focus and theme behavior.
 - **Linux:** GTK4 header bar, Adwaita stack switcher with the same four modes,
-  two-column welcome and native `GtkListBox`/`GtkStack` content. Follow the
-  system accent and Adwaita focus states.
+  two-column welcome, native `GtkListBox`/`GtkStack` content and an app-level
+  Settings window opened by the header gear. Follow the system accent and
+  Adwaita focus states.
 - All three hosts keep the same order, labels and shortcuts for a document
   workflow: open, read, switch sidebar view, annotate, edit/export, AI review,
   settings, close. Shared behavior, strings, recovery and security contracts
