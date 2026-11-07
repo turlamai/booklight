@@ -495,7 +495,7 @@ GtkWidget* AiPanel::make_settings_tab() {
   gtk_box_append(GTK_BOX(root), privacy);
 
   sync_settings();
-  return root;
+  return scroll;
 }
 
 void AiPanel::open_settings_tab() {
