@@ -19,6 +19,12 @@ All notable changes to Booklight are documented here. Format follows
   AI inspector keeps only Translate / Summarize / Chat, so the entry and the
   navigation model match instead of hiding Settings in a fourth AI tab.
 
+### Tests
+
+- Packaged macOS, Windows and Linux journeys now open the app-level Settings
+  surface and assert the provider section, so the settings entry is covered
+  by the same native accessibility evidence as reading and annotations.
+
 ## [0.9.0] - 2026-11-04
 
 ### Added

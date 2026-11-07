@@ -66,6 +66,14 @@ function Contains-Text {
     }
 }
 
+function Process-Windows {
+    param([int]$ProcessId)
+    $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+    $condition = [System.Windows.Automation.PropertyCondition]::new(
+        [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $ProcessId)
+    return @($desktop.FindAll([System.Windows.Automation.TreeScope]::Children, $condition))
+}
+
 function Invoke-NamedControl {
     param($Root, [string[]]$Names)
     try { return Invoke-NamedControlInner $Root $Names } catch { return $false }
@@ -308,6 +316,28 @@ try {
         if ((Contains-Text $window 'Stop') -or (Contains-Text $window '停止')) {
             throw 'cancelling the AI send review created a stream card'
         }
+        # Settings is an app-level surface, not a fourth AI tab. Open the
+        # native gear, require the provider section, then close the dialog.
+        [void](Wait-Until 'settings gear' {
+            Invoke-NamedControl $window @('Settings','设置')
+        })
+        $settingsRoot = Wait-Until 'app-level settings surface' {
+            $candidates = @($window) + @(Process-Windows -ProcessId $process.Id)
+            foreach ($candidate in $candidates) {
+                if ((Contains-Text $candidate 'Provider preset') -or
+                    (Contains-Text $candidate '服务商预设')) {
+                    return $candidate
+                }
+            }
+            return $null
+        }
+        [void](Wait-Until 'settings close action' {
+            Invoke-NamedControl $settingsRoot @('Close','关闭')
+        })
+        [void](Wait-Until 'settings dismissal' {
+            -not ((Contains-Text $window 'Provider preset') -or
+                  (Contains-Text $window '服务商预设'))
+        })
     } catch {
         Save-Snapshot $window (Join-Path $output 'accessibility-failure.json')
         throw
@@ -321,7 +351,7 @@ try {
     [ordered]@{
         platform = 'windows'
         artifact = $executable.FullName
-        actions = @('launch:two-original-epub-paths','switch:first-epub','press:Annotations','switch:second-epub','switch:first-epub','press:AI Assistant','press:Translate current EPUB scope','assert:AI send review','press:Cancel')
+        actions = @('launch:two-original-epub-paths','switch:first-epub','press:Annotations','switch:second-epub','switch:first-epub','press:AI Assistant','press:Translate current EPUB scope','assert:AI send review','press:Cancel','press:Settings','assert:settings surface')
         assertions = @('packaged WinUI window activated','branded titlebar icon is pixel-identical to the packaged exe group icon resource','sample EPUB crossed RVT1 into the embedded backend','native accessibility tree contains The Sample Book','native accessibility tree contains First Chapter','pending recovery crosses RVT1 on reopen','native Notes pane exposes recovered status and Retry Save','recovered annotation remains visible and exportable','two distinct native EPUB tabs persist across switches','first EPUB recovery state is isolated','both source EPUB hashes remain unchanged','native review exposes current-chapter scope and exact user-content total before provider launch','Cancel dismisses the review without starting the AI stream')
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output 'interaction-trace.json') -Encoding utf8
 

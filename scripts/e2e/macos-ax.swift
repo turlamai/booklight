@@ -124,8 +124,20 @@ do {
     }
     if usedEscape { FileHandle.standardError.write(Data("cancel path: escape\n".utf8)) }
     if contains(window, "Stop") || contains(window, "停止") { throw DriverError.failure("cancelling the AI send review created a stream card") }
+    // Settings is an app-level surface, not a fourth AI tab. Open it through
+    // the native application menu and require the provider section to be
+    // present in a second window.
+    _ = try waitFor("Settings menu item") {
+        pressNamed(application, ["Settings…", "设置…"]) ? true : nil
+    }
+    _ = try waitFor("app-level settings surface") { () -> AXUIElement? in
+        let windows = (attribute(application, kAXWindowsAttribute) as? [AXUIElement]) ?? []
+        return windows.first {
+            contains($0, "AI Provider") || contains($0, "AI 服务商")
+        }
+    }
     try writeJSON(snapshot(application), to: output.appendingPathComponent("accessibility.json"))
-    try writeJSON(["platform": "macos", "actions": ["launch:sample.epub", "press:Annotations", "press:AI Assistant", "press:Translate current EPUB scope", "assert:AI send review", "press:Cancel"], "assertions": ["packaged SwiftUI window activated", "sample EPUB crossed RVT1 into the embedded backend", "native accessibility tree contains The Sample Book", "native accessibility tree contains First Chapter", "pending recovery crosses RVT1 on reopen", "native Notes pane exposes recovered status and Retry Save", "recovered annotation remains visible and exportable", "native review exposes current-chapter scope and exact user-content total before provider launch", "Cancel dismisses the review without starting the AI stream"]], to: output.appendingPathComponent("interaction-trace.json"))
+    try writeJSON(["platform": "macos", "actions": ["launch:sample.epub", "press:Annotations", "press:AI Assistant", "press:Translate current EPUB scope", "assert:AI send review", "press:Cancel", "press:Settings", "assert:settings surface"], "assertions": ["packaged SwiftUI window activated", "sample EPUB crossed RVT1 into the embedded backend", "native accessibility tree contains The Sample Book", "native accessibility tree contains First Chapter", "pending recovery crosses RVT1 on reopen", "native Notes pane exposes recovered status and Retry Save", "recovered annotation remains visible and exportable", "native review exposes current-chapter scope and exact user-content total before provider launch", "Cancel dismisses the review without starting the AI stream", "Settings opens an app-level surface with the AI provider section"]], to: output.appendingPathComponent("interaction-trace.json"))
     guard let running = NSRunningApplication(processIdentifier: pid), running.terminate() else { throw DriverError.failure("native application rejected termination") }
 } catch {
     if let application = diagnosticApplication, let output = diagnosticOutput { try? writeJSON(snapshot(application), to: output.appendingPathComponent("accessibility-failure.json")) }
