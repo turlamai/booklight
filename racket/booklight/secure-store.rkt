@@ -15,8 +15,8 @@
 ;; so the UI/docs can say where the key actually lives. Tests parameterize
 ;; `current-secure-store` with an in-memory store.
 
-(require racket/file
-         racket/format
+(require racket/bytes
+         racket/file
          racket/list
          racket/match
          racket/path
@@ -108,12 +108,6 @@
   (subprocess-wait process)
   (values (subprocess-status process) out err))
 
-(define (hex-encode bytes)
-  (string-join
-   (for/list ([byte (in-bytes bytes)])
-     (~r byte #:base 16 #:min-width 2 #:pad-string "0"))
-   ""))
-
 ;; ---- macOS Keychain ----
 
 (define (macos-keychain-store)
@@ -131,15 +125,16 @@
   (define (write service account secret)
     (unless security
       (raise (exn:fail "macOS Keychain tool is unavailable" (current-continuation-marks))))
-    ;; `security` has no stdin form for a new password; -X keeps the secret out
-    ;; of shell history and the file, though a same-user process can briefly
-    ;; observe argv. The long-term fix belongs in the native host's
-    ;; RivetSecureStorage call, not a second credential format here.
+    (when (for/or ([byte (in-bytes secret)]) (= byte 10))
+      (raise (exn:fail "API keys must not contain newlines" (current-continuation-marks))))
+    ;; `-w` as the last option asks for the password and its confirmation on
+    ;; stdin, keeping the secret out of argv. The tool reads both lines from the
+    ;; pipe; the prompts go to stderr and are never logged.
     (define-values (status _out err)
       (run/capture security
                    (list "add-generic-password" "-U"
-                         "-s" service "-a" account
-                         "-X" (hex-encode secret))))
+                         "-s" service "-a" account "-w")
+                   (bytes-append secret #"\n" secret #"\n")))
     (unless (zero? status)
       (raise (exn:fail (string-trim err) (current-continuation-marks)))))
   (define (delete service account)

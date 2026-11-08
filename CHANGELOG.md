@@ -5,6 +5,12 @@ All notable changes to Booklight are documented here. Format follows
 
 ## [Unreleased]
 
+### Security
+
+- macOS Keychain writes now feed the password and its confirmation to the
+  system `security` tool on stdin. The API key no longer appears in the
+  process argument vector, shell history or any temporary file.
+
 ### Changed
 
 - Windows and Linux now use the same welcome, reader, sidebar, annotation and
