@@ -44,3 +44,53 @@
                 "Authorization: Bearer [redacted]")
   (check-equal? (redact-secret "no secret here" "") "no secret here")
   (check-equal? (redact-secret "no secret here" "sk-missing") "no secret here"))
+
+;; On macOS the platform store shells out to security(1). Use a fake executable
+;; on PATH to prove the password reaches it on stdin and never in argv, without
+;; touching a real login keychain.
+(when (eq? (system-type) 'macosx)
+  (test-case "macOS Keychain password uses stdin, never argv"
+    (define root (make-temporary-file "booklight-keychain-test-~a" 'directory))
+    (define script (build-path root "security"))
+    (define store-file (build-path root "item"))
+    (define old-path (getenv "PATH"))
+    (dynamic-wind
+     void
+     (lambda ()
+       (call-with-output-file script
+         (lambda (out)
+           (display "#!/bin/sh\n" out)
+           (display "cmd=\"$1\"\n" out)
+           (display "case \"$cmd\" in\n" out)
+           (display "  add-generic-password)\n" out)
+           (display "    for arg in \"$@\"; do\n" out)
+           (display "      case \"$arg\" in sk-*) exit 9;; esac\n" out)
+           (display "    done\n" out)
+           (display "    IFS= read -r one\n" out)
+           (display "    IFS= read -r two\n" out)
+           (display "    [ \"$one\" = \"$two\" ] || exit 3\n" out)
+           (display "    printf '%s' \"$one\" > \"$BOOKLIGHT_FAKE_STORE\"\n" out)
+           (display "    ;;\n" out)
+           (display "  find-generic-password)\n" out)
+           (display "    [ -f \"$BOOKLIGHT_FAKE_STORE\" ] || exit 44\n" out)
+           (display "    cat \"$BOOKLIGHT_FAKE_STORE\"\n" out)
+           (display "    ;;\n" out)
+           (display "  delete-generic-password)\n" out)
+           (display "    rm -f \"$BOOKLIGHT_FAKE_STORE\"\n" out)
+           (display "    ;;\n" out)
+           (display "  *) exit 2;;\n" out)
+           (display "esac\n" out))
+         #:exists 'truncate/replace)
+       (file-or-directory-permissions script #o755)
+       (putenv "PATH" (string-append (path->string root) ":" old-path))
+       (putenv "BOOKLIGHT_FAKE_STORE" (path->string store-file))
+       (define store (make-platform-secure-store root))
+       (secure-store-write store "site.jrtx.booklight.test" "api-key"
+                           #"sk-stdin-secret")
+       (check-equal? (secure-store-read store "site.jrtx.booklight.test" "api-key")
+                     #"sk-stdin-secret")
+       (secure-store-delete store "site.jrtx.booklight.test" "api-key")
+       (check-false (secure-store-read store "site.jrtx.booklight.test" "api-key")))
+     (lambda ()
+       (putenv "PATH" old-path)
+       (delete-directory/files root)))))
