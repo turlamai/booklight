@@ -24,6 +24,9 @@ All notable changes to Booklight are documented here. Format follows
 - Packaged macOS, Windows and Linux journeys now open the app-level Settings
   surface and assert the provider section, so the settings entry is covered
   by the same native accessibility evidence as reading and annotations.
+- Linux's welcome uses a wrapping flow box: two columns when the window is
+  wide enough, one column on narrow windows, instead of clipping fixed-width
+  columns.
 
 ## [0.9.0] - 2026-11-04
 
