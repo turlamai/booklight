@@ -476,26 +476,9 @@ struct PdfTab::Impl {
     static_cast<Impl*>(user_data)->track_current_page();
   }
 
-  double scroll_ratio() const {
-    double const span = gtk_adjustment_get_upper(vadj) -
-                        gtk_adjustment_get_page_size(vadj);
-    if (span <= 0) return 0.0;
-    return std::clamp(gtk_adjustment_get_value(vadj) / span, 0.0, 1.0);
-  }
-
-  void set_scroll_ratio(double ratio) {
-    double const span = gtk_adjustment_get_upper(vadj) -
-                        gtk_adjustment_get_page_size(vadj);
-    gtk_adjustment_set_value(vadj, std::clamp(ratio, 0.0, 1.0) * span);
-  }
-
   void track_current_page() {
     if (!layout_valid) rebuild_layout();
     if (rows.empty()) return;
-    // Split view follows the main view's scroll by ratio (mac SplitViewport).
-    if (tab->split_tab_ != nullptr) {
-      tab->split_tab_->impl->set_scroll_ratio(scroll_ratio());
-    }
     double const y = gtk_adjustment_get_value(vadj) +
                      gtk_adjustment_get_page_size(vadj) * 0.35;
     std::size_t row = 0;
@@ -510,15 +493,8 @@ struct PdfTab::Impl {
   }
 
   // Notify the host that the stored document data changed: repaint here,
-  // persist + rebuild the notes pane over there. The split mirrors the data
-  // (mac: annotations live on the shared document, both views show them).
+  // persist + rebuild the notes pane over there.
   void notify_annotations_changed() {
-    if (tab->split_tab_ != nullptr) {
-      tab->split_tab_->doc_data_ = tab->doc_data_;
-      if (tab->split_tab_->impl->draw != nullptr) {
-        gtk_widget_queue_draw(tab->split_tab_->impl->draw);
-      }
-    }
     if (draw != nullptr) gtk_widget_queue_draw(draw);
     if (tab->on_annotations_changed) tab->on_annotations_changed();
   }
@@ -546,9 +522,7 @@ PdfTab::PdfTab(std::shared_ptr<PdfDocument> doc, std::string path,
       gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(scrolled));
   hook(impl->vadj, "value-changed",
                    Impl::on_vadj_changed, impl.get());
-  paned_ = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
-  gtk_paned_set_wide_handle(GTK_PANED(paned_), TRUE);
-  gtk_paned_set_start_child(GTK_PANED(paned_), scrolled);
+  widget_ = scrolled;
 
   // mouse: selection drag, double-click word, right-click context menu
   auto* click = gtk_gesture_click_new();
@@ -620,9 +594,6 @@ PdfTab::~PdfTab() {
     (void)page;
     g_object_unref(texture);
   }
-  // The split tab dies with its owner; its widgets were children of the
-  // paned already destroyed by the GTK hierarchy.
-  split_tab_.reset();
 }
 
 // --------------------------------------------------------------- zoom ----
@@ -655,7 +626,6 @@ void PdfTab::set_double_mode(bool on) {
   impl->invalidate_layout();
   impl->update_size_request();
   go_to_page(current_page_);
-  if (split_tab_ != nullptr) split_tab_->set_double_mode(on);
 }
 
 void PdfTab::set_surface(std::string const& surface) {
@@ -678,7 +648,6 @@ void PdfTab::set_surface(std::string const& surface) {
     impl->thumbs.clear();
   }
   if (impl->draw != nullptr) gtk_widget_queue_draw(impl->draw);
-  if (split_tab_ != nullptr) split_tab_->set_surface(surface);
 }
 
 void PdfTab::set_dark(bool on) {
@@ -693,7 +662,6 @@ void PdfTab::set_dark(bool on) {
   }
   impl->thumbs.clear();
   if (impl->draw != nullptr) gtk_widget_queue_draw(impl->draw);
-  if (split_tab_ != nullptr) split_tab_->set_dark(on);
 }
 
 void PdfTab::go_to_page(int page) {
@@ -771,18 +739,6 @@ void PdfTab::reload_document(std::shared_ptr<PdfDocument> doc) {
   impl->invalidate_layout();
   impl->update_size_request();
   go_to_page(1);
-  // The split shares the document — reload it too (mac reloadTabDocument
-  // sets splitPdfView.document).
-  if (split_tab_ != nullptr) {
-    split_tab_->doc_ = doc_;
-    split_tab_->impl->sel = PdfSelection{};
-    split_tab_->impl->find_hits.clear();
-    split_tab_->impl->find_index_ = -1;
-    split_tab_->impl->clear_cache();
-    split_tab_->impl->invalidate_layout();
-    split_tab_->impl->update_size_request();
-    split_tab_->go_to_page(current_page_);
-  }
 }
 
 // ---------------------------------------------------------------- find ----
@@ -1007,47 +963,6 @@ void PdfTab::remove_bookmark(int page) {
 void PdfTab::refresh_rendering() {
   impl->clear_cache();
   if (impl->draw != nullptr) gtk_widget_queue_draw(impl->draw);
-  if (split_tab_ != nullptr) split_tab_->refresh_rendering();
-}
-
-// ------------------------------------------------------------ split ----
-
-void PdfTab::set_split(bool on) {
-  if (on == (split_tab_ != nullptr)) return;
-  if (on) {
-    split_tab_ = std::make_unique<PdfTab>(doc_, path_, title_);
-    split_tab_->impl->dark_ = impl->dark_;
-    split_tab_->set_double_mode(double_mode_);
-    split_tab_->restore_page(current_page_);
-    split_tab_->go_to_page(current_page_);
-    gtk_paned_set_end_child(GTK_PANED(paned_), split_tab_->widget());
-    // Half/half once the paned has a real allocation (an early set_position
-    // gets clamped against the not-yet-known width).
-    struct Once {
-      GtkPaned* paned;
-      int tries;
-    };
-    auto* once = new Once{GTK_PANED(paned_), 0};
-    (void)g_timeout_add(
-        30,
-        +[](gpointer user_data) -> int {
-          auto* ctx = static_cast<Once*>(user_data);
-          if (!gtk_widget_get_mapped(GTK_WIDGET(ctx->paned)) &&
-              ++ctx->tries < 100) {
-            return G_SOURCE_CONTINUE;
-          }
-          int const width = gtk_widget_get_width(GTK_WIDGET(ctx->paned));
-          if (width > 0) gtk_paned_set_position(ctx->paned, width / 2);
-          delete ctx;
-          return G_SOURCE_REMOVE;
-        },
-        once);
-    split_tab_->impl->set_scroll_ratio(impl->scroll_ratio());
-  } else {
-    auto dying = std::move(split_tab_);
-    gtk_paned_set_end_child(GTK_PANED(paned_), nullptr);  // destroys widgets
-    dying.reset();
-  }
 }
 
 // ---------------------------------------------------------- thumbnails ----

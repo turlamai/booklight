@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import AVFoundation
 import UniformTypeIdentifiers
 import PDFKit
 import WebKit
@@ -14,15 +13,14 @@ enum AnnotationPersistenceState: Equatable {
 }
 
 /// One open PDF document inside one reader window. Owns exactly one PDFView
-/// (plus a split mirror) so selection, zoom and scroll survive for the
-/// window's lifetime; business actions live in ReaderModel.
+/// so selection, zoom and scroll survive for the window's lifetime; business
+/// actions live in ReaderModel.
 @MainActor
 final class PDFTab: ObservableObject, Identifiable {
     let id = UUID()
     let path: String
     let title: String
     let pdfView: GistPDFView
-    let splitPdfView: GistPDFView
     weak var reader: ReaderModel?
 
     @Published var pageCount = 0
@@ -31,7 +29,6 @@ final class PDFTab: ObservableObject, Identifiable {
     @Published var isBookmarked = false
     @Published var docData = DocData.empty
     @Published var outline: [OutlineNode] = []
-    @Published var splitOn = false
 
     var resumePage = 1
     var didInitialLayout = false
@@ -51,16 +48,6 @@ final class PDFTab: ObservableObject, Identifiable {
         view.displaysPageBreaks = true
         view.document = document
         self.pdfView = view
-        // Split mirror (v1 viewer-split): shares the document, has no
-        // toolbar state of its own, only follows the main view's scroll.
-        let split = GistPDFView()
-        split.minScaleFactor = 0.4
-        split.maxScaleFactor = 4.0
-        split.autoScales = false
-        split.displayMode = view.displayMode
-        split.displaysPageBreaks = true
-        split.document = document
-        self.splitPdfView = split
         view.hostTab = self
         self.pageCount = document.pageCount
     }
@@ -74,7 +61,6 @@ final class PDFTab: ObservableObject, Identifiable {
         let color = NSColor(hex: surface == "dark" ? 0x171412
                             : surface == "sepia" ? 0xEFE6D5 : 0xF5F2ED)
         pdfView.backgroundColor = color
-        splitPdfView.backgroundColor = color
     }
 
     func goToPage(_ page: Int) {
@@ -168,7 +154,7 @@ final class PDFTab: ObservableObject, Identifiable {
 
 /// Per reader window: the open document (PDF or EPUB, or none = welcome
 /// state) plus everything the document commands — find, AI, annotations,
-/// page surgery, TTS, printing. The process-wide backend and settings live
+/// page surgery and printing. The process-wide backend and settings live
 /// in the shared AppModel.
 @MainActor
 final class ReaderModel: ObservableObject {
@@ -192,7 +178,6 @@ final class ReaderModel: ObservableObject {
     @Published var findQuery = ""
     @Published var findTotal = 0
     @Published var findIndex = 0
-    @Published var ttsSpeaking = false
     @Published var showAlert = false
     @Published var alertText = ""
     @Published var passwordPrompt: PasswordPrompt?
@@ -216,9 +201,6 @@ final class ReaderModel: ObservableObject {
     private var epubFindHits: [(chapter: Int, ordinal: Int)] = []
     private var epubFindQuery = ""
     private var epubFindHitIndex = 0
-
-    private let synthesizer = AVSpeechSynthesizer()
-    private lazy var ttsDelegate = TTSDelegate()
 
     init(app: AppModel) {
         self.app = app
@@ -358,7 +340,6 @@ final class ReaderModel: ObservableObject {
         let scale = tab.pdfView.scaleFactor
         let mode = tab.pdfView.displayMode
         tab.pdfView.document = doc
-        tab.splitPdfView.document = doc
         tab.pageCount = doc.pageCount
         applyStoredAnnotations(tab)
         rebuildOutline(tab)
@@ -420,10 +401,6 @@ final class ReaderModel: ObservableObject {
         }
         guard let tab = pdf else { return }
         tab.goToPage(last ? tab.pageCount : 1)
-    }
-
-    func toggleSplit() {
-        pdf?.splitOn.toggle()
     }
 
     /// Tools > Merge PDF: pick the second document, then hand both paths to
@@ -627,7 +604,6 @@ final class ReaderModel: ObservableObject {
             return
         }
         tab.pdfView.document = newDoc
-        tab.splitPdfView.document = newDoc
         tab.pageCount = newDoc.pageCount
         tab.goToPage(1)
         tab.refreshBookmarkFlag()
@@ -709,42 +685,6 @@ final class ReaderModel: ObservableObject {
             alert(L10n.t("ui.pages.save-failed", error.localizedDescription))
             return false
         }
-    }
-
-    // MARK: TTS (read the current page aloud — v1 main.ts toggleTTS)
-
-    func toggleTTS() {
-        if ttsSpeaking {
-            synthesizer.stopSpeaking(at: .immediate)
-            ttsSpeaking = false
-            return
-        }
-        if epubActive, let epub = epub {
-            let raw = epubTextSync(epub) // cache-filled by prefetch
-            guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                alert(L10n.t("ui.tts.empty"))
-                return
-            }
-            speak(raw)
-            return
-        }
-        guard let page = pdf?.pdfView.currentPage, let raw = page.string else { return }
-        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else {
-            alert(L10n.t("ui.tts.empty"))
-            return
-        }
-        speak(text)
-    }
-
-    private func speak(_ text: String) {
-        synthesizer.delegate = ttsDelegate
-        ttsDelegate.reader = self
-        let utterance = AVSpeechUtterance(string: String(text.prefix(20000)))
-        utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
-        synthesizer.speak(utterance)
-        ttsSpeaking = true
     }
 
     // MARK: PDFKit callbacks (from PDFViewport coordinator)
@@ -1235,15 +1175,15 @@ final class ReaderModel: ObservableObject {
         return (page, text)
     }
 
-    /// Chapter text from the prefetch cache (openEpub fills it; AI, TTS and
+    /// Chapter text from the prefetch cache (openEpub fills it; AI and
     /// search only ever read).
     func epubTextSync(_ epub: EpubTab, chapter: Int? = nil) -> String {
         let ch = chapter ?? epub.currentPage
         return epub.textCache[ch] ?? ""
     }
 
-    /// Prefetch every chapter's text SERIALLY so AI actions, TTS and
-    /// whole-book search read from the cache without waiting. Concurrent
+    /// Prefetch every chapter's text SERIALLY so AI actions and whole-book
+    /// search read from the cache without waiting. Concurrent
     /// epub RPCs stall on the embedded channel, so this must stay serial.
     func prefetchEpubText(_ epub: EpubTab) {
         guard let api = app?.api else { return }

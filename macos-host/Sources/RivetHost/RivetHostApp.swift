@@ -108,7 +108,7 @@ struct PDFGistApp: App {
 }
 
 /// Menu bar following the Preview layout: File (new/open/open recent/print),
-/// Edit (find), View (display modes, zoom, split, bookmark, TTS), Go (pages).
+/// Edit (find), View (display modes, zoom, bookmark), Go (pages).
 struct AppCommands: Commands {
     let app: AppModel
 
@@ -182,17 +182,10 @@ struct AppCommands: Commands {
                 HostActions.fitWidth?()
             }
             Divider()
-            Toggle(L10n.t("ui.toolbar.split"), isOn: Binding(
-                get: { app.activeReader?.pdf?.splitOn ?? false },
-                set: { _ in HostActions.toggleSplit?() }))
-            Divider()
             Button(L10n.t("ui.menu.bookmark")) {
                 HostActions.toggleBookmark?()
             }
             .keyboardShortcut("b")
-            Button(L10n.t("ui.menu.tts")) {
-                HostActions.toggleTTS?()
-            }
         }
 
         CommandMenu(L10n.t("ui.menu.go")) {

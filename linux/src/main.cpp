@@ -9,7 +9,7 @@
 //
 // Parity surface: PDF reading (tabs/continuous/double/zoom/dark/keys),
 // AI (translate/summarize/chat streaming), settings, EPUB (WebKitGTK),
-// page-level editing, annotation overlay, TTS, printing, split view,
+// page-level editing, annotation overlay, printing,
 // AcroForm, online updates, About — the README roadmap tracks what is
 // still open, not this list.
 #include <gtk/gtk.h>
@@ -46,7 +46,6 @@
 #include "panels.hpp"
 #include "pdfview.hpp"
 #include "printing.hpp"
-#include "tts.hpp"
 
 namespace {
 
@@ -131,8 +130,6 @@ struct Host {
   GtkWidget* header_edit_menu{nullptr};
   GtkWidget* header_toc_menu{nullptr};
   GtkWidget* header_bookmark{nullptr};
-  GtkWidget* header_split{nullptr};
-  GtkWidget* header_tts{nullptr};
   GtkWidget* header_print{nullptr};
   GtkMenuButton* primary_menu{nullptr};
   std::unique_ptr<FormsPane> forms_pane;
@@ -155,7 +152,6 @@ struct Host {
   std::vector<std::string> pending_open_paths;
   bool ready{false};
   std::string theme{"system"};
-  double tts_rate{1.0};
   double epub_font_scale{1.0};
 
   // backend boot handshake (mirrors the scaffold)
@@ -1922,49 +1918,6 @@ void toggle_bookmark_ui() {
   tab->toggle_bookmark(tab->current_page());
 }
 
-void toggle_split_ui() {
-  auto* tab = g_host.active_pdf();
-  if (tab == nullptr) return;
-  tab->set_split(!tab->split_on());
-}
-
-void toggle_tts_ui() {
-  std::string text;
-  if (g_host.epub_active() && g_host.epub != nullptr) {
-    text = g_host.epub->chapter_text(g_host.epub->current_page());
-  } else if (auto* tab = g_host.active_pdf(); tab != nullptr) {
-    text = tab->page_text(tab->current_page());
-  }
-  // Trim; mac guards on whitespace-only pages.
-  auto trimmed = [](std::string s) {
-    while (!s.empty() && (s.front() == ' ' || s.front() == '\n' ||
-                          s.front() == '\r' || s.front() == '\t')) {
-      s.erase(s.begin());
-    }
-    while (!s.empty() && (s.back() == ' ' || s.back() == '\n' ||
-                          s.back() == '\r' || s.back() == '\t')) {
-      s.pop_back();
-    }
-    return s;
-  }(std::move(text));
-  if (trimmed.empty()) {
-    host_alert(Tr("ui.tts.empty"));
-    return;
-  }
-  if (trimmed.size() > 20000) {
-    // UTF-8 safe cut (mac String.prefix(20000) parity).
-    std::size_t end = 20000;
-    while (end > 0 &&
-           (static_cast<unsigned char>(trimmed[end]) & 0xC0) == 0x80) {
-      --end;
-    }
-    trimmed = trimmed.substr(0, end);
-  }
-  if (!pdfgist::tts::toggle(trimmed)) {
-    host_alert(Tr("ui.tts.unavailable"));
-  }
-}
-
 void print_ui() {
   auto* tab = g_host.active_pdf();
   if (tab == nullptr) {
@@ -3369,8 +3322,6 @@ void update_main_stack() {
   gtk_widget_set_visible(GTK_WIDGET(g_host.header_edit_menu), pages > 0);
   if (g_host.header_bookmark != nullptr) {
     gtk_widget_set_visible(GTK_WIDGET(g_host.header_bookmark), pages > 0);
-    gtk_widget_set_visible(GTK_WIDGET(g_host.header_split), pages > 0);
-    gtk_widget_set_visible(GTK_WIDGET(g_host.header_tts), pages > 0);
     gtk_widget_set_visible(GTK_WIDGET(g_host.header_print), pages > 0);
   }
 }
@@ -3783,14 +3734,6 @@ void install_actions(GtkApplication* app) {
                                          gpointer) {
         toggle_bookmark_ui();
       }, nullptr);
-  add("split-toggle", +[](GSimpleAction*, GVariant*,
-                                      gpointer) {
-        toggle_split_ui();
-      }, nullptr);
-  add("tts-toggle", +[](GSimpleAction*, GVariant*,
-                                    gpointer) {
-        toggle_tts_ui();
-      }, nullptr);
   add("print", +[](GSimpleAction*, GVariant*, gpointer) {
         print_ui();
       }, nullptr);
@@ -3881,7 +3824,6 @@ void build_primary_menu() {
   g_menu_append(view, Tr("ui.menu.zoom-out").c_str(), "app.zoom-out");
   g_menu_append(view, Tr("ui.menu.zoom-reset").c_str(), "app.zoom-reset");
   g_menu_append(view, Tr("ui.viewer.fit").c_str(), "app.fit-width");
-  g_menu_append(view, Tr("ui.toolbar.split").c_str(), "app.split-toggle");
   // The AI sidebar starts hidden (reading canvas first); without a named
   // menu entry the only way to open it is the hidden accelerator, which
   // neither assistive technology nor the packaged journey can reach.
@@ -3909,10 +3851,9 @@ void build_primary_menu() {
     g_object_unref(appearance);
   }
 
-  // Document (bookmark / speech / print — mac reader menu parity)
+  // Document (bookmark / print — mac reader menu parity)
   auto* doc = g_menu_new();
   g_menu_append(doc, Tr("ui.menu.bookmark").c_str(), "app.bookmark-toggle");
-  g_menu_append(doc, Tr("ui.menu.tts").c_str(), "app.tts-toggle");
   g_menu_append(doc, Tr("ui.menu.print").c_str(), "app.print");
   g_menu_append_section(menu, nullptr, G_MENU_MODEL(doc));
   g_object_unref(doc);
@@ -4088,15 +4029,6 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_header_bar_pack_start(GTK_HEADER_BAR(header), bookmark_button);
   g_host.header_bookmark = bookmark_button;
 
-  // read aloud
-  auto* tts_button =
-      gtk_button_new_from_icon_name("audio-x-generic-symbolic");
-  gtk_widget_set_tooltip_text(tts_button, Tr("ui.toolbar.tts").c_str());
-  gtk_actionable_set_action_name(GTK_ACTIONABLE(tts_button),
-                                 "app.tts-toggle");
-  gtk_header_bar_pack_start(GTK_HEADER_BAR(header), tts_button);
-  g_host.header_tts = tts_button;
-
   // AI sidebar toggle: the sidebar starts hidden (reading canvas first),
   // so it needs a discoverable surface — same as the mac and Windows
   // hosts. The explicit accessible label is the packaged journey's handle.
@@ -4107,14 +4039,6 @@ void on_activate(GtkApplication* app, gpointer) {
                                  GTK_ACCESSIBLE_PROPERTY_LABEL,
                                  Tr("ui.toolbar.ai").c_str(), -1);
   gtk_header_bar_pack_start(GTK_HEADER_BAR(header), ai_button);
-
-  // split view toggle
-  auto* split_button = gtk_button_new_from_icon_name("view-dual-symbolic");
-  gtk_widget_set_tooltip_text(split_button, Tr("ui.toolbar.split").c_str());
-  gtk_actionable_set_action_name(GTK_ACTIONABLE(split_button),
-                                 "app.split-toggle");
-  gtk_header_bar_pack_start(GTK_HEADER_BAR(header), split_button);
-  g_host.header_split = split_button;
 
   // print
   auto* print_button =
@@ -4523,11 +4447,6 @@ void on_activate(GtkApplication* app, gpointer) {
     update_message_dialog(Tr("ui.settings.language"),
                           Tr("ui.settings.language-note"));
   };
-  g_host.ai_panel->on_tts_rate_changed = [](double rate) {
-    g_host.tts_rate = std::clamp(rate, 0.5, 3.0);
-    pdfgist::tts::set_rate(g_host.tts_rate);
-    host::save_pref("tts-rate", std::to_string(g_host.tts_rate));
-  };
   g_host.ai_panel->on_reading_theme_changed = [](std::string const& theme) {
     using rivet_app::ReadingTheme;
     save_reading_prefs(theme == "paper"   ? ReadingTheme::paper
@@ -4665,7 +4584,6 @@ void on_open_files(GtkApplication* app, GFile** files, gint n_files, gpointer) {
 void on_shutdown(GApplication*, gpointer) {
   g_host.shutting_down.store(true, std::memory_order_release);
   stop_update_poll();
-  pdfgist::tts::stop();
   if (g_host.startup_thread.joinable()) {
     g_host.startup_thread.join();
   }
@@ -4760,14 +4678,6 @@ int main(int argc, char** argv) {
                              : detect_ui_language());
   g_host.theme = host::pref_string("theme", "system");
   g_host.panel_ctx.ui_language = language_pref;
-  try {
-    g_host.tts_rate = std::stod(host::pref_string("tts-rate", "1.0"));
-  } catch (...) {
-  }
-  g_host.tts_rate = std::clamp(g_host.tts_rate, 0.5, 3.0);
-  g_host.panel_ctx.tts_rate = g_host.tts_rate;
-  pdfgist::tts::set_rate(g_host.tts_rate);
-
   auto* app = gtk_application_new("site.jrtx.booklight",
                                   G_APPLICATION_HANDLES_OPEN);
   hook(app, "activate", on_activate, nullptr);

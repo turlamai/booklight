@@ -1,5 +1,5 @@
 // PDF reading core: document model, continuous scrolling page view,
-// selection, find, outline, thumbnails, annotation overlay, split view.
+// selection, find, outline, thumbnails, annotation overlay.
 //
 // All PDFium calls run on the GTK main thread (PDFium has no per-document
 // thread-safety guarantees; the only background work in this host is RPC,
@@ -139,8 +139,8 @@ class PdfTab {
   std::string const& title() const { return title_; }
   std::shared_ptr<PdfDocument> document() const { return doc_; }
 
-  // The container to put into the notebook (the split view lives inside).
-  GtkWidget* widget() const { return paned_; }
+  // The scrolled page surface to put into the notebook.
+  GtkWidget* widget() const { return widget_; }
 
   int current_page() const { return current_page_; }  // 1-based
   int zoom_percent() const {
@@ -229,15 +229,6 @@ class PdfTab {
   // underneath us — form fills, page edits).
   void refresh_rendering();
 
-  // ------------------------------------------------------- split view --
-  // Second view of the same document (mac SplitViewport): no toolbar state
-  // of its own, only follows the main view's scroll ratio. The split tab
-  // shares the PdfDocument (render/text caches) but owns its own layout.
-
-  bool split_on() const { return split_tab_ != nullptr; }
-  void set_split(bool on);
-  PdfTab* split() const { return split_tab_.get(); }
-
  private:
   struct Impl;
   std::unique_ptr<Impl> impl;
@@ -245,12 +236,11 @@ class PdfTab {
   std::shared_ptr<PdfDocument> doc_;
   std::string path_;
   std::string title_;
-  GtkWidget* paned_{nullptr};
+  GtkWidget* widget_{nullptr};
   int current_page_{1};
   double zoom_{1.0};
   bool double_mode_{false};
   DocData doc_data_;
-  std::unique_ptr<PdfTab> split_tab_;  // owned; never split recursively
 };
 
 // --------------------------------------------------------- outline -----

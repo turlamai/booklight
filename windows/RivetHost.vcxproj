@@ -126,7 +126,6 @@
     <ClCompile Include="MainWindow.Pages.cpp" />
     <ClCompile Include="MainWindow.Tools.cpp" />
     <ClCompile Include="MainWindow.Annotations.cpp" />
-    <ClCompile Include="MainWindow.Tts.cpp" />
     <ClCompile Include="MainWindow.Print.cpp" />
     <ClCompile Include="MainWindow.Forms.cpp" />
     <ClCompile Include="MainWindow.Update.cpp" />

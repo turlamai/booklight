@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import AVFoundation
 import PDFKit
 
 // Shared host-side types: annotation storage schema, streaming cards, the
@@ -254,24 +253,5 @@ func languageName(_ code: RivetTypes.TargetLanguage) -> String {
     case .fr: return "Français"
     case .de: return "Deutsch"
     case .es: return "Español"
-    }
-}
-
-// MARK: - TTS delegate
-
-// @unchecked Sendable: newer SDKs infer the conformance for delegate
-// storage, older Swift 6.1 toolchains (Xcode 16.4, the Intel release
-// runner) demand it explicitly and then reject the mutable model
-// reference. Sound by construction — the delegate only touches the
-// reader from @MainActor tasks.
-final class TTSDelegate: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
-    weak var reader: ReaderModel?
-
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        Task { @MainActor [weak self] in self?.reader?.ttsSpeaking = false }
-    }
-
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        Task { @MainActor [weak self] in self?.reader?.ttsSpeaking = false }
     }
 }

@@ -60,16 +60,6 @@
                               Background="Transparent" BorderThickness="0">
                     <FontIcon FontFamily="Segoe Fluent Icons" FontSize="14" Glyph="&#xE734;" />
                 </ToggleButton>
-                <ToggleButton x:Name="SplitToggle" Click="Split_Click"
-                              Width="34" Height="30" Padding="0" CornerRadius="4"
-                              Background="Transparent" BorderThickness="0">
-                    <FontIcon FontFamily="Segoe Fluent Icons" FontSize="14" Glyph="&#xE89A;" />
-                </ToggleButton>
-                <ToggleButton x:Name="TtsButton" Click="TtsButton_Click"
-                              Width="34" Height="30" Padding="0" CornerRadius="4"
-                              Background="Transparent" BorderThickness="0">
-                    <FontIcon FontFamily="Segoe Fluent Icons" FontSize="14" Glyph="&#xE720;" />
-                </ToggleButton>
                 <Button x:Name="PrintButton" Click="PrintButton_Click"
                         Width="34" Height="30" Padding="0" CornerRadius="4"
                         Background="Transparent" BorderThickness="0">

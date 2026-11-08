@@ -38,7 +38,6 @@ struct PanelContext {
   std::function<bool()> epub_active;                      // page means chapter
   std::function<void(GtkWidget*)> open_settings_window;   // host-owned dialog
   std::string ui_language{"system"};                      // host pref mirror
-  double tts_rate{1.0};                                   // host pref mirror
 };
 
 // One AI stream (a card in the Translate/Summarize lists or an assistant
@@ -86,7 +85,6 @@ class AiPanel {
   std::function<void(std::string const&)> on_theme_changed;  // system|light|dark
   std::function<void(std::string const&)> on_reading_theme_changed;  // system|paper|night
   std::function<void(std::string const&)> on_language_changed;  // system|zh|en
-  std::function<void(double)> on_tts_rate_changed;
   void set_theme(std::string const& theme);
 
   // AI actions (menu items and the context menu route here).
@@ -152,7 +150,6 @@ class AiPanel {
   GtkDropDown* theme_dropdown_{nullptr};
   GtkDropDown* reading_theme_dropdown_{nullptr};
   GtkDropDown* language_dropdown_{nullptr};
-  GtkScale* tts_rate_scale_{nullptr};
   std::map<std::string, std::pair<std::string, std::string>> preset_stash_;
   std::string current_preset_id_;
   bool busy_{false};
