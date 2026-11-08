@@ -103,7 +103,6 @@ add_executable(RivetHost
   src/annotations.cpp
   src/panels.cpp
   src/epub.cpp
-  src/tts.cpp
   src/printing.cpp
   src/forms.cpp
 )

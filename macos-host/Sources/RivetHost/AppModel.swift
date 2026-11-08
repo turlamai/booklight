@@ -556,8 +556,6 @@ final class AppModel: ObservableObject {
         HostActions.find = { [weak self] in self?.activeReader?.openFind() }
         HostActions.printDocument = { [weak self] in self?.activeReader?.printDocument() }
         HostActions.toggleBookmark = { [weak self] in self?.activeReader?.toggleBookmark() }
-        HostActions.toggleTTS = { [weak self] in self?.activeReader?.toggleTTS() }
-        HostActions.toggleSplit = { [weak self] in self?.activeReader?.toggleSplit() }
         HostActions.zoomIn = { [weak self] in self?.activeReader?.pdf?.zoomIn() }
         HostActions.zoomOut = { [weak self] in self?.activeReader?.pdf?.zoomOut() }
         HostActions.zoomReset = { [weak self] in self?.activeReader?.pdf?.zoomReset() }
@@ -638,8 +636,6 @@ enum HostActions {
     nonisolated(unsafe) static var find: (() -> Void)?
     nonisolated(unsafe) static var toggleBookmark: (() -> Void)?
     nonisolated(unsafe) static var printDocument: (() -> Void)?
-    nonisolated(unsafe) static var toggleTTS: (() -> Void)?
-    nonisolated(unsafe) static var toggleSplit: (() -> Void)?
     nonisolated(unsafe) static var zoomIn: (() -> Void)?
     nonisolated(unsafe) static var zoomOut: (() -> Void)?
     nonisolated(unsafe) static var zoomReset: (() -> Void)?

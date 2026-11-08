@@ -168,8 +168,6 @@ MainWindow::MainWindow() {
   set_tip(RecentsButton(), pdfgist::Tr("ui.viewer.recents"));
   set_tip(FindToggle(), pdfgist::Tr("ui.toolbar.find"));
   set_tip(BookmarkToggle(), pdfgist::Winize(pdfgist::Tr("ui.toolbar.bookmark")));
-  set_tip(SplitToggle(), pdfgist::Tr("ui.toolbar.split"));
-  set_tip(TtsButton(), pdfgist::Tr("ui.toolbar.tts"));
   set_tip(PrintButton(), pdfgist::Winize(pdfgist::Tr("ui.toolbar.print")));
   set_tip(ToolsButton(), pdfgist::Tr("ui.menu.tools"));
   ToolsFillFormItem().Text(pdfgist::Tr("ui.menu.fill-forms"));
@@ -198,8 +196,6 @@ MainWindow::MainWindow() {
   set_name(RecentsButton(), pdfgist::Tr("ui.viewer.recents"));
   set_name(FindToggle(), pdfgist::Tr("ui.toolbar.find"));
   set_name(BookmarkToggle(), pdfgist::Winize(pdfgist::Tr("ui.toolbar.bookmark")));
-  set_name(SplitToggle(), pdfgist::Tr("ui.toolbar.split"));
-  set_name(TtsButton(), pdfgist::Tr("ui.toolbar.tts"));
   set_name(PrintButton(), pdfgist::Winize(pdfgist::Tr("ui.toolbar.print")));
   set_name(ToolsButton(), pdfgist::Tr("ui.menu.tools"));
   set_name(AiToggle(), pdfgist::Tr("ui.toolbar.ai"));
@@ -671,8 +667,6 @@ void MainWindow::UpdateChrome() {
   RecentsButton().Visibility(reader_vis);
   FindToggle().Visibility(reader_vis);
   BookmarkToggle().Visibility(reader_vis);
-  SplitToggle().Visibility(reader_vis);
-  TtsButton().Visibility(reader_vis);
   PrintButton().Visibility(reader_vis);
   ToolsButton().Visibility(reader_vis);
   BottomBar().Visibility(!epub_active_ && active_pdf_ != nullptr
@@ -701,11 +695,6 @@ void MainWindow::LoadHostPrefs() {
         left_visible_ = v == "true";
       }
       if (auto v = value_of("ui-language"); !v.empty()) ui_language_ = v;
-      if (auto v = value_of("tts-voice"); !v.empty()) tts_voice_ = v;
-      if (auto v = value_of("tts-rate"); !v.empty()) {
-        try { tts_rate_ = std::stod(v); } catch (...) {}
-      }
-      tts_rate_ = std::clamp(tts_rate_, 0.5, 3.0);
     }
   } catch (...) {
     // defaults are fine
@@ -725,9 +714,7 @@ void MainWindow::SaveHostPrefs() {
     file << "theme=" << theme_ << "\n"
          << "ai-visible=" << (ai_visible_ ? "true" : "false") << "\n"
          << "left-visible=" << (left_visible_ ? "true" : "false") << "\n"
-         << "ui-language=" << ui_language_ << "\n"
-         << "tts-voice=" << tts_voice_ << "\n"
-         << "tts-rate=" << tts_rate_ << "\n";
+         << "ui-language=" << ui_language_ << "\n";
   } catch (...) {
     // best effort
   }
@@ -842,11 +829,6 @@ void MainWindow::Bookmark_Click(winrt::Windows::Foundation::IInspectable const&,
   ToggleBookmark();
 }
 
-void MainWindow::Split_Click(winrt::Windows::Foundation::IInspectable const&,
-                             mux::RoutedEventArgs const&) {
-  ToggleSplit();
-}
-
 // ---- tabs ---------------------------------------------------------------------------
 
 void MainWindow::DocTabs_SelectionChanged(
@@ -882,12 +864,10 @@ void MainWindow::DocTabs_SelectionChanged(
   }
   CloseFind();
   if (auto tab = active_pdf_) {
-    ApplySplitLayout(*tab);
     LayoutTab(*tab);
     RequestVisibleRenders(*tab);
     LoadDocData(tab);
   }
-  SplitToggle().IsChecked(active_pdf_ != nullptr && active_pdf_->split_on);
   UpdateBookmarkToggle();
   RefreshLeftPanel();
   UpdateChrome();
@@ -1112,7 +1092,6 @@ void MainWindow::OpenDocReady(
     if (window->active_pdf_.get() == shared.get()) {
       window->RequestVisibleRenders(*shared);
       window->TrackCurrentPage(*shared);
-      window->SyncSplitView(*shared);
     }
   });
   scroll.SizeChanged([weak_window, weak_tab](
@@ -1128,45 +1107,10 @@ void MainWindow::OpenDocReady(
     }
   });
 
-  // two-column container: main view | divider | split view
-  muxc::Grid container;
-  muxc::ColumnDefinition main_column;
-  main_column.Width({1, mux::GridUnitType::Star});
-  container.ColumnDefinitions().Append(main_column);
-  muxc::ColumnDefinition divider_column;
-  divider_column.Width({0, mux::GridUnitType::Pixel});
-  container.ColumnDefinitions().Append(divider_column);
-  muxc::ColumnDefinition split_column;
-  split_column.Width({0, mux::GridUnitType::Pixel});
-  container.ColumnDefinitions().Append(split_column);
-  container.Children().Append(scroll);
-  muxc::Grid::SetColumn(scroll, 0);
-
-  muxc::Border divider;
-  divider.Width(1);
-  divider.HorizontalAlignment(mux::HorizontalAlignment::Stretch);
-  divider.Background(ThemeBorderBrush());
-  container.Children().Append(divider);
-  muxc::Grid::SetColumn(divider, 1);
-
-  muxc::ScrollViewer split_scroll;
-  muxc::StackPanel split_rows;
-  split_rows.Spacing(8);
-  split_rows.Padding({8, 16, 16, 32});
-  split_scroll.Content(split_rows);
-  split_scroll.VerticalScrollBarVisibility(muxc::ScrollBarVisibility::Auto);
-  split_scroll.HorizontalAlignment(mux::HorizontalAlignment::Stretch);
-  split_scroll.Visibility(Visibility::Collapsed);
-  container.Children().Append(split_scroll);
-  muxc::Grid::SetColumn(split_scroll, 2);
-
-  item.Content(container);
+  item.Content(scroll);
   tab->tab_item = item;
   tab->scroll = scroll;
   tab->rows = rows;
-  tab->split_container = container;
-  tab->split_scroll = split_scroll;
-  tab->split_rows = split_rows;
 
   DocTabs().TabItems().Append(item);
   tabs_.push_back(tab);
@@ -1177,7 +1121,6 @@ void MainWindow::OpenDocReady(
     SaveHostPrefs();
   }
   ActivateTab(tab);
-  ApplySplitLayout(*tab);
   UpdateBookmarkToggle();
 
   // outline loads in the background; the left panel picks it up
@@ -1373,20 +1316,14 @@ void MainWindow::LayoutTab(PdfTab& tab) {
   tab.rows.Children().Clear();
   tab.cells.clear();
   tab.rendering_.clear();
-  if (tab.split_rows) tab.split_rows.Children().Clear();
 
   bool const two_up = settings_.view_mode == "double";
-  bool const build_split = tab.split_on && tab.split_rows != nullptr;
   int page = 1;
   while (page <= tab.page_count) {
     auto row = muxc::StackPanel();
     row.Orientation(muxc::Orientation::Horizontal);
     row.Spacing(8);
     row.HorizontalAlignment(mux::HorizontalAlignment::Center);
-    auto split_row = muxc::StackPanel();
-    split_row.Orientation(muxc::Orientation::Horizontal);
-    split_row.Spacing(8);
-    split_row.HorizontalAlignment(mux::HorizontalAlignment::Center);
     int const second = two_up && page + 1 <= tab.page_count ? page + 1 : 0;
     for (int const p : {page, second}) {
       if (p == 0) break;
@@ -1419,33 +1356,10 @@ void MainWindow::LayoutTab(PdfTab& tab) {
       cell->canvas = canvas;
       cell->image = image;
 
-      if (build_split) {
-        // read-only mirror: same bitmap, no input handling
-        auto split_grid = muxc::Grid();
-        split_grid.Width(cell->width);
-        split_grid.Height(cell->height);
-        split_grid.Background(Brush(SurfaceCanvasColor()));
-        auto split_image = muxc::Image();
-        split_image.Stretch(media::Stretch::Fill);
-        split_image.Width(cell->width);
-        split_image.Height(cell->height);
-        split_grid.Children().Append(split_image);
-        auto split_canvas = muxc::Canvas();
-        split_canvas.Width(cell->width);
-        split_canvas.Height(cell->height);
-        split_grid.Children().Append(split_canvas);
-        cell->split_grid = split_grid;
-        cell->split_canvas = split_canvas;
-        cell->split_image = split_image;
-        split_row.Children().Append(split_grid);
-      }
       tab.cells.push_back(cell);
       row.Children().Append(grid);
     }
     tab.rows.Children().Append(row);
-    if (build_split && split_row.Children().Size() > 0) {
-      tab.split_rows.Children().Append(split_row);
-    }
     page = second == 0 ? page + 1 : second + 1;
   }
   RequestVisibleRenders(tab);
@@ -1537,8 +1451,6 @@ void MainWindow::RenderCell(std::shared_ptr<PdfTab> tab,
           std::memcpy(data, rendered.bgra.data(), rendered.bgra.size());
           bitmap.Invalidate();
           cell->image.Source(bitmap);
-          // the split mirror shares the same ImageSource
-          if (cell->split_image) cell->split_image.Source(bitmap);
           cell->rendered_key = static_cast<std::int64_t>(scale * raster * 1000.0) *
                                (dark ? -1 : 1);
         } catch (...) {
@@ -1683,60 +1595,6 @@ void MainWindow::FitWidth_Click(winrt::Windows::Foundation::IInspectable const&,
   if (!tab) return;
   tab->fit_width = true;
   RelayoutActive();
-}
-
-// ---- split view ------------------------------------------------------------------
-
-// Column widths follow the toggle; the split rows themselves are rebuilt by
-// LayoutTab on the relayout the viewport change triggers.
-void MainWindow::ApplySplitLayout(PdfTab& tab) {
-  if (!tab.split_container) return;
-  try {
-    auto const& columns = tab.split_container.ColumnDefinitions();
-    if (columns.Size() < 3) return;
-    // divider column stays 1px only while split is on
-    columns.GetAt(1).Width(tab.split_on ? mux::GridLength{1, mux::GridUnitType::Pixel}
-                                        : mux::GridLength{0, mux::GridUnitType::Pixel});
-    columns.GetAt(2).Width(tab.split_on
-                               ? mux::GridLength{1, mux::GridUnitType::Star}
-                               : mux::GridLength{0, mux::GridUnitType::Pixel});
-    if (tab.split_scroll) {
-      tab.split_scroll.Visibility(tab.split_on ? Visibility::Visible
-                                               : Visibility::Collapsed);
-    }
-  } catch (...) {
-  }
-}
-
-void MainWindow::ToggleSplit() {
-  auto tab = epub_active_ ? nullptr : active_pdf_.get();
-  if (!tab) return;
-  tab->split_on = !tab->split_on;
-  SplitToggle().IsChecked(tab->split_on);
-  ApplySplitLayout(*tab);
-  // force a relayout so the split rows exist at the new viewport
-  tab->layout_viewport_w = -1;
-  LayoutTab(*tab);
-  RequestVisibleRenders(*tab);
-  SyncSplitView(*tab);
-}
-
-void MainWindow::SyncSplitView(PdfTab& tab) {
-  if (!tab.split_on || !tab.split_scroll || !tab.scroll) return;
-  try {
-    double const main_extent = tab.scroll.ExtentHeight();
-    double const main_viewport = tab.scroll.ViewportHeight();
-    if (main_extent <= main_viewport + 1) return;
-    double const ratio =
-        std::clamp(tab.scroll.VerticalOffset() / (main_extent - main_viewport),
-                   0.0, 1.0);
-    double const split_extent = tab.split_scroll.ExtentHeight();
-    double const split_viewport = tab.split_scroll.ViewportHeight();
-    if (split_extent <= split_viewport + 1) return;
-    tab.split_scroll.ChangeView(nullptr, ratio * (split_extent - split_viewport),
-                                nullptr, true);
-  } catch (...) {
-  }
 }
 
 void MainWindow::PageInput_KeyDown(
@@ -1884,7 +1742,6 @@ void MainWindow::DrawCellOverlays(PdfTab::Cell& cell, PdfTab const& tab) {
   if (scale <= 0) return;
   try {
     cell.canvas.Children().Clear();
-    if (cell.split_canvas) cell.split_canvas.Children().Clear();
 
     auto add_rect = [&](std::array<double, 4> const& rect, wu::Color color) {
       double const left = rect[0] * scale;

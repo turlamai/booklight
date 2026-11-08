@@ -749,7 +749,6 @@ void MainWindow::DrawStoredOverlays(PdfTab::Cell& cell, PdfTab const& tab) {
     }
   };
   paint(cell.canvas);
-  paint(cell.split_canvas);
 }
 
 // ---- notes pane ----------------------------------------------------------------------

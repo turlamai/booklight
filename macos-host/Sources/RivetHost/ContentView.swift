@@ -392,10 +392,6 @@ struct ReaderWindowView: View {
                         reader.exportEditedPdf()
                     }
                 }
-                toolbarIcon("rectangle.split.2x1", active: tab.splitOn,
-                            help: L10n.t("ui.toolbar.split")) {
-                    reader.toggleSplit()
-                }
             }
             toolbarIcon("magnifyingglass", active: reader.findVisible,
                         help: L10n.t("ui.toolbar.find")) {
@@ -414,11 +410,6 @@ struct ReaderWindowView: View {
                     reader.toggleBookmark()
                 }
             }
-            toolbarIcon("speaker.wave.2", active: reader.ttsSpeaking,
-                        help: L10n.t("ui.toolbar.tts")) {
-                reader.toggleTTS()
-            }
-            .disabled(!reader.hasDocument)
             toolbarIcon("printer", active: false, help: L10n.t("ui.menu.print")) {
                 reader.printDocument()
             }
@@ -530,24 +521,16 @@ struct PageNavControl: View {
     }
 }
 
-/// Document area. Observes the tab directly so tab-level state (splitOn)
-/// re-renders it — the environment model alone does not.
+/// Document area. Observes the tab directly so page/zoom state re-renders
+/// it — the environment model alone does not.
 private struct CenteredDocument: View {
     @ObservedObject var tab: PDFTab
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            PDFViewport(tab: tab)
-                .ignoresSafeArea()
-                .background(Theme.bg)
-            if tab.splitOn {
-                Divider().overlay(Theme.border)
-                SplitViewport(tab: tab)
-                    .ignoresSafeArea()
-                    .background(Theme.panelAlt)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        PDFViewport(tab: tab)
+            .ignoresSafeArea()
+            .background(Theme.bg)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

@@ -90,22 +90,11 @@ struct PdfTab {
   winrt::Microsoft::UI::Xaml::Controls::ScrollViewer scroll{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::StackPanel rows{nullptr};
 
-  // split view (second read-only view of the same document; follows the main
-  // view's scroll ratio — mac SplitViewport semantics)
-  bool split_on = false;
-  winrt::Microsoft::UI::Xaml::Controls::Grid split_container{nullptr};
-  winrt::Microsoft::UI::Xaml::Controls::ScrollViewer split_scroll{nullptr};
-  winrt::Microsoft::UI::Xaml::Controls::StackPanel split_rows{nullptr};
-
   struct Cell {
     int page = 0;  // 1-based
     winrt::Microsoft::UI::Xaml::Controls::Grid grid{nullptr};
     winrt::Microsoft::UI::Xaml::Controls::Canvas canvas{nullptr};
     winrt::Microsoft::UI::Xaml::Controls::Image image{nullptr};
-    // split-view twins (built only while split is on)
-    winrt::Microsoft::UI::Xaml::Controls::Grid split_grid{nullptr};
-    winrt::Microsoft::UI::Xaml::Controls::Canvas split_canvas{nullptr};
-    winrt::Microsoft::UI::Xaml::Controls::Image split_image{nullptr};
     double width = 0;   // effective px at the current scale
     double height = 0;
     std::int64_t rendered_key = 0;  // (scale, raster, dark) stamp of the bitmap
@@ -228,10 +217,6 @@ struct MainWindow : MainWindowT<MainWindow> {
                            winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void Bookmark_Click(winrt::Windows::Foundation::IInspectable const&,
                       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  void Split_Click(winrt::Windows::Foundation::IInspectable const&,
-                   winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  void TtsButton_Click(winrt::Windows::Foundation::IInspectable const&,
-                       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void PrintButton_Click(winrt::Windows::Foundation::IInspectable const&,
                          winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void ToolsWatermark_Click(winrt::Windows::Foundation::IInspectable const&,
@@ -393,20 +378,6 @@ struct MainWindow : MainWindowT<MainWindow> {
   void DrawStoredOverlays(PdfTab::Cell& cell, PdfTab const& tab);
   std::string SerializeDocData(DocData const& data);
   bool ParseDocData(std::string const& json, DocData* out);
-
-  // split view (MainWindow.xaml.cpp)
-  void ApplySplitLayout(PdfTab& tab);
-  void SyncSplitView(PdfTab& tab);
-  void ToggleSplit();
-
-  // TTS (MainWindow.Tts.cpp)
-  void ToggleTts();
-  void TtsSpeak(std::wstring const& text);
-  void TtsStop();
-  void TtsSetSpeaking(bool speaking);
-  winrt::Windows::Media::SpeechSynthesis::SpeechSynthesizer tts_synth_{nullptr};
-  winrt::Windows::Media::Playback::MediaPlayer tts_player_{nullptr};
-  bool tts_speaking_ = false;
 
   // printing (MainWindow.Print.cpp)
   void PrintDocument();
@@ -579,8 +550,6 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::unique_ptr<rivet_app::API> api_;
   rivet_app::SettingsView settings_{};
   std::string ui_language_ = "system";  // system | zh | en (host pref, relaunch applies)
-  std::string tts_voice_ = "";          // display name; empty = system default
-  double tts_rate_ = 1.0;
   bool settings_loaded_ = false;
   std::vector<rivet_app::ProviderPreset> presets_;
   std::vector<rivet_app::RecentEntry> recents_;
@@ -627,8 +596,6 @@ struct MainWindow : MainWindowT<MainWindow> {
   winrt::Microsoft::UI::Xaml::Controls::ComboBox settings_reading_theme_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::ComboBox settings_language_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::ScrollViewer settings_pane_{nullptr};
-  winrt::Microsoft::UI::Xaml::Controls::ComboBox settings_tts_voice_{nullptr};
-  winrt::Microsoft::UI::Xaml::Controls::Slider settings_tts_rate_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::CheckBox settings_sidecar_{nullptr};
   std::map<std::wstring, std::pair<std::wstring, std::wstring>> preset_stash_;
   bool settings_busy_ = false;

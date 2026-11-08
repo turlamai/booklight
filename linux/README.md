@@ -8,8 +8,8 @@ dispatched back to the main loop before widgets are touched.
 State: **feature parity with the macOS reading host (P2)**: reading core, AI
 workflow, settings, EPUB, page editing, online updates, About, plus the P2
 surface — password prompt for encrypted PDFs, annotation
-highlights/underline/strike with the notes pane, bookmarks, TTS, printing,
-split view and AcroForm filling with export.
+highlights/underline/strike with the notes pane, bookmarks, printing and
+AcroForm filling with export.
 
 ## What is here
 
@@ -28,10 +28,7 @@ split view and AcroForm filling with export.
 - `src/pdfview.{hpp,cpp}` — reading core: PdfDocument (sizes + text-page
   caches + form surface), PdfTab (continuous scroll, single/double spread,
   zoom + fit-width, selection, find, thumbnails, outline, annotation
-  overlay, split view). All PDFium calls run on the UI thread.
-- `src/tts.{hpp,cpp}` — read the current page aloud via `spd-say -w`
-  (speech-dispatcher); the child's exit doubles as the end-of-speech
-  signal, stop kills the process. Missing binary → readable message.
+  overlay). All PDFium calls run on the UI thread.
 - `src/printing.{hpp,cpp}` — GtkPrintOperation with a draw-page callback
   over the document's cairo render path (scale-down-to-fit, printer DPI).
 - `src/forms.{hpp,cpp}` — AcroForm pane: enumerate text/check/choice
@@ -48,7 +45,7 @@ split view and AcroForm filling with export.
   actions. Builds without WebKitGTK (`-DPDFGIST_ENABLE_EPUB=OFF`) with a
   readable fallback.
 - `src/main.cpp` — window assembly: header bar (open / page-edit menu /
-  bookmark / TTS / split / print / TOC / primary menu), notebook tabs (the
+  bookmark / print / TOC / primary menu), notebook tabs (the
   EPUB tab stays last), left sidebar (thumbnails + outline + notes +
   forms), find bar, status bar, keyboard navigation, drag & drop,
   page-level editing dialogs (delete / rotate / insert blank / extract /

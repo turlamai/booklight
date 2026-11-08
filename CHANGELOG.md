@@ -5,6 +5,12 @@ All notable changes to Booklight are documented here. Format follows
 
 ## [Unreleased]
 
+### Removed
+
+- Read-aloud and split view are gone from all three hosts. Both carried
+  separate macOS, Windows and Linux implementations and preferences while
+  sitting outside the core open/read/annotate/export loop.
+
 ### Security
 
 - macOS Keychain writes now feed the password and its confirmation to the

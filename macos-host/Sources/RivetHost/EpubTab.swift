@@ -18,7 +18,7 @@ final class EpubTab: ObservableObject, Identifiable {
     @Published var fontScale: Double = 1.0
     @Published var toc: [RivetTypes.EpubTocItem] = []
     @Published var loaded = false
-    /// all chapter texts prefetched (AI / TTS / whole-book search can read)
+    /// all chapter texts prefetched (AI / whole-book search can read)
     @Published var textReady = false
 
     var recentTask: Task<Void, Never>?

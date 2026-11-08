@@ -17,9 +17,9 @@ Booklight 以 Rivet（github.com/turlamai/rivet）构建：一份 Racket 领域�
 
 | 平台宿主 | 技术栈 | 目录 | 状态 |
 |---|---|---|---|
-| macOS | SwiftUI 宿主 + 生成客户端 | `macos-host/` | 可跑（阅读/AI/批注/表单/页编辑/打印/TTS/分屏全量） |
-| Windows | WinUI 3（C++/WinRT）宿主 + PDFium + 生成客户端 | `windows/` | 可跑（阅读/AI/批注/表单/页编辑/打印/TTS/分屏全量） |
-| Linux | GTK4 宿主 + PDFium + 生成客户端 | `linux/` | 可跑（阅读/AI/批注/表单/页编辑/打印/TTS/分屏全量） |
+| macOS | SwiftUI 宿主 + 生成客户端 | `macos-host/` | 可跑（阅读/AI/批注/表单/页编辑/打印全量） |
+| Windows | WinUI 3（C++/WinRT）宿主 + PDFium + 生成客户端 | `windows/` | 可跑（阅读/AI/批注/表单/页编辑/打印全量） |
+| Linux | GTK4 宿主 + PDFium + 生成客户端 | `linux/` | 可跑（阅读/AI/批注/表单/页编辑/打印全量） |
 | agent CLI | — | — | 不适用 |
 
 ## 快速命令
