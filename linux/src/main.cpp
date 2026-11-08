@@ -4246,9 +4246,20 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_widget_set_valign(welcome, GTK_ALIGN_CENTER);
   gtk_widget_set_margin_start(welcome, 48);
   gtk_widget_set_margin_end(welcome, 48);
-  auto* welcome_columns = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 56);
+  // A two-column welcome on wide windows, one column when the window is too
+  // narrow for both. GtkFlowBox owns the wrapping; the minimum widths keep
+  // the reading column readable instead of squeezing both halves.
+  auto* welcome_columns = gtk_flow_box_new();
+  gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(welcome_columns),
+                                  GTK_SELECTION_NONE);
+  gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(welcome_columns), 2);
+  gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(welcome_columns), 1);
+  gtk_flow_box_set_homogeneous(GTK_FLOW_BOX(welcome_columns), TRUE);
+  gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(welcome_columns), 56);
+  gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(welcome_columns), 36);
   gtk_widget_set_halign(welcome_columns, GTK_ALIGN_CENTER);
   gtk_widget_set_valign(welcome_columns, GTK_ALIGN_CENTER);
+  gtk_widget_set_hexpand(welcome_columns, TRUE);
 
   auto* welcome_left = gtk_box_new(GTK_ORIENTATION_VERTICAL, 18);
   gtk_widget_set_size_request(welcome_left, 340, -1);
@@ -4301,7 +4312,7 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_box_append(GTK_BOX(welcome_left), welcome_privacy);
 
   auto* welcome_right = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-  gtk_widget_set_size_request(welcome_right, 420, -1);
+  gtk_widget_set_size_request(welcome_right, 380, -1);
   gtk_widget_set_valign(welcome_right, GTK_ALIGN_START);
   auto* recent_title = gtk_label_new(Tr("ui.viewer.recents").c_str());
   gtk_widget_add_css_class(recent_title, "heading");
@@ -4319,8 +4330,8 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_label_set_wrap(GTK_LABEL(welcome_empty), TRUE);
   gtk_box_append(GTK_BOX(welcome_right), welcome_empty);
 
-  gtk_box_append(GTK_BOX(welcome_columns), welcome_left);
-  gtk_box_append(GTK_BOX(welcome_columns), welcome_right);
+  gtk_flow_box_append(GTK_FLOW_BOX(welcome_columns), welcome_left);
+  gtk_flow_box_append(GTK_FLOW_BOX(welcome_columns), welcome_right);
   gtk_box_append(GTK_BOX(welcome), welcome_columns);
   gtk_stack_add_named(GTK_STACK(main_stack), welcome, "shelf");
 
