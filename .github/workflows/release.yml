@@ -182,7 +182,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { arch: x64, runner: ubuntu-latest, racket-arch: x64 }
+          # Ubuntu 26.04's rpm 4.19 changed the buildroot location; the
+          # pinned Rivet v0.12.0 stages the RPM into the old BUILDROOT and
+          # rpmbuild then reports an empty /opt/booklight. Keep the x64
+          # release leg on 24.04 (arm64 already is) until the pin moves.
+          - { arch: x64, runner: ubuntu-24.04, racket-arch: x64 }
           - { arch: arm64, runner: ubuntu-24.04-arm, racket-arch: arm64 }
     steps:
       - uses: actions/checkout@v4
