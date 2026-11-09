@@ -1,480 +1,471 @@
-<!doctype html>
-<html lang="zh-CN">
+<!DOCTYPE html>
+<html lang="zh-CN" data-kit-id="booklight" data-kit-lang-key="booklight-lang">
+
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Booklight — 专注文件的 PDF / EPUB 阅读与轻编辑</title>
-<meta name="description" content="本地优先的 AI PDF 阅读器：划词翻译、段落对照、一键总结、与文档对话。兼容任意 OpenAI 协议端点（GLM Coding、Kimi Code、DeepSeek、Qwen、Ollama…），API Key 只存本机。开源，AGPL-3.0。" />
-<link rel="icon" type="image/png" href="assets/favicon.png" />
-<style>
-/* Self-hosted Inter (variable, latin subset) — no third-party font CDN */
-@font-face {
-  font-family: "Inter";
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url("assets/fonts/inter-latin-var.woff2") format("woff2");
-}
-  :root {
-    --bg: #F9F7F4;
-    --surface: #FFFFFF;
-    --text: #1C1917;
-    --text-2: #57534E;
-    --text-3: #A8A29E;
-    --accent: #D97757;
-    --accent-hover: #C4623E;
-    --accent-bg: #FFF7ED;
-    --border: #E7E5E4;
-    --shadow-sm: 0 1px 2px rgba(28, 25, 23, 0.05);
-    --shadow: 0 1px 3px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04);
-    --shadow-lg: 0 10px 15px -3px rgba(28, 25, 23, 0.08), 0 4px 6px -4px rgba(28, 25, 23, 0.05);
-    --shadow-xl: 0 20px 25px -5px rgba(28, 25, 23, 0.1), 0 8px 10px -6px rgba(28, 25, 23, 0.06);
-    --radius: 12px;
-    --radius-sm: 8px;
-    --radius-lg: 16px;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #171412; --surface: #231F1D; --text: #E7E5E4; --text-2: #A8A29E; --text-3: #78716C;
-      --accent: #E8926A; --accent-hover: #F0A07C; --accent-bg: #2D2218; --border: #3D3835;
-      --shadow-sm: 0 1px 2px rgba(0,0,0,.2);
-      --shadow: 0 1px 3px rgba(0,0,0,.25);
-      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,.4);
-      --shadow-xl: 0 20px 25px -5px rgba(0,0,0,.5);
-    }
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
-    font-size: 15px; line-height: 1.7; color: var(--text); background: var(--bg);
-    -webkit-font-smoothing: antialiased;
-  }
-  h1, h2, h3 { font-family: "Inter", -apple-system, "Segoe UI", sans-serif; font-weight: 700; letter-spacing: -0.02em; line-height: 1.3; }
-  a { color: inherit; text-decoration: none; }
-  .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booklight — 专注文件的 PDF / EPUB 阅读与轻编辑</title>
+    <meta name="description" content="本地优先的 AI PDF 阅读器：划词翻译、段落对照、一键总结、与文档对话。兼容任意 OpenAI 协议端点（GLM Coding、Kimi Code、DeepSeek、Qwen、Ollama…），API Key 只存本机。开源，AGPL-3.0。">
+    <link rel="canonical" href="https://booklight.jrtx.site/">
+    <meta name="theme-color" content="#D97757">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Booklight">
+    <meta property="og:title" content="Booklight — 专注文件的 PDF / EPUB 阅读与轻编辑">
+    <meta property="og:description" content="本地优先的 AI PDF 阅读器：划词翻译、段落对照、总结与文档对话。兼容任意 OpenAI 协议端点，API Key 只存本机。开源，AGPL-3.0。">
+    <meta property="og:url" content="https://booklight.jrtx.site/">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Booklight — 专注文件的 PDF / EPUB 阅读与轻编辑">
+    <meta name="twitter:description" content="本地优先的 AI PDF 阅读器：划词翻译、段落对照、总结与文档对话。API Key 只存本机。开源，AGPL-3.0。">
 
-  /* nav */
-  .nav { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); }
-  .nav-inner { display: flex; align-items: center; height: 60px; gap: 28px; }
-  .brand { display: flex; align-items: center; gap: 10px; font-family: "Inter", sans-serif; font-weight: 700; font-size: 17px; }
-  .brand img { width: 30px; height: 30px; border-radius: 8px; }
-  .nav-links { display: flex; gap: 22px; margin-left: auto; align-items: center; font-size: 14px; color: var(--text-2); }
-  .nav-links a:hover { color: var(--accent); }
-  .nav-cta { background: var(--accent); color: #fff !important; padding: 7px 16px; border-radius: 999px; font-weight: 600; }
-  .nav-cta:hover { background: var(--accent-hover); }
-  .lang-btn { border: 1px solid var(--border); background: var(--surface); color: var(--text-2); border-radius: 999px; padding: 5px 12px; font-size: 12.5px; cursor: pointer; font-family: inherit; }
+    <!-- Theme & language pre-paint: no flash before the stylesheet paints.
+         Language keeps the site's historical storage key (booklight-lang). -->
+    <script>
+        (function () {
+            var t;
+            try { t = localStorage.getItem('booklight-theme'); } catch (e) { }
+            if (t !== 'dark' && t !== 'light') {
+                t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.dataset.theme = t;
+            var l;
+            try { l = localStorage.getItem('booklight-lang'); } catch (e) { }
+            if (l !== 'zh' && l !== 'en') {
+                l = (navigator.language || 'zh').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en';
+            }
+            document.documentElement.lang = l === 'zh' ? 'zh-CN' : 'en';
+        })();
+    </script>
 
-  /* hero */
-  .hero { padding: 84px 0 64px; text-align: center; }
-  .hero-badge { display: inline-flex; align-items: center; gap: 8px; background: var(--accent-bg); color: var(--accent); font-size: 13px; font-weight: 600; border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); border-radius: 999px; padding: 5px 16px; margin-bottom: 22px; }
-  .hero h1 { font-size: 46px; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 18px; }
-  .hero h1 em { font-style: normal; color: var(--accent); }
-  .hero .sub { font-size: 17px; color: var(--text-2); max-width: 640px; margin: 0 auto 32px; }
-  .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px; }
-  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 26px; border-radius: 11px; font-size: 14.5px; font-weight: 600; transition: all .15s; }
-  .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent); }
-  .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
-  .btn-ghost { border: 1px solid var(--border); color: var(--text); background: var(--surface); }
-  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
-  .hero-note { font-size: 13px; color: var(--text-3); }
-
-  /* hero shot */
-  .shot { margin: 48px auto 0; max-width: 1080px; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-xl); background: var(--surface); }
-  .shot img { display: block; width: 100%; }
-  .shot-dark { display: none; }
-  @media (prefers-color-scheme: dark) { .shot-light { display: none; } .shot-dark { display: block; } }
-
-  /* sections */
-  section { padding: 76px 0; }
-  .sec-head { text-align: center; max-width: 620px; margin: 0 auto 44px; }
-  .sec-head h2 { font-size: 32px; margin-bottom: 12px; }
-  .sec-head p { color: var(--text-2); font-size: 15.5px; }
-
-  /* bento */
-  .bento { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-  .bento-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 28px; transition: all .2s; }
-  .bento-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
-  .bento-card.span-2 { grid-column: span 2; }
-  .card-icon { width: 42px; height: 42px; border-radius: 11px; background: var(--accent-bg); color: var(--accent); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
-  .card-icon svg { width: 21px; height: 21px; }
-  .bento-card h3 { font-size: 16.5px; margin-bottom: 8px; }
-  .bento-card p { font-size: 13.5px; color: var(--text-2); }
-
-  /* providers */
-  .prov-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 40px; display: flex; flex-direction: column; gap: 24px; align-items: center; }
-  .chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
-  .chip { font-family: "Inter", sans-serif; font-size: 13.5px; font-weight: 500; color: var(--text-2); background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 8px 18px; }
-  .chip.hot { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-bg); font-weight: 600; }
-  .prov-note { font-size: 13.5px; color: var(--text-3); text-align: center; }
-
-  /* privacy trio */
-  .trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-  .trio-card { text-align: center; padding: 28px 22px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
-  .trio-card h3 { font-size: 15.5px; margin: 12px 0 6px; }
-  .trio-card p { font-size: 13px; color: var(--text-2); }
-
-  /* download */
-  .dl-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; max-width: 620px; margin: 0 auto; }
-  .dl-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 26px; text-align: center; transition: all .2s; }
-  .dl-card:hover { border-color: var(--accent); box-shadow: var(--shadow-lg); transform: translateY(-2px); }
-  .dl-card h3 { font-size: 16px; margin-bottom: 4px; }
-  .dl-card .fmt { font-size: 12.5px; color: var(--text-3); margin-bottom: 16px; font-family: "Inter", sans-serif; }
-  .dl-card a { display: inline-block; background: var(--accent); color: #fff; font-size: 13.5px; font-weight: 600; padding: 9px 22px; border-radius: 9px; }
-  .dl-card a:hover { background: var(--accent-hover); }
-
-  footer { border-top: 1px solid var(--border); padding: 32px 0; margin-top: 40px; }
-  .foot-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--text-3); }
-  .foot-inner a { color: var(--text-2); }
-  .foot-inner a:hover { color: var(--accent); }
-
-  /* scroll animation */
-  .animate-on-scroll { opacity: 0; transform: translateY(16px); transition: opacity .5s ease, transform .5s ease; }
-  .animate-on-scroll.visible { opacity: 1; transform: none; }
-
-  @media (max-width: 900px) {
-    .hero h1 { font-size: 34px; }
-    .bento, .trio, .dl-grid { grid-template-columns: 1fr; }
-    .bento-card.span-2 { grid-column: auto; }
-    .nav-links a:not(.nav-cta) { display: none; }
-  }
-/* Language dropdown (family standard) */
-.lang-dropdown-wrapper { position: relative; }
-.lang-btn { display: flex; align-items: center; gap: 6px; background: none; border: none; cursor: pointer; font-family: inherit; font-size: 14px; color: var(--text-2); padding: 6px 10px; border-radius: 8px; transition: color .2s, background .2s; }
-.lang-btn:hover { color: var(--accent); background: var(--accent-soft); }
-.lang-menu { position: absolute; top: calc(100% + 6px); right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12); padding: 6px; min-width: 132px; margin: 0; list-style: none; opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity .18s, visibility .18s, transform .18s; z-index: 10000; }
-.lang-dropdown-wrapper:hover .lang-menu, .lang-dropdown-wrapper:focus-within .lang-menu { opacity: 1; visibility: visible; transform: translateY(0); }
-.lang-menu li { padding: 7px 12px; font-size: 14px; color: inherit; border-radius: 6px; cursor: pointer; transition: background .15s, color .15s; }
-.lang-menu li:hover { background: var(--accent-soft); color: var(--accent); }
-
-</style>
-<script>
-var _hmt = _hmt || [];
-(function() {
-  var hm = document.createElement("script");
-  hm.src = "https://hm.baidu.com/hm.js?8e2445912635226bcba0c400bfb6079d";
-  var s = document.getElementsByTagName("script")[0];
-  s.parentNode.insertBefore(hm, s);
-})();
-</script>
-<style>
-  #product-support { display:flex; flex-wrap:wrap; justify-content:center; gap:12px 24px; padding:24px; font:inherit; border-top:1px solid var(--border, #a8a29e); }
-  #product-support a:focus-visible { outline:2px solid currentColor; outline-offset:4px; }
-  html:lang(en) #product-support .support-zh, html:lang(zh) #product-support .support-en { display:none; }
-</style>
-<style id="product-start-style">
-.product-availability{font-size:.95rem;line-height:1.65;max-width:72ch;margin:18px 0;opacity:.85} .hero .product-availability{margin-left:auto;margin-right:auto}
-.product-start{max-width:1120px;margin:64px auto;padding:32px 24px;border-top:1px solid var(--border,#aaa);font:inherit;line-height:1.65}
-.product-start h2{font-size:clamp(1.7rem,3vw,2.4rem);letter-spacing:-.025em;margin:0 0 16px}.product-start h3{font-size:1.05rem;margin:0 0 10px}.product-start p{margin:0 0 16px;max-width:74ch}.product-start-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;margin:28px 0}.product-start a{text-decoration:underline;text-underline-offset:4px;overflow-wrap:anywhere}.product-start a:focus-visible{outline:2px solid currentColor;outline-offset:5px}.product-start .start-links{display:flex;gap:16px 24px;flex-wrap:wrap}.product-start .start-status{font-weight:600}.product-start .start-limits{font-size:.95em}
-html:lang(en) .reader-zh,html:lang(zh) .reader-en{display:none!important}@media(max-width:700px){.product-start{margin:40px auto;padding:24px 20px}.product-start-grid{grid-template-columns:1fr;gap:18px}}
-</style>
-<style>.lang-menu li.lang-choice{padding:0}.lang-menu .lang-choice button{display:block;width:100%;padding:8px 12px;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.lang-menu .lang-choice button:focus-visible{outline:2px solid currentColor;outline-offset:-2px;border-radius:4px}</style>
-<style id="visual-showcase-css">
-/* Visual Showcase: process illustration, intentionally not an app screenshot. */
-.vs-showcase{padding:clamp(48px,7vw,88px) 24px;background:var(--bg,var(--surface,#faf7f2));color:var(--text,var(--ink,#24211d))}
-.vs-showcase *{box-sizing:border-box}
-.vs-showcase .vs-wrap{max-width:1080px;margin:0 auto}
-.vs-showcase .vs-intro{text-align:center;max-width:680px;margin:0 auto 28px}
-.vs-showcase .vs-label{text-transform:uppercase;letter-spacing:.14em;font-size:.7rem;font-weight:700;color:var(--accent,#b85d3f)}
-.vs-showcase h2{font:inherit;font-size:clamp(1.65rem,3.3vw,2.5rem);font-weight:700;line-height:1.2;letter-spacing:-.04em;margin:12px 0}
-.vs-showcase .vs-lead,.vs-showcase .vs-caption{color:var(--text-2,var(--muted,#6b6660));line-height:1.7}
-.vs-showcase .vs-frame{padding:clamp(18px,3vw,34px);border:1px solid var(--border,var(--line,#e8e2d9));background:var(--bg-card,var(--surface,#fff));border-radius:24px;box-shadow:0 20px 60px rgba(36,29,18,.07);overflow:hidden}
-.vs-showcase .vs-stage{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
-.vs-showcase .vs-step{position:relative;min-height:170px;padding:22px 18px;border-radius:16px;background:var(--bg,var(--surface,#faf7f2));border:1px solid var(--border,var(--line,#e8e2d9))}
-.vs-showcase .vs-step:not(:last-child):after{content:"→";position:absolute;z-index:1;right:-15px;top:50%;transform:translateY(-50%);width:28px;height:28px;display:grid;place-items:center;border-radius:50%;background:var(--bg-card,var(--surface,#fff));color:var(--accent,#b85d3f);border:1px solid var(--border,var(--line,#e8e2d9))}
-.vs-showcase .vs-glyph{font-size:1.75rem;display:block;margin-bottom:24px;color:var(--accent,#b85d3f)}
-.vs-showcase .vs-step b{display:block;font-size:1.03rem;margin-bottom:7px}
-.vs-showcase .vs-step small{display:block;color:var(--text-2,var(--muted,#6b6660));font-size:.84rem;line-height:1.5}
-.vs-showcase .vs-caption{font-size:.79rem;text-align:center;margin:16px 0 0}
-.vs-showcase .vs-art{margin-bottom:22px;background:var(--bg,var(--surface,#f6f3ed));border:1px solid var(--border,var(--line,#e8e2d9));border-radius:18px;padding:22px;overflow:hidden;min-height:185px}
-.vs-showcase .vs-task-art{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
-.vs-showcase .vs-mini-board{background:var(--bg-card,var(--surface,#fff));border-radius:14px;border:1px solid var(--border,var(--line,#e8e2d9));padding:15px;box-shadow:0 6px 24px rgba(10,10,10,.04)}
-.vs-showcase .vs-mini-title{font-size:.76rem;color:var(--text-2,var(--muted,#6b6660));font-weight:700;margin-bottom:12px}
-.vs-showcase .vs-mini-task{display:flex;align-items:center;gap:10px;padding:9px 3px;border-top:1px solid var(--border,var(--line,#e8e2d9));font-size:.9rem}
-.vs-showcase .vs-ring{flex:none;height:17px;width:17px;border:2px solid var(--accent,#b85d3f);border-radius:50%}
-.vs-showcase .vs-ring.done{background:var(--accent,#b85d3f);position:relative}.vs-showcase .vs-ring.done:after{content:"✓";color:#fff;font-size:12px;position:absolute;left:2px;top:-3px}
-.vs-showcase .vs-mini-tag{margin-left:auto;color:var(--accent,#b85d3f);background:var(--accent-soft,#f7e5dd);font-size:.7rem;padding:3px 6px;border-radius:6px}
-.vs-showcase .vs-reader-art{display:grid;grid-template-columns:1.5fr 1fr;gap:18px}
-.vs-showcase .vs-paper,.vs-showcase .vs-annotation{border-radius:14px;background:var(--bg-card,var(--surface,#fff));border:1px solid var(--border,var(--line,#e8e2d9));padding:18px}
-.vs-showcase .vs-paper-title{font-size:.75rem;letter-spacing:.1em;color:var(--text-2,var(--muted,#6b6660));margin-bottom:22px}
-.vs-showcase .vs-line{height:9px;background:var(--border,var(--line,#e8e2d9));border-radius:8px;margin:12px 0;max-width:100%}
-.vs-showcase .vs-line.short{width:57%}.vs-showcase .vs-line.mid{width:82%}
-.vs-showcase .vs-highlight{height:15px;border-radius:3px;width:72%;background:color-mix(in srgb,var(--accent,#d97757) 32%,transparent)}
-.vs-showcase .vs-note-label{font-size:.72rem;letter-spacing:.09em;color:var(--accent,#b85d3f);font-weight:800}
-.vs-showcase .vs-note-body{font-size:.93rem;line-height:1.7;margin:18px 0}
-.vs-showcase .vs-note-foot{font-size:.75rem;color:var(--text-2,var(--muted,#6b6660))}
-html:lang(en) .vs-zh,html:lang(zh) .vs-en{display:none!important}
-@media(max-width:700px){.vs-showcase .vs-stage{grid-template-columns:1fr}.vs-showcase .vs-step{min-height:120px}.vs-showcase .vs-step:not(:last-child):after{right:calc(50% - 14px);top:auto;bottom:-15px;transform:rotate(90deg)}.vs-showcase .vs-glyph{margin-bottom:12px}.vs-showcase .vs-reader-art{grid-template-columns:1fr 1fr}.vs-showcase .vs-art{padding:14px}}
-@media(prefers-reduced-motion:reduce){.vs-showcase *, .vs-showcase *:before,.vs-showcase *:after{animation:none!important;transition:none!important}}
-</style>
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+    <link rel="stylesheet" href="family.css">
+    <link rel="stylesheet" href="site.css">
+    <link rel="preload" href="fonts/newsreader-latin-var.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/inter-latin-var.woff2" as="font" type="font/woff2" crossorigin>
+    <script src="family.js" defer></script>
 </head>
+
 <body>
-<nav class="nav">
-  <div class="container nav-inner">
-    <a class="brand" href="#"><img src="assets/favicon.png" alt="Booklight" />Booklight</a>
-    <div class="nav-links">
-      <a href="#features" data-en="Features" data-zh="功能">功能</a>
-      <a href="#models" data-en="Models" data-zh="模型">模型</a>
-      <a href="guide.html" data-en="Guide" data-zh="手册">手册</a>
-      <a href="https://github.com/turlamai/booklight" target="_blank" rel="noopener">GitHub</a>
-      <div class="lang-dropdown-wrapper">
-          <button class="lang-btn" type="button" onclick="void 0" aria-label="Switch language">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-              <span id="current-lang-label">English</span>
-          </button>
-          <ul class="lang-menu">
-              <li class="lang-choice"><button type="button" onclick="setLanguage('en')">English</button></li>
-              <li class="lang-choice"><button type="button" onclick="setLanguage('zh')">简体中文</button></li>
-          </ul>
-      </div>
-      <a class="nav-cta" href="#download" data-en="Download" data-zh="下载">下载</a>
-    </div>
-  </div>
-</nav>
+    <header class="kit-nav" id="top">
+        <div class="kit-container kit-nav-inner">
+            <a class="kit-brand" href="/">
+                <img class="kit-brand-mark" src="assets/favicon.png" alt="Booklight">
+                <span>Booklight</span>
+            </a>
+            <nav class="kit-nav-links" aria-label="Primary navigation">
+                <a href="#features" data-i18n="nav.features">功能</a>
+                <a href="#models" data-i18n="nav.models">模型</a>
+                <a href="guide.html" data-i18n="nav.guide">手册</a>
+                <a href="https://github.com/turlamai/booklight" target="_blank" rel="noopener" data-i18n="nav.github">GitHub</a>
+            </nav>
+            <div class="kit-nav-actions">
+                <div class="kit-lang">
+                    <button class="kit-lang-btn" type="button" aria-haspopup="true" aria-expanded="false">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M1.8 8h12.4M8 1.8c-4.6 4-4.6 8.4 0 12.4 4.6-4 4.6-8.4 0-12.4z"/></svg>
+                        <span class="kit-lang-current">简体中文</span>
+                    </button>
+                    <ul class="kit-lang-menu">
+                        <li><button type="button" data-kit-lang="zh">简体中文</button></li>
+                        <li><button type="button" data-kit-lang="en">English</button></li>
+                    </ul>
+                </div>
+                <button class="kit-icon-btn kit-theme-toggle" type="button" aria-pressed="false" aria-label="Theme">
+                    <svg class="kit-icon-sun" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="10" cy="10" r="4"/><path d="M10 1.5v2M10 16.5v2M1.5 10h2M16.5 10h2M4 4l1.4 1.4M14.6 14.6L16 16M16 4l-1.4 1.4M5.4 14.6L4 16"/></svg>
+                    <svg class="kit-icon-moon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M16.5 12.2A7 7 0 0 1 7.8 3.5a7 7 0 1 0 8.7 8.7z"/></svg>
+                </button>
+                <a class="kit-btn kit-btn--primary nav-cta" href="#download" data-i18n="nav.download">下载</a>
+            </div>
+        </div>
+    </header>
 
-<header class="hero container">
-  <div class="hero-badge" data-en="Open source · AGPL-3.0 · macOS 14+ · Windows 10+ · Linux" data-zh="开源 · AGPL-3.0 · macOS 14+ · Windows 10+ · Linux">开源 · AGPL-3.0 · macOS 14+ · Windows 10+ · Linux</div>
-  <h1 data-en='Open a file. <em>Stay with the words.</em>' data-zh='打开文件，<em>专注阅读。</em>'>打开文件，<em>专注阅读。</em></h1>
-<p class="reader-en product-availability" lang="en">Development preview. Existing reading, annotation, light editing and single-document BYOK features remain free. No paid Booklight edition is planned for this refactor.</p><p class="reader-zh product-availability" lang="zh">开发预览。已有阅读、批注、轻量编辑和单文档 BYOK 功能保持免费；本次重构不包含付费版。</p>
-  <p class="sub" data-en="Your PDFs and EPUBs stay where they belong. Open a file, read beautifully, annotate and edit with care. No bookshelf database, copied books, reading timer, goals or streaks. Optional AI uses your chosen provider."
-  data-zh="PDF / EPUB 文件留在原来的位置。打开即阅读，可靠批注，需要时轻编辑；没有书库数据库、文件副本、阅读时长、目标或打卡。AI 可选，并由你选择服务商。">PDF / EPUB 文件留在原来的位置。打开即阅读，可靠批注，需要时轻编辑；没有书库数据库、文件副本、阅读时长、目标或打卡。AI 可选，并由你选择服务商。</p>
-  <div class="hero-actions">
-    <a class="btn btn-primary" href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="macos-arm64.dmg" data-en="Download for macOS" data-zh="下载 macOS 版">下载 macOS 版</a>
-    <a class="btn btn-ghost" href="https://github.com/turlamai/booklight" target="_blank" rel="noopener" data-en="View on GitHub" data-zh="GitHub 源码">GitHub 源码</a>
-  </div>
-  <p class="hero-note" data-en="Use a compatible model endpoint or local model you configure; availability and usage fees depend on your provider." data-zh="使用自行配置的兼容模型接口或本地模型；可用性与用量费用以服务商为准。">使用自行配置的兼容模型接口或本地模型。</p>
-  <div class="shot animate-on-scroll" style="padding:24px;">
-    <p data-en="Open a small PDF or EPUB, add an annotation, close the document and reopen it. Confirm the annotation remains before relying on the workflow with important files." data-zh="打开一份小型 PDF 或 EPUB，添加批注，再关闭并重新打开。确认批注仍在后，再用重要文件执行同样流程。">打开一份小型 PDF 或 EPUB，添加批注并重新打开确认保存结果。</p>
-  </div>
-</header>
-<!-- Visual Showcase: process illustration, not an application screenshot. -->
-<section class="vs-showcase" id="visual-showcase" aria-label="Product workflow illustration">
-  <div class="vs-wrap"><div class="vs-intro"><span class="vs-label">PRODUCT IN CONTEXT · 产品如何工作</span>
-    <h2><span class="vs-zh" lang="zh-CN">打开文件，阅读就在这里发生。</span><span class="vs-en" lang="en">Open a file. Stay in the reading flow.</span></h2><p class="vs-lead"><span class="vs-zh" lang="zh-CN">围绕原位置的 PDF / EPUB 文件组织阅读与批注，不以虚构的新书库界面来宣传尚在变化的产品。</span><span class="vs-en" lang="en">Reading and annotation around PDF / EPUB files in their original location. No invented library UI for a product still in flux.</span></p>
-  </div><div class="vs-frame"><div class="vs-art vs-reader-art" aria-label="阅读与批注概念示意 / Reading and annotation concept"><article class="vs-paper"><div class="vs-paper-title">PDF / EPUB</div><div class="vs-line"></div><div class="vs-line mid"></div><div class="vs-highlight"></div><div class="vs-line"></div><div class="vs-line short"></div></article><aside class="vs-annotation"><div class="vs-note-label">HIGHLIGHT → NOTE</div><div class="vs-note-body"><span class="vs-zh">选中有用的一段，留下自己的理解。</span><span class="vs-en">Highlight a passage and capture your thoughts.</span></div><div class="vs-note-foot">LOCAL FILE · YOUR NOTES</div></aside></div><div class="vs-stage"><div class="vs-step"><span class="vs-glyph" aria-hidden="true">▤</span><b><span class="vs-zh" lang="zh-CN">原位打开</span><span class="vs-en" lang="en">Open in place</span></b><small><span class="vs-zh" lang="zh-CN">文件仍在你的目录中。</span><span class="vs-en" lang="en">Your document stays where you keep it.</span></small></div><div class="vs-step"><span class="vs-glyph" aria-hidden="true">✎</span><b><span class="vs-zh" lang="zh-CN">阅读和批注</span><span class="vs-en" lang="en">Read &amp; annotate</span></b><small><span class="vs-zh" lang="zh-CN">突出重要内容，记下想法。</span><span class="vs-en" lang="en">Highlight what matters and add notes.</span></small></div><div class="vs-step"><span class="vs-glyph" aria-hidden="true">⇩</span><b><span class="vs-zh" lang="zh-CN">带走笔记</span><span class="vs-en" lang="en">Take notes out</span></b><small><span class="vs-zh" lang="zh-CN">按实际功能导出或整理阅读成果。</span><span class="vs-en" lang="en">Export or organize notes using supported tools.</span></small></div></div>
-  <p class="vs-caption"><span class="vs-zh" lang="zh-CN">功能流程示意，非软件界面截图。实际界面、可用性与交互以当前安装版本和用户手册为准。</span><span class="vs-en" lang="en">Conceptual workflow, not an app screenshot. Refer to the installed version and user guide for actual UI and availability.</span></p>
-  </div></div>
-</section>
-<!-- End Visual Showcase -->
+    <main>
+        <!-- Hero -->
+        <section class="kit-hero">
+            <div class="kit-container">
+                <span class="kit-eyebrow" data-i18n="hero.eyebrow">开源 · AGPL-3.0 · macOS 14+ · Windows 10+ · Linux</span>
+                <h1><span data-i18n="hero.h1a">打开文件，</span> <span class="kit-accent-word" data-i18n="hero.h1b">专注阅读。</span></h1>
+                <p class="kit-hero-meta"><span class="kit-badge" data-i18n="hero.badge">开发预览。已有阅读、批注、轻量编辑和单文档 BYOK 功能保持免费；本次重构不包含付费版。</span></p>
+                <p class="kit-lead" data-i18n="hero.lead">PDF / EPUB 文件留在原来的位置。打开即阅读，可靠批注，需要时轻编辑；没有书库数据库、文件副本、阅读时长、目标或打卡。AI 可选，并由你选择服务商。</p>
+                <div class="kit-btn-row">
+                    <div class="kit-dl">
+                        <a class="kit-btn kit-btn--primary" data-kit-dl-primary href="https://github.com/turlamai/booklight/releases/latest">
+                            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 2.5v10M6 9l4 4 4-4M3.5 16.5h13"/></svg>
+                            <span class="kit-dl-label" data-i18n="dl.generic">下载 Booklight</span>
+                        </a>
+                        <button class="kit-dl-caret" type="button" aria-haspopup="true" aria-expanded="false" aria-label="All platforms">
+                            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 5.5L7 9.5l4-4"/></svg>
+                        </button>
+                        <ul class="kit-dl-menu">
+                            <li><a href="https://github.com/turlamai/booklight/releases/latest" data-kit-dl="mac"><span class="kit-dl-os" data-i18n="dl.mac">macOS 版</span><span class="kit-dl-kind">.dmg</span></a></li>
+                            <li><a href="https://github.com/turlamai/booklight/releases/latest" data-kit-dl="win"><span class="kit-dl-os" data-i18n="dl.win">Windows 版</span><span class="kit-dl-kind">.msi</span></a></li>
+                            <li><a href="https://github.com/turlamai/booklight/releases/latest" data-kit-dl="linux"><span class="kit-dl-os" data-i18n="dl.linux">Linux 版</span><span class="kit-dl-kind">.AppImage</span></a></li>
+                            <li class="kit-dl-note kit-hidden" data-kit-dl-note data-i18n="dl.menu-note">移动端与未知平台请前往 Releases 页面选取对应安装包。</li>
+                        </ul>
+                    </div>
+                    <a class="kit-btn kit-btn--secondary" href="https://github.com/turlamai/booklight" target="_blank" rel="noopener" data-i18n="hero.source">GitHub 源码</a>
+                </div>
+                <p class="kit-hero-meta" data-i18n="hero.note">使用自行配置的兼容模型接口或本地模型；可用性与用量费用以服务商为准。</p>
 
+                <div class="shot">
+                    <p data-i18n="shot.note">打开一份小型 PDF 或 EPUB，添加批注，再关闭并重新打开。确认批注仍在后，再用重要文件执行同样流程。</p>
+                </div>
+            </div>
+        </section>
 
-<section id="features">
-  <div class="container">
-    <div class="sec-head animate-on-scroll">
-      <h2 data-en="Reading first, AI everywhere" data-zh="以阅读为本，AI 贯穿其中">以阅读为本，AI 贯穿其中</h2>
-      <p data-en="No bloat. A fast, focused reader with the AI workflow literature actually needs." data-zh="不做臃肿的全能编辑器——只把「读文献 + AI」这一件事做透。">不做臃肿的全能编辑器——只把「读文献 + AI」这一件事做透。</p>
-    </div>
-    <div class="bento">
-      <div class="bento-card span-2 animate-on-scroll">
-        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h12M9 3v2m3.5 0C11 9 8 12 5 13.5M6 8c1.5 3 4.5 5.5 8 6.5"/><path d="M14 21l4-9 4 9m-6.7-3h5.4"/></svg></div>
-        <h3 data-en="Paragraph-aligned bilingual reading" data-zh="段落对照精读">段落对照精读</h3>
-        <p data-en="One click turns the current page into original/translation pairs, streamed in parallel paragraph by paragraph — read foreign papers without switching windows." data-zh="一键把当前页变成原文/译文成对对照，逐段并行流式——读外文文献不用再来回切窗口。">一键把当前页变成原文/译文成对对照，逐段并行流式——读外文文献不用再来回切窗口。</p>
-      </div>
-      <div class="bento-card animate-on-scroll">
-        <div class="card-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.8l2 5.2 5.2 2-5.2 2-2 5.2-2-5.2L4.8 10l5.2-2 2-5.2z"/></svg></div>
-        <h3 data-en="Selection translation" data-zh="划词翻译">划词翻译</h3>
-        <p data-en="Select any text, one click, streaming result — with a reasoning-model-aware display that keeps chain-of-thought out of your face." data-zh="选中即译，流式输出；对推理模型做了专门处理，思维过程自动置灰不碍眼。">选中即译，流式输出；对推理模型做了专门处理，思维过程自动置灰不碍眼。</p>
-      </div>
-      <div class="bento-card animate-on-scroll">
-        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></div>
-        <h3 data-en="Summaries & document chat" data-zh="总结与文档对话">总结与文档对话</h3>
-        <p data-en="Structured summaries for the current page, a selection or the whole document — and a chat grounded in what you are reading." data-zh="当前页、选区或整份文档的一键结构化总结；对话基于你正在读的内容作答。">当前页、选区或整份文档的一键结构化总结；对话基于你正在读的内容作答。</p>
-      </div>
-      <div class="bento-card animate-on-scroll">
-        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg></div>
-        <h3 data-en="Full-text search" data-zh="全文搜索">全文搜索</h3>
-        <p data-en="Ctrl+F searches the whole document with highlight overlays and match navigation, starting from where you are." data-zh="Ctrl+F 从当前页向外渐进扫描全文档，高亮全部命中，Enter/Shift+Enter 上下跳转。">Ctrl+F 从当前页向外渐进扫描全文档，高亮全部命中，Enter/Shift+Enter 上下跳转。</p>
-      </div>
-      <div class="bento-card animate-on-scroll">
-        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg></div>
-        <h3 data-en="A reader that feels right" data-zh="顺手的阅读器">顺手的阅读器</h3>
-        <p data-en="Tabs, continue-reading, two-page view, thumbnails, outline, full-text search, dark mode, printing — the essentials, done properly." data-zh="多标签、续读、双页视图、缩略图、目录、全文搜索、深色模式、打印——基本功，认真做。">多标签、续读、双页视图、缩略图、目录、全文搜索、深色模式、打印——基本功，认真做。</p>
-      </div>
-      <div class="bento-card animate-on-scroll">
-        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v5h5"/><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-5z"/></svg></div>
-        <h3 data-en="EPUB, too" data-zh="EPUB 也一样">EPUB 也一样</h3>
-        <p data-en="Reflowable chapters with font-size control, table of contents, whole-book search and dark mode — same AI workflow on e-books." data-zh="章节流式排版、字号调节、书内搜索与深色模式——电子书享受同一套 AI 工作流。">章节流式排版、字号调节、书内搜索与深色模式——电子书享受同一套 AI 工作流。</p>
-      </div>
-      <div class="bento-card animate-on-scroll">
-        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
-        <h3 data-en="Highlights into your notes" data-zh="高亮进笔记">高亮进笔记</h3>
-        <p data-en="Three-color highlights with notes, an annotation panel, and Obsidian-friendly Markdown export — your reading notes stay yours." data-zh="三色高亮 + 笔记、批注面板、Obsidian 友好的 Markdown 导出——你的阅读笔记永远属于你。">三色高亮 + 笔记、批注面板、Obsidian 友好的 Markdown 导出——你的阅读笔记永远属于你。</p>
-      </div>
-    </div>
-  </div>
-</section>
+        <!-- Visual Showcase: process illustration, not an application screenshot. -->
+        <section class="kit-section kit-section--alt" id="visual-showcase" aria-label="Product workflow illustration">
+            <div class="kit-container vs-wrap">
+                <div class="vs-intro">
+                    <span class="vs-label">PRODUCT IN CONTEXT · 产品如何工作</span>
+                    <h2 class="kit-h2" data-i18n="vs.title">打开文件，阅读就在这里发生。</h2>
+                    <p class="kit-lead" data-i18n="vs.lead">围绕原位置的 PDF / EPUB 文件组织阅读与批注，不以虚构的新书库界面来宣传尚在变化的产品。</p>
+                </div>
+                <div class="vs-frame">
+                    <div class="vs-art" aria-label="阅读与批注概念示意 / Reading and annotation concept">
+                        <article class="vs-paper">
+                            <div class="vs-paper-title">PDF / EPUB</div>
+                            <div class="vs-line"></div>
+                            <div class="vs-line mid"></div>
+                            <div class="vs-highlight"></div>
+                            <div class="vs-line"></div>
+                            <div class="vs-line short"></div>
+                        </article>
+                        <aside class="vs-annotation">
+                            <div class="vs-note-label">HIGHLIGHT → NOTE</div>
+                            <div class="vs-note-body" data-i18n="vs.note">选中有用的一段，留下自己的理解。</div>
+                            <div class="vs-note-foot">LOCAL FILE · YOUR NOTES</div>
+                        </aside>
+                    </div>
+                    <div class="vs-stage">
+                        <div class="vs-step"><span class="vs-glyph" aria-hidden="true">▤</span><b data-i18n="vs.s1t">原位打开</b><small data-i18n="vs.s1b">文件仍在你的目录中。</small></div>
+                        <div class="vs-step"><span class="vs-glyph" aria-hidden="true">✎</span><b data-i18n="vs.s2t">阅读和批注</b><small data-i18n="vs.s2b">突出重要内容，记下想法。</small></div>
+                        <div class="vs-step"><span class="vs-glyph" aria-hidden="true">⇩</span><b data-i18n="vs.s3t">带走笔记</b><small data-i18n="vs.s3b">按实际功能导出或整理阅读成果。</small></div>
+                    </div>
+                    <p class="vs-caption" data-i18n="vs.caption">功能流程示意，非软件界面截图。实际界面、可用性与交互以当前安装版本和用户手册为准。</p>
+                </div>
+            </div>
+        </section>
 
-<section id="models">
-  <div class="container">
-    <div class="sec-head animate-on-scroll">
-      <h2 data-en="Your subscription, your models" data-zh="你的套餐，你的模型">你的套餐，你的模型</h2>
-      <p data-en="UPDF locks AI behind its own quota. Booklight connects to any OpenAI-compatible endpoint — including the coding plans you already pay for." data-zh="UPDF 把 AI 锁在自己的订阅配额里；Booklight 直连任意 OpenAI 协议端点——包括你已经付费的编程套餐。">UPDF 把 AI 锁在自己的订阅配额里；Booklight 直连任意 OpenAI 协议端点——包括你已经付费的编程套餐。</p>
-    </div>
-    <div class="prov-wrap animate-on-scroll">
-      <div class="chips">
-        <span class="chip hot">GLM Coding 套餐</span>
-        <span class="chip hot">Kimi Code</span>
-        <span class="chip hot">豆包 Coding</span>
-        <span class="chip">智谱 GLM</span>
-        <span class="chip">DeepSeek</span>
-        <span class="chip">通义千问</span>
-        <span class="chip">Moonshot Kimi</span>
-        <span class="chip">豆包（火山方舟）</span>
-        <span class="chip">硅基流动</span>
-        <span class="chip">Ollama（本地）</span>
-        <span class="chip">OpenAI</span>
-        <span class="chip" data-en="Any OpenAI-compatible endpoint" data-zh="任意 OpenAI 兼容端点">任意 OpenAI 兼容端点</span>
-      </div>
-      <p class="prov-note" data-en="Presets ship with the correct plan endpoints (e.g. open.bigmodel.cn/api/coding/paas/v4), on-demand model list fetching and a connection test." data-zh="预设内置各套餐专属端点（如 open.bigmodel.cn/api/coding/paas/v4），模型列表按需拉取，一键测试连接。">预设内置各套餐专属端点（如 open.bigmodel.cn/api/coding/paas/v4），模型列表按需拉取，一键测试连接。</p>
-    </div>
-  </div>
-</section>
+        <!-- Features -->
+        <section class="kit-section" id="features">
+            <div class="kit-container">
+                <h2 class="kit-h2" data-i18n="feat.title">以阅读为本，AI 贯穿其中</h2>
+                <p class="kit-lead" data-i18n="feat.lead">不做臃肿的全能编辑器——只把「读文献 + AI」这一件事做透。</p>
+                <div class="kit-grid kit-grid--3" style="margin-top: 44px;">
+                    <div class="kit-card bl-span2">
+                        <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h12M9 3v2m3.5 0C11 9 8 12 5 13.5M6 8c1.5 3 4.5 5.5 8 6.5"/><path d="M14 21l4-9 4 9m-6.7-3h5.4"/></svg></span>
+                        <h3 data-i18n="feat.f1.title">段落对照精读</h3>
+                        <p data-i18n="feat.f1.body">一键把当前页变成原文/译文成对对照，逐段并行流式——读外文文献不用再来回切窗口。</p>
+                    </div>
+                    <div class="kit-card">
+                        <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.8l2 5.2 5.2 2-5.2 2-2 5.2-2-5.2L4.8 10l5.2-2 2-5.2z"/></svg></span>
+                        <h3 data-i18n="feat.f2.title">划词翻译</h3>
+                        <p data-i18n="feat.f2.body">选中即译，流式输出；对推理模型做了专门处理，思维过程自动置灰不碍眼。</p>
+                    </div>
+                    <div class="kit-card">
+                        <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></span>
+                        <h3 data-i18n="feat.f3.title">总结与文档对话</h3>
+                        <p data-i18n="feat.f3.body">当前页、选区或整份文档的一键结构化总结；对话基于你正在读的内容作答。</p>
+                    </div>
+                    <div class="kit-card">
+                        <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg></span>
+                        <h3 data-i18n="feat.f4.title">全文搜索</h3>
+                        <p data-i18n="feat.f4.body">Ctrl+F 从当前页向外渐进扫描全文档，高亮全部命中，Enter/Shift+Enter 上下跳转。</p>
+                    </div>
+                    <div class="kit-card">
+                        <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg></span>
+                        <h3 data-i18n="feat.f5.title">顺手的阅读器</h3>
+                        <p data-i18n="feat.f5.body">多标签、续读、双页视图、缩略图、目录、全文搜索、深色模式、打印——基本功，认真做。</p>
+                    </div>
+                    <div class="kit-card">
+                        <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v5h5"/><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-5z"/></svg></span>
+                        <h3 data-i18n="feat.f6.title">EPUB 也一样</h3>
+                        <p data-i18n="feat.f6.body">章节流式排版、字号调节、书内搜索与深色模式——电子书享受同一套 AI 工作流。</p>
+                    </div>
+                    <div class="kit-card">
+                        <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
+                        <h3 data-i18n="feat.f7.title">高亮进笔记</h3>
+                        <p data-i18n="feat.f7.body">三色高亮 + 笔记、批注面板、Obsidian 友好的 Markdown 导出——你的阅读笔记永远属于你。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-<section id="privacy">
-  <div class="container">
-    <div class="trio">
-      <div class="trio-card animate-on-scroll">
-        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
-        <h3 data-en="Key stays local" data-zh="Key 只存本机">Key 只存本机</h3>
-        <p data-en="Settings and API keys live in your user config directory — never uploaded." data-zh="设置与 API Key 保存在本机用户配置目录，绝不上传。">设置与 API Key 保存在本机用户配置目录，绝不上传。</p>
-      </div>
-      <div class="trio-card animate-on-scroll">
-        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4z"/></svg></div>
-        <h3 data-en="Requests go straight to your provider" data-zh="请求直达你的服务商">请求直达你的服务商</h3>
-        <p data-en="No middleman servers. The app talks to the endpoint you configured, nothing else." data-zh="没有中间服务器，应用只和你配置的端点通信。">没有中间服务器，应用只和你配置的端点通信。</p>
-      </div>
-      <div class="trio-card animate-on-scroll">
-        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v5h5"/><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-5z"/></svg></div>
-        <h3 data-en="Open source, auditable" data-zh="开源可审计">开源可审计</h3>
-        <p data-en="AGPL-3.0. Read every line that touches your documents." data-zh="AGPL-3.0，接触你文档的每一行代码都可查证。">AGPL-3.0，接触你文档的每一行代码都可查证。</p>
-      </div>
-    </div>
-  </div>
-</section>
+        <!-- Models -->
+        <section class="kit-section kit-section--alt" id="models">
+            <div class="kit-container">
+                <h2 class="kit-h2" data-i18n="models.title">你的套餐，你的模型</h2>
+                <p class="kit-lead" data-i18n="models.lead">UPDF 把 AI 锁在自己的订阅配额里；Booklight 直连任意 OpenAI 协议端点——包括你已经付费的编程套餐。</p>
+                <div class="kit-card prov-wrap">
+                    <div class="kit-platforms prov-chips">
+                        <span class="kit-chip chip-hot">GLM Coding 套餐</span>
+                        <span class="kit-chip chip-hot">Kimi Code</span>
+                        <span class="kit-chip chip-hot">豆包 Coding</span>
+                        <span class="kit-chip">智谱 GLM</span>
+                        <span class="kit-chip">DeepSeek</span>
+                        <span class="kit-chip">通义千问</span>
+                        <span class="kit-chip">Moonshot Kimi</span>
+                        <span class="kit-chip">豆包（火山方舟）</span>
+                        <span class="kit-chip">硅基流动</span>
+                        <span class="kit-chip">Ollama（本地）</span>
+                        <span class="kit-chip">OpenAI</span>
+                        <span class="kit-chip" data-i18n="models.chip-any">任意 OpenAI 兼容端点</span>
+                    </div>
+                    <p class="prov-note" data-i18n="models.note">预设内置各套餐专属端点（如 open.bigmodel.cn/api/coding/paas/v4），模型列表按需拉取，一键测试连接。</p>
+                </div>
+            </div>
+        </section>
 
-<section id="download">
-  <div class="container">
-    <div class="sec-head animate-on-scroll">
-      <h2 data-en="Download" data-zh="下载">下载</h2>
-      <p data-en="The existing reader is free. New research features are not on sale. Read the installation, privacy and recovery guide before using valuable documents." data-zh="现有阅读器免费，新增研究能力尚未开售。处理重要文档前请阅读安装、隐私与恢复说明。">现有阅读器免费，新增研究能力尚未开售。处理重要文档前请阅读安装、隐私与恢复说明。</p>
-    </div>
-    <div class="dl-grid animate-on-scroll">
-      <div class="dl-card">
-        <h3>macOS</h3>
-        <p class="fmt">Apple silicon · dmg</p>
-        <a href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="macos-arm64.dmg" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
-      </div>
-      <div class="dl-card">
-        <h3>macOS (Intel)</h3>
-        <p class="fmt">Intel 芯片 · dmg</p>
-        <a href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="macos-x64.dmg" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
-      </div>
-      <div class="dl-card">
-        <h3>Windows</h3>
-        <p class="fmt">x64 · MSI 安装包</p>
-        <a href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="windows-x64.msi" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
-      </div>
-      <div class="dl-card">
-        <h3>Linux</h3>
-        <p class="fmt">x64 · deb / rpm / AppImage / tar.gz</p>
-        <a href="https://github.com/turlamai/booklight/releases/latest" data-release-suffix="linux-x86_64.AppImage" target="_blank" rel="noopener" data-en="Download" data-zh="下载">下载</a>
-      </div>
-    </div>
-    <p style="text-align:center;margin-top:10px"><a href="https://github.com/turlamai/booklight/releases" target="_blank" rel="noopener" data-en="All releases" data-zh="全部版本">全部版本</a></p>
-    <p class="hero-note" style="text-align:center;margin-top:18px" data-en="Verify published downloads using the release SHA256SUMS file. Linux also comes as deb / rpm / tar.gz (arm64 builds on the release page); Windows portable zip and macOS portable zip are on the release page too. Update behavior depends on the installation channel; consult the release notes and user guide." data-zh="请使用 Release 提供的 SHA256SUMS 校验下载文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均支持应用内自动更新。">所有下载附 SHA-256 校验文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均支持应用内自动更新。</p>
-  </div>
-</section>
+        <!-- Privacy -->
+        <section class="kit-section" id="privacy">
+            <div class="kit-container">
+                <div class="kit-grid kit-grid--3">
+                    <div class="kit-card trio-card">
+                        <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
+                        <h3 data-i18n="priv.c1.title">Key 只存本机</h3>
+                        <p data-i18n="priv.c1.body">设置与 API Key 保存在本机用户配置目录，绝不上传。</p>
+                    </div>
+                    <div class="kit-card trio-card">
+                        <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4z"/></svg></span>
+                        <h3 data-i18n="priv.c2.title">请求直达你的服务商</h3>
+                        <p data-i18n="priv.c2.body">没有中间服务器，应用只和你配置的端点通信。</p>
+                    </div>
+                    <div class="kit-card trio-card">
+                        <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v5h5"/><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-5z"/></svg></span>
+                        <h3 data-i18n="priv.c3.title">开源可审计</h3>
+                        <p data-i18n="priv.c3.body">AGPL-3.0，接触你文档的每一行代码都可查证。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-<section id="start-here" class="product-start" aria-label="Get started / 开始使用">
-  <h2 class="reader-en" lang="en">Open, read, edit.</h2>
-  <h2 class="reader-zh" lang="zh">打开、阅读、编辑。</h2>
-  <p class="reader-en" lang="en">Desktop previews for macOS, Windows and Linux; check the actual release assets for supported builds. No book import or managed catalog.</p>
-  <p class="reader-zh" lang="zh">提供 macOS、Windows、Linux 桌面预览版；具体以发布附件为准。无需导入书库，也没有强制编目。</p>
-  <div class="product-start-grid">
-    <article><h3>01</h3><p class="reader-en" lang="en">Open any PDF / EPUB from its original folder or drag it into the app.</p><p class="reader-zh" lang="zh">从原目录打开 PDF / EPUB，或者直接拖进应用。</p></article>
-    <article><h3>02</h3><p class="reader-en" lang="en">Read, search and annotate. Confirm a note is saved before relying on it.</p><p class="reader-zh" lang="zh">阅读、搜索、批注，重要笔记先确认已保存。</p></article>
-    <article><h3>03</h3><p class="reader-en" lang="en">Edit PDFs in a working view and export explicitly; your original must not be silently replaced.</p><p class="reader-zh" lang="zh">轻编辑 PDF，明确选择导出位置，不静默覆盖原文件。</p></article>
-  </div>
-  <p class="reader-en start-limits" lang="en">The file-first refactor is in development. Native cross-platform acceptance is required before a release claim.</p>
-  <p class="reader-zh start-limits" lang="zh">文件优先重构仍在开发中，发布前必须完成三端原生打包验收。</p>
-  <div class="start-links">
-    <a href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.md">English guide</a>
-    <a href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.zh-CN.md">中文使用指南</a>
-    <a href="https://github.com/turlamai/booklight/issues">反馈与帮助</a>
-  </div>
-</section>
-<footer>
-  <div class="container foot-inner">
-    <span>© 2026 TuringLambdaAI · Booklight is free software under AGPL-3.0</span>
-    <span><a href="https://github.com/turlamai/booklight" target="_blank" rel="noopener">GitHub</a> · <a href="https://jrtx.site" target="_blank" rel="noopener">jrtx.site</a></span>
-  </div>
-</footer>
-<nav id="product-support" aria-label="Support / 支持"><a href="https://github.com/turlamai/booklight/issues"><span class="support-zh">反馈</span><span class="support-en" lang="en">Feedback</span></a> <a href="https://github.com/turlamai/booklight/releases"><span class="support-zh">发布与更新</span><span class="support-en" lang="en">Releases</span></a> <a href="https://github.com/turlamai/booklight/blob/main/LICENSE"><span class="support-zh">源码许可</span><span class="support-en" lang="en">Source license</span></a> <a class="support-zh" href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.zh-CN.md">使用与帮助</a> <a class="support-en" lang="en" href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.md">Usage & help</a></nav>
+        <!-- Download -->
+        <section class="kit-section kit-section--alt" id="download">
+            <div class="kit-container">
+                <h2 class="kit-h2" data-i18n="dl.title">下载</h2>
+                <p class="kit-lead" data-i18n="dl.lead">现有阅读器免费，新增研究能力尚未开售。处理重要文档前请阅读安装、隐私与恢复说明。</p>
+                <div class="dl-grid">
+                    <div class="kit-card dl-card">
+                        <h3>macOS</h3>
+                        <p class="fmt kit-mono">Apple silicon · dmg</p>
+                        <p><a class="kit-btn kit-btn--primary" href="https://github.com/turlamai/booklight/releases/latest/download/booklight-macos-arm64.dmg" data-i18n="dl.card-btn">下载</a></p>
+                    </div>
+                    <div class="kit-card dl-card">
+                        <h3>macOS (Intel)</h3>
+                        <p class="fmt kit-mono">Intel 芯片 · dmg</p>
+                        <p><a class="kit-btn kit-btn--primary" href="https://github.com/turlamai/booklight/releases/latest/download/booklight-macos-x64.dmg" data-i18n="dl.card-btn">下载</a></p>
+                    </div>
+                    <div class="kit-card dl-card">
+                        <h3>Windows</h3>
+                        <p class="fmt kit-mono">x64 · MSI 安装包</p>
+                        <p><a class="kit-btn kit-btn--primary" href="https://github.com/turlamai/booklight/releases/latest/download/booklight-windows-x64.msi" data-i18n="dl.card-btn">下载</a></p>
+                    </div>
+                    <div class="kit-card dl-card">
+                        <h3>Linux</h3>
+                        <p class="fmt kit-mono">x64 · deb / rpm / AppImage / tar.gz</p>
+                        <p><a class="kit-btn kit-btn--primary" href="https://github.com/turlamai/booklight/releases/latest/download/booklight-linux-x86_64.AppImage" data-i18n="dl.card-btn">下载</a></p>
+                    </div>
+                </div>
+                <p class="dl-all"><a href="https://github.com/turlamai/booklight/releases" target="_blank" rel="noopener" data-i18n="dl.all">全部版本</a></p>
+                <p class="kit-hero-meta dl-sha" data-i18n="dl.note">请使用 Release 提供的 SHA256SUMS 校验下载文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均支持应用内自动更新。</p>
+            </div>
+        </section>
 
-<script>
-  var lang = localStorage.getItem("booklight-lang") || "zh";
-  function applyLang(l) {
-    lang = l;
-    localStorage.setItem("booklight-lang", l);
-    document.documentElement.lang = l === "zh" ? "zh-CN" : "en";
-    document.querySelectorAll("[data-en]").forEach(function (el) {
-      var v = el.getAttribute(l === "zh" ? "data-zh" : "data-en");
-      if (v !== null) el.innerHTML = v;
-    });
-    document.getElementById("current-lang-label").textContent = l === "zh" ? "简体中文" : "English";
-  }
-  window.setLanguage = function (target) {
-    if (target === "zh" || target === "en") applyLang(target);
-  };
-  applyLang(lang);
+        <!-- Get started -->
+        <section class="kit-section" id="start-here">
+            <div class="kit-container">
+                <h2 class="kit-h2" data-i18n="start.title">打开、阅读、编辑。</h2>
+                <p class="kit-lead" data-i18n="start.body">提供 macOS、Windows、Linux 桌面预览版；具体以发布附件为准。无需导入书库，也没有强制编目。</p>
+                <div class="kit-steps" style="margin-top: 44px;">
+                    <div class="kit-step">
+                        <p data-i18n="start.s1">从原目录打开 PDF / EPUB，或者直接拖进应用。</p>
+                    </div>
+                    <div class="kit-step">
+                        <p data-i18n="start.s2">阅读、搜索、批注，重要笔记先确认已保存。</p>
+                    </div>
+                    <div class="kit-step">
+                        <p data-i18n="start.s3">轻编辑 PDF，明确选择导出位置，不静默覆盖原文件。</p>
+                    </div>
+                </div>
+                <p class="start-limits kit-text-2" data-i18n="start.limits">文件优先重构仍在开发中，发布前必须完成三端原生打包验收。</p>
+                <div class="start-links">
+                    <a href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.md">English guide</a>
+                    <a href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.zh-CN.md">中文使用指南</a>
+                    <a href="https://github.com/turlamai/booklight/issues" data-i18n="start.help">反馈与帮助</a>
+                </div>
+            </div>
+        </section>
+    </main>
 
-  var io = new IntersectionObserver(function (entries) {
-    entries.forEach(function (e) {
-      if (e.isIntersecting) { e.target.classList.add("visible"); io.unobserve(e.target); }
-    });
-  }, { threshold: 0.12 });
-  document.querySelectorAll(".animate-on-scroll").forEach(function (el) { io.observe(el); });
+    <footer class="kit-footer">
+        <div class="kit-container">
+            <div class="kit-footer-grid">
+                <div>
+                    <a class="kit-brand" href="/">
+                        <img class="kit-brand-mark" src="assets/favicon.png" alt="Booklight">
+                        <span>Booklight</span>
+                    </a>
+                    <p class="kit-footer-tagline" data-i18n="footer.tagline">专注文件的 PDF / EPUB 阅读与轻编辑。</p>
+                </div>
+                <div>
+                    <h4 data-i18n="footer.product">产品</h4>
+                    <ul>
+                        <li><a href="#features" data-i18n="nav.features">功能</a></li>
+                        <li><a href="guide.html" data-i18n="nav.guide">手册</a></li>
+                        <li><a href="https://github.com/turlamai/booklight/releases" data-i18n="footer.releases">Releases</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 data-i18n="footer.family">家族</h4>
+                    <ul>
+                        <li><a href="https://jrtx.site/" data-i18n="footer.portal">全部产品</a></li>
+                        <li><a href="https://rivet.jrtx.site/">Rivet</a></li>
+                        <li><a href="https://glaze.jrtx.site/">Glaze</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 data-i18n="footer.legal">条款</h4>
+                    <ul>
+                        <li><a href="https://github.com/turlamai/booklight" data-i18n="nav.github">GitHub</a></li>
+                        <li><a href="https://github.com/turlamai/booklight/blob/main/LICENSE" data-i18n="footer.license">AGPL-3.0 许可</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="kit-footer-bottom">
+                <span>© 2026 TuringLambdaAI · Booklight is free software under AGPL-3.0</span>
+                <span class="kit-mono">site-kit v1.0.2</span>
+            </div>
+        </div>
+    </footer>
 
-  // Resolve exact tagged installers; keep Releases as the fallback while
-  // the API is blocked, offline, or a draft has no qualifying public assets.
-  (function () {
-    var page = "https://github.com/turlamai/booklight/releases/latest";
-    var release = null;
-    var links = document.querySelectorAll("a[data-release-suffix]");
-    function resolveLinks() {
-      links.forEach(function (a) {
-        a.href = page;
-        if (!release || release.draft || release.prerelease ||
-            !/^v[0-9]+\.[0-9]+\.[0-9]+$/.test(release.tag_name)) return;
-        var name = "booklight-" + release.tag_name.slice(1) + "-" + a.dataset.releaseSuffix;
-        var exact = "https://github.com/turlamai/booklight/releases/download/" + release.tag_name + "/" + name;
-        var asset = (release.assets || []).find(function (x) {
-          return x.name === name && x.size > 0 && x.browser_download_url === exact;
-        });
-        if (asset) a.href = exact;
-      });
+    <nav id="product-support" aria-label="Support / 支持">
+        <a href="https://github.com/turlamai/booklight/issues" data-i18n="support.feedback">反馈</a>
+        <a href="https://github.com/turlamai/booklight/releases" data-i18n="support.releases">发布与更新</a>
+        <a href="https://github.com/turlamai/booklight/blob/main/LICENSE" data-i18n="support.license">源码许可</a>
+        <a href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.zh-CN.md" data-en-href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.md" data-i18n="support.help">使用与帮助</a>
+    </nav>
+
+    <script type="application/json" id="kit-i18n">
+    {
+        "zh": {
+            "nav.features": "功能", "nav.models": "模型", "nav.guide": "手册", "nav.github": "GitHub", "nav.download": "下载",
+            "hero.eyebrow": "开源 · AGPL-3.0 · macOS 14+ · Windows 10+ · Linux",
+            "hero.h1a": "打开文件，", "hero.h1b": "专注阅读。",
+            "hero.badge": "开发预览。已有阅读、批注、轻量编辑和单文档 BYOK 功能保持免费；本次重构不包含付费版。",
+            "hero.lead": "PDF / EPUB 文件留在原来的位置。打开即阅读，可靠批注，需要时轻编辑；没有书库数据库、文件副本、阅读时长、目标或打卡。AI 可选，并由你选择服务商。",
+            "hero.source": "GitHub 源码",
+            "hero.note": "使用自行配置的兼容模型接口或本地模型；可用性与用量费用以服务商为准。",
+            "shot.note": "打开一份小型 PDF 或 EPUB，添加批注，再关闭并重新打开。确认批注仍在后，再用重要文件执行同样流程。",
+            "vs.title": "打开文件，阅读就在这里发生。",
+            "vs.lead": "围绕原位置的 PDF / EPUB 文件组织阅读与批注，不以虚构的新书库界面来宣传尚在变化的产品。",
+            "vs.note": "选中有用的一段，留下自己的理解。",
+            "vs.s1t": "原位打开", "vs.s1b": "文件仍在你的目录中。",
+            "vs.s2t": "阅读和批注", "vs.s2b": "突出重要内容，记下想法。",
+            "vs.s3t": "带走笔记", "vs.s3b": "按实际功能导出或整理阅读成果。",
+            "vs.caption": "功能流程示意，非软件界面截图。实际界面、可用性与交互以当前安装版本和用户手册为准。",
+            "feat.title": "以阅读为本，AI 贯穿其中",
+            "feat.lead": "不做臃肿的全能编辑器——只把「读文献 + AI」这一件事做透。",
+            "feat.f1.title": "段落对照精读", "feat.f1.body": "一键把当前页变成原文/译文成对对照，逐段并行流式——读外文文献不用再来回切窗口。",
+            "feat.f2.title": "划词翻译", "feat.f2.body": "选中即译，流式输出；对推理模型做了专门处理，思维过程自动置灰不碍眼。",
+            "feat.f3.title": "总结与文档对话", "feat.f3.body": "当前页、选区或整份文档的一键结构化总结；对话基于你正在读的内容作答。",
+            "feat.f4.title": "全文搜索", "feat.f4.body": "Ctrl+F 从当前页向外渐进扫描全文档，高亮全部命中，Enter/Shift+Enter 上下跳转。",
+            "feat.f5.title": "顺手的阅读器", "feat.f5.body": "多标签、续读、双页视图、缩略图、目录、全文搜索、深色模式、打印——基本功，认真做。",
+            "feat.f6.title": "EPUB 也一样", "feat.f6.body": "章节流式排版、字号调节、书内搜索与深色模式——电子书享受同一套 AI 工作流。",
+            "feat.f7.title": "高亮进笔记", "feat.f7.body": "三色高亮 + 笔记、批注面板、Obsidian 友好的 Markdown 导出——你的阅读笔记永远属于你。",
+            "models.title": "你的套餐，你的模型",
+            "models.lead": "UPDF 把 AI 锁在自己的订阅配额里；Booklight 直连任意 OpenAI 协议端点——包括你已经付费的编程套餐。",
+            "models.chip-any": "任意 OpenAI 兼容端点",
+            "models.note": "预设内置各套餐专属端点（如 open.bigmodel.cn/api/coding/paas/v4），模型列表按需拉取，一键测试连接。",
+            "priv.c1.title": "Key 只存本机", "priv.c1.body": "设置与 API Key 保存在本机用户配置目录，绝不上传。",
+            "priv.c2.title": "请求直达你的服务商", "priv.c2.body": "没有中间服务器，应用只和你配置的端点通信。",
+            "priv.c3.title": "开源可审计", "priv.c3.body": "AGPL-3.0，接触你文档的每一行代码都可查证。",
+            "dl.title": "下载",
+            "dl.lead": "现有阅读器免费，新增研究能力尚未开售。处理重要文档前请阅读安装、隐私与恢复说明。",
+            "dl.generic": "下载 Booklight",
+            "dl.mac": "macOS 版", "dl.win": "Windows 版", "dl.linux": "Linux 版",
+            "dl.menu-note": "移动端与未知平台请前往 Releases 页面选取对应安装包。",
+            "dl.card-btn": "下载",
+            "dl.all": "全部版本",
+            "dl.note": "请使用 Release 提供的 SHA256SUMS 校验下载文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均支持应用内自动更新。",
+            "start.title": "打开、阅读、编辑。",
+            "start.body": "提供 macOS、Windows、Linux 桌面预览版；具体以发布附件为准。无需导入书库，也没有强制编目。",
+            "start.s1": "从原目录打开 PDF / EPUB，或者直接拖进应用。",
+            "start.s2": "阅读、搜索、批注，重要笔记先确认已保存。",
+            "start.s3": "轻编辑 PDF，明确选择导出位置，不静默覆盖原文件。",
+            "start.limits": "文件优先重构仍在开发中，发布前必须完成三端原生打包验收。",
+            "start.help": "反馈与帮助",
+            "footer.tagline": "专注文件的 PDF / EPUB 阅读与轻编辑。",
+            "footer.product": "产品", "footer.family": "家族", "footer.legal": "条款",
+            "footer.releases": "Releases", "footer.portal": "全部产品", "footer.license": "AGPL-3.0 许可",
+            "support.feedback": "反馈", "support.releases": "发布与更新", "support.license": "源码许可", "support.help": "使用与帮助"
+        },
+        "en": {
+            "nav.features": "Features", "nav.models": "Models", "nav.guide": "Guide", "nav.github": "GitHub", "nav.download": "Download",
+            "hero.eyebrow": "Open source · AGPL-3.0 · macOS 14+ · Windows 10+ · Linux",
+            "hero.h1a": "Open a file.", "hero.h1b": "Stay with the words.",
+            "hero.badge": "Development preview. Existing reading, annotation, light editing and single-document BYOK features remain free. No paid Booklight edition is planned for this refactor.",
+            "hero.lead": "Your PDFs and EPUBs stay where they belong. Open a file, read beautifully, annotate and edit with care. No bookshelf database, copied books, reading timer, goals or streaks. Optional AI uses your chosen provider.",
+            "hero.source": "View on GitHub",
+            "hero.note": "Use a compatible model endpoint or local model you configure; availability and usage fees depend on your provider.",
+            "shot.note": "Open a small PDF or EPUB, add an annotation, close the document and reopen it. Confirm the annotation remains before relying on the workflow with important files.",
+            "vs.title": "Open a file. Stay in the reading flow.",
+            "vs.lead": "Reading and annotation around PDF / EPUB files in their original location. No invented library UI for a product still in flux.",
+            "vs.note": "Highlight a passage and capture your thoughts.",
+            "vs.s1t": "Open in place", "vs.s1b": "Your document stays where you keep it.",
+            "vs.s2t": "Read & annotate", "vs.s2b": "Highlight what matters and add notes.",
+            "vs.s3t": "Take notes out", "vs.s3b": "Export or organize notes using supported tools.",
+            "vs.caption": "Conceptual workflow, not an app screenshot. Refer to the installed version and user guide for actual UI and availability.",
+            "feat.title": "Reading first, AI everywhere",
+            "feat.lead": "No bloat. A fast, focused reader with the AI workflow literature actually needs.",
+            "feat.f1.title": "Paragraph-aligned bilingual reading", "feat.f1.body": "One click turns the current page into original/translation pairs, streamed in parallel paragraph by paragraph — read foreign papers without switching windows.",
+            "feat.f2.title": "Selection translation", "feat.f2.body": "Select any text, one click, streaming result — with a reasoning-model-aware display that keeps chain-of-thought out of your face.",
+            "feat.f3.title": "Summaries & document chat", "feat.f3.body": "Structured summaries for the current page, a selection or the whole document — and a chat grounded in what you are reading.",
+            "feat.f4.title": "Full-text search", "feat.f4.body": "Ctrl+F searches the whole document with highlight overlays and match navigation, starting from where you are.",
+            "feat.f5.title": "A reader that feels right", "feat.f5.body": "Tabs, continue-reading, two-page view, thumbnails, outline, full-text search, dark mode, printing — the essentials, done properly.",
+            "feat.f6.title": "EPUB, too", "feat.f6.body": "Reflowable chapters with font-size control, table of contents, whole-book search and dark mode — same AI workflow on e-books.",
+            "feat.f7.title": "Highlights into your notes", "feat.f7.body": "Three-color highlights with notes, an annotation panel, and Obsidian-friendly Markdown export — your reading notes stay yours.",
+            "models.title": "Your subscription, your models",
+            "models.lead": "UPDF locks AI behind its own quota. Booklight connects to any OpenAI-compatible endpoint — including the coding plans you already pay for.",
+            "models.chip-any": "Any OpenAI-compatible endpoint",
+            "models.note": "Presets ship with the correct plan endpoints (e.g. open.bigmodel.cn/api/coding/paas/v4), on-demand model list fetching and a connection test.",
+            "priv.c1.title": "Key stays local", "priv.c1.body": "Settings and API keys live in your user config directory — never uploaded.",
+            "priv.c2.title": "Requests go straight to your provider", "priv.c2.body": "No middleman servers. The app talks to the endpoint you configured, nothing else.",
+            "priv.c3.title": "Open source, auditable", "priv.c3.body": "AGPL-3.0. Read every line that touches your documents.",
+            "dl.title": "Download",
+            "dl.lead": "The existing reader is free. New research features are not on sale. Read the installation, privacy and recovery guide before using valuable documents.",
+            "dl.generic": "Download Booklight",
+            "dl.mac": "For macOS", "dl.win": "For Windows", "dl.linux": "For Linux",
+            "dl.menu-note": "On mobile or unknown platforms, pick the right package from the Releases page.",
+            "dl.card-btn": "Download",
+            "dl.all": "All releases",
+            "dl.note": "Verify published downloads using the release SHA256SUMS file. Linux also comes as deb / rpm / tar.gz (arm64 builds on the release page); Windows portable zip and macOS portable zip are on the release page too. Update behavior depends on the installation channel; consult the release notes and user guide.",
+            "start.title": "Open, read, edit.",
+            "start.body": "Desktop previews for macOS, Windows and Linux; check the actual release assets for supported builds. No book import or managed catalog.",
+            "start.s1": "Open any PDF / EPUB from its original folder or drag it into the app.",
+            "start.s2": "Read, search and annotate. Confirm a note is saved before relying on it.",
+            "start.s3": "Edit PDFs in a working view and export explicitly; your original must not be silently replaced.",
+            "start.limits": "The file-first refactor is in development. Native cross-platform acceptance is required before a release claim.",
+            "start.help": "Get help",
+            "footer.tagline": "File-focused PDF / EPUB reading and light editing.",
+            "footer.product": "Product", "footer.family": "Family", "footer.legal": "Legal",
+            "footer.releases": "Releases", "footer.portal": "All products", "footer.license": "AGPL-3.0 License",
+            "support.feedback": "Feedback", "support.releases": "Releases", "support.license": "Source license", "support.help": "Usage & help"
+        }
     }
-    function applyArch(arch) {
-      var hero = document.querySelector(".hero-actions a.btn-primary");
-      if (hero) { hero.dataset.releaseSuffix = "macos-" + arch + ".dmg"; }
-      document.querySelectorAll("#download .dl-card").forEach(function (card, i) {
-        card.classList.toggle("current", i === (arch === "x64" ? 1 : 0));
-      });
-      links = document.querySelectorAll("a[data-release-suffix]");
-      resolveLinks();
+    </script>
+
+    <!-- Download config: hero split button resolves per visitor platform/arch.
+         The download cards keep stable unversioned deep links per asset. -->
+    <script type="application/json" id="kit-download">
+    {
+        "repo": "turlamai/booklight",
+        "assets": {
+            "mac": "booklight-{v}-macos-{arch}.dmg",
+            "win": "booklight-{v}-windows-x64.msi",
+            "linux": "booklight-{v}-linux-{arch}.AppImage"
+        },
+        "archMap": { "linux": { "x64": "x86_64", "arm64": "aarch64" } }
     }
-    applyArch("arm64");
-    if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
-      navigator.userAgentData.getHighEntropyValues(["architecture", "platform"]).then(function (h) {
-        if (h && /Mac/i.test(h.platform || "") && h.architecture === "x86") applyArch("x64");
-      }).catch(function () {});
-    }
-    fetch("https://api.github.com/repos/turlamai/booklight/releases/latest",
-          {headers: {"Accept": "application/vnd.github+json"}})
-      .then(function (r) { if (!r.ok) throw new Error("release lookup"); return r.json(); })
-      .then(function (data) { release = data; resolveLinks(); })
-      .catch(function () { /* No direct asset without a verified release. */ });
-  })();
-</script>
+    </script>
 </body>
+
 </html>

@@ -1,0 +1,253 @@
+/* ============================================================
+   Booklight site.css — per-site sections only.
+   Shared frame (nav, hero, cards, footer, tokens) lives in
+   family.css from site-kit; do not duplicate it here.
+   ============================================================ */
+
+/* ---------- Nav download CTA (kit button, nav-sized) ---------- */
+.nav-cta { height: 34px; padding: 0 16px; font-size: 13px; border-radius: 999px; }
+.nav-cta:hover { transform: none; }
+
+/* ---------- Hero shot frame (test-before-trust note) ---------- */
+.shot {
+    margin: 48px auto 0;
+    max-width: 780px;
+    padding: 24px;
+    border: 1px solid var(--kit-border);
+    border-radius: var(--kit-radius-l);
+    background: var(--kit-bg-elevated);
+    box-shadow: var(--kit-shadow);
+    text-align: center;
+}
+.shot p {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--kit-text-2);
+    max-width: 56ch;
+    margin-inline: auto;
+}
+
+/* ---------- Visual Showcase: reader concept art ---------- */
+.vs-intro { margin-bottom: 40px; }
+.vs-label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--kit-accent-strong);
+    margin-bottom: 14px;
+}
+html[data-theme="dark"] .vs-label { color: var(--kit-accent); }
+.vs-frame {
+    background: var(--kit-bg);
+    border: 1px solid var(--kit-border);
+    border-radius: var(--kit-radius-l);
+    padding: clamp(18px, 3vw, 34px);
+    box-shadow: var(--kit-shadow);
+    overflow: hidden;
+}
+.vs-art {
+    margin-bottom: 22px;
+    background: var(--kit-bg-elevated);
+    border: 1px solid var(--kit-border);
+    border-radius: 18px;
+    padding: 22px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 18px;
+}
+.vs-paper, .vs-annotation {
+    border-radius: 14px;
+    background: var(--kit-bg);
+    border: 1px solid var(--kit-border);
+    padding: 18px;
+    min-width: 0;
+}
+.vs-paper-title {
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    color: var(--kit-text-2);
+    margin-bottom: 22px;
+}
+.vs-line {
+    height: 9px;
+    background: var(--kit-border);
+    border-radius: 8px;
+    margin: 12px 0;
+    max-width: 100%;
+}
+.vs-line.short { width: 57%; }
+.vs-line.mid { width: 82%; }
+.vs-highlight {
+    height: 15px;
+    border-radius: 3px;
+    width: 72%;
+    background: var(--kit-accent-soft-strong);
+}
+.vs-note-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.09em;
+    color: var(--kit-accent-strong);
+    font-weight: 800;
+}
+html[data-theme="dark"] .vs-note-label { color: var(--kit-accent); }
+.vs-note-body { font-size: 0.93rem; line-height: 1.7; margin: 18px 0; }
+.vs-note-foot { font-size: 0.75rem; color: var(--kit-text-2); }
+.vs-stage {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+.vs-step {
+    position: relative;
+    min-height: 150px;
+    padding: 22px 18px;
+    border-radius: var(--kit-radius-l);
+    background: var(--kit-bg-elevated);
+    border: 1px solid var(--kit-border);
+}
+.vs-step:not(:last-child)::after {
+    content: "→";
+    position: absolute;
+    z-index: 1;
+    right: -15px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--kit-bg-elevated);
+    color: var(--kit-accent-strong);
+    border: 1px solid var(--kit-border);
+}
+html[data-theme="dark"] .vs-step:not(:last-child)::after { color: var(--kit-accent); }
+.vs-glyph {
+    font-size: 1.75rem;
+    display: block;
+    margin-bottom: 20px;
+    color: var(--kit-accent-strong);
+}
+html[data-theme="dark"] .vs-glyph { color: var(--kit-accent); }
+.vs-step b { display: block; font-size: 1.03rem; margin-bottom: 7px; }
+.vs-step small { display: block; color: var(--kit-text-2); font-size: 0.84rem; line-height: 1.5; }
+.vs-caption {
+    font-size: 12.5px;
+    text-align: center;
+    margin: 16px 0 0;
+    color: var(--kit-text-3);
+}
+@media (max-width: 700px) {
+    .vs-art { grid-template-columns: 1fr 1fr; padding: 14px; }
+    .vs-stage { grid-template-columns: 1fr; }
+    .vs-step { min-height: 110px; }
+    .vs-step:not(:last-child)::after {
+        right: auto;
+        left: 50%;
+        top: auto;
+        bottom: -15px;
+        transform: translateX(-50%) rotate(90deg);
+    }
+    .vs-glyph { margin-bottom: 12px; }
+}
+
+/* ---------- Features: first card spans two columns (bento carry-over) ---------- */
+.bl-span2 { grid-column: span 2; }
+@media (max-width: 960px) { .bl-span2 { grid-column: span 2; } }
+@media (max-width: 640px) { .bl-span2 { grid-column: auto; } }
+
+/* ---------- Models panel ---------- */
+.prov-wrap {
+    margin-top: 44px;
+    gap: 24px;
+    align-items: center;
+}
+.prov-chips { justify-content: center; gap: 10px; }
+.chip-hot {
+    color: var(--kit-accent-strong);
+    background: var(--kit-accent-soft);
+    border: 1px solid var(--kit-accent-soft-strong);
+}
+html[data-theme="dark"] .chip-hot { color: var(--kit-accent); }
+.prov-note {
+    font-size: 13.5px;
+    color: var(--kit-text-3);
+    text-align: center;
+    max-width: 64ch;
+}
+
+/* ---------- Privacy trio: centered cards ---------- */
+.trio-card { text-align: center; }
+.trio-card h3 { margin-top: 4px; }
+
+/* ---------- Download cards (2x2, like the old grid) ---------- */
+.dl-grid {
+    margin: 44px auto 0;
+    max-width: 680px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+}
+@media (max-width: 640px) { .dl-grid { grid-template-columns: 1fr; } }
+.dl-card { text-align: center; }
+.dl-card h3 { font-size: 16px; }
+.dl-card .fmt {
+    font-size: 12.5px;
+    color: var(--kit-text-3);
+    margin: 6px 0 16px;
+    overflow-wrap: anywhere;
+}
+.dl-all { margin-top: 22px; text-align: center; }
+.dl-all a {
+    color: var(--kit-accent-strong);
+    font-weight: 600;
+    font-size: 14.5px;
+}
+html[data-theme="dark"] .dl-all a { color: var(--kit-accent); }
+.dl-all a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.dl-sha {
+    margin: 18px auto 0;
+    max-width: 72ch;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.65;
+}
+
+/* ---------- Start-here extras ---------- */
+.start-limits { margin-top: 30px; font-size: 14px; max-width: 62ch; }
+.start-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px 26px;
+    margin-top: 20px;
+}
+.start-links a {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--kit-accent-strong);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+html[data-theme="dark"] .start-links a { color: var(--kit-accent); }
+.start-links a:hover { text-decoration-color: currentColor; }
+
+/* ---------- Support bar (below footer) ---------- */
+#product-support {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px 28px;
+    padding: 22px 24px;
+    background: var(--kit-bg-elevated);
+    border-top: 1px solid var(--kit-border);
+    font-size: 13.5px;
+}
+#product-support a { color: var(--kit-text-2); }
+#product-support a:hover { color: var(--kit-accent); }
+
+/* ---------- Icon visibility per theme ---------- */
+html[data-theme="light"] .kit-icon-moon { display: none; }
+html[data-theme="dark"] .kit-icon-sun { display: none; }
