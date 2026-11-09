@@ -5,6 +5,8 @@ All notable changes to Booklight are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-09
+
 ### Removed
 
 - Read-aloud and split view are gone from all three hosts. Both carried
