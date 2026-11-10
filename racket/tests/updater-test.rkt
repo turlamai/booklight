@@ -283,6 +283,32 @@
     (check-equal? app-channel 'stable)
     (check-equal? update-key-id "booklight-2026-10")
     (check-true (string? app-version))
-    (check-equal? app-build 1)))
+    (check-equal? app-build 1))
 
-(reset-update-state!)
+  (test-case "make-updater-config selects the feed's component-less artifact"
+    ;; Regression: the 9->10-field updater-config shim appended 'app as its
+    ;; component fallback, but the published feed's artifacts carry no
+    ;; component at all (#f), and select-update matches config component
+    ;; against artifact component — so every real check answered
+    ;; up-to-date forever, invisible to every offline test here because
+    ;; they all construct their own artifacts. Build the config exactly the
+    ;; way the live check builds it and select against a manifest shaped
+    ;; like the published feed: the plain artifact must be offered.
+    (define (feed-shape-artifact platform architecture url sha256 size installer arguments)
+      (with-handlers
+          ([exn:fail:contract:arity?
+            (lambda (_)
+              (apply update-artifact
+                     (append (list platform architecture url sha256 size installer arguments)
+                             (list #f))))])
+        (update-artifact platform architecture url sha256 size installer arguments)))
+    (define manifest
+      (update-manifest app-identifier "9.9.9" 99 'stable
+                       "2026-11-01T00:00:00Z" "0.0.0" #f #t 100
+                       (list (feed-shape-artifact (platform-symbol)
+                                                  (architecture-symbol)
+                                                  "https://downloads.example.com/booklight-9.9.9.tar.gz"
+                                                  (make-string 64 #\a)
+                                                  123456 'targz '()))))
+    (check-true (update-candidate? (select-update (make-updater-config) manifest))
+                "the shipped config must select the feed's component-less artifact")))

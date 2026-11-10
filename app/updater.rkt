@@ -66,6 +66,7 @@
          manifest-url
          destination-path
          download-with-progress!
+         make-updater-config
          update-state-snapshot
          reset-update-state!
          perform-check!
@@ -87,6 +88,11 @@
 
 ;; rivet moved updater-config to 10 fields (component) mid-v0.11.0; the
 ;; updater constructs through this shim so production runs on either shape.
+;; The component must be #f: the published feed's artifacts carry no
+;; component (the plain whole-app artifact) and select-update matches
+;; config component against artifact component — 'app would silently
+;; select nothing from the real feed (racket/tests/updater-test.rkt pins
+;; this against a feed-shaped manifest).
 (define (make-updater-config)
   (define args
     (list app-identifier
@@ -101,7 +107,7 @@
   (with-handlers
       ([exn:fail:contract:arity?
         (lambda (_)
-          (apply updater-config (append args (list 'app))))])
+          (apply updater-config (append args (list #f))))])
     (apply updater-config args)))
 
 (define (installer-extension)
