@@ -98,21 +98,37 @@ def node_with_text(root, value):
 def preset_combo(root):
     labels = ("Ollama (local)", "Ollama（本地）", "DeepSeek", "Custom", "自定义", "Qwen (Alibaba)", "通义千问 Qwen")
     return next((node for node in walk(root) if role(node) == "combo box" and any(label in (descendant.name or "") or label in text(descendant) for descendant in walk(node) for label in labels)), None)
-def click_extents(extents):
-    # The journey runs on bare Xvfb (no window manager), so the settings
-    # window sits at (0,0) and a widget's WINDOW_COORDS extents are already
-    # desktop coordinates. GTK4 reports broken (0,0) DESKTOP_COORDS on this
-    # stack, and AT-SPI press actions cannot open the dropdown, so every
-    # selection step goes through XTest pointer clicks at computed positions.
+def settings_window_origin():
+    # Bare Xvfb has no window manager, but GTK still places the transient
+    # settings window wherever it likes, so WINDOW_COORDS extents must be
+    # translated by the window's real position before any XTest click.
+    # (v5 clicked one row high — the window sat at y≈37.)
+    for title in ("Settings", "设置"):
+        result = subprocess.run(
+            ["xdotool", "search", "--onlyvisible", "--name", title,
+             "getwindowgeometry", "--shell"],
+            capture_output=True, text=True)
+        values = {}
+        for line in result.stdout.strip().splitlines():
+            if "=" in line:
+                key, _, value = line.partition("=")
+                values[key] = value
+        if "X" in values and "Y" in values:
+            return int(values["X"]), int(values["Y"])
+    return 0, 0
+def click_extents(extents, origin):
+    # GTK4 reports broken (0,0) DESKTOP_COORDS on this stack, and AT-SPI
+    # press actions cannot open the dropdown, so every selection step goes
+    # through XTest pointer clicks at window origin + WINDOW_COORDS.
     subprocess.run(["xdotool", "mousemove",
-                    str(extents.x + extents.width // 2),
-                    str(extents.y + extents.height // 2),
+                    str(origin[0] + extents.x + extents.width // 2),
+                    str(origin[1] + extents.y + extents.height // 2),
                     "click", "1"], check=True)
-def click_center(node):
+def click_center(node, origin):
     extents = node.queryComponent().getExtents(pyatspi.WINDOW_COORDS)
     if extents.width <= 0 or extents.height <= 0:
         raise AssertionError(f"AT-SPI exposes no bounds for {node.name!r}")
-    click_extents(extents)
+    click_extents(extents, origin)
 def popup_rows(application):
     # Search the settings window subtree first: the main reader window can
     # expose its own list items (EPUB thumbnails), which would otherwise be
@@ -135,8 +151,9 @@ def popup_rows(application):
 def select_preset(application, output, names):
     combo = wait_for("provider preset combo box", lambda: preset_combo(application))
     if combo is None: raise AssertionError("provider preset combo box not found")
-    record_step(output, "open preset popup", "click combo center")
-    click_center(combo)
+    origin = settings_window_origin()
+    record_step(output, "open preset popup", f"click combo center, window origin {origin}")
+    click_center(combo, origin)
     rows = wait_for("provider preset popup rows", lambda: popup_rows(application) or None, timeout=10)
     # The popup lists the fixed preset order from
     # racket/booklight/providers.rkt: glm-coding, zhipu, deepseek, qwen, ...
@@ -147,7 +164,7 @@ def select_preset(application, output, names):
         raise AssertionError(f"preset popup exposed only {len(rows)} rows")
     geometry = [f"y={entry[2].y} h={entry[2].height}" for entry in rows]
     record_step(output, "click Qwen row", f"row {qwen_index} of {len(rows)}: {'; '.join(geometry)}")
-    click_extents(rows[qwen_index][2])
+    click_extents(rows[qwen_index][2], origin)
 
 def main():
     parser = argparse.ArgumentParser(); parser.add_argument("--output", type=Path, required=True); args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True)
