@@ -101,7 +101,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y -o Acquire::Retries=5 --no-install-recommends \
-            libgtk-4-1 libadwaita-1-0 libwebkit2gtk-6.0-2 libjson-glib-1.0-0 \
+            libgtk-4-1 libadwaita-1-0 libwebkitgtk-6.0-4 libjson-glib-1.0-0 \
             libsecret-1-0 liblz4-1 zlib1g libncurses6 libx11-6 libxtst6 \
             weston at-spi2-core dbus python3-pyatspi libglib2.0-bin
 
