@@ -377,9 +377,20 @@ jobs:
               path = Path("dist") / name
               if not path.is_file() or path.stat().st_size == 0:
                   raise SystemExit(f"Missing or empty installer: {name}")
+              # Every published body ships with its per-asset sidecar: the
+              # AppImage self-update flow downloads `<asset>.sha256` from
+              # this release and refuses the swap without it, so a release
+              # whose sidecars did not make it to publish-assets would
+              # strand every AppImage install on an update error.
+              sidecar = Path("dist") / (name + ".sha256")
+              if not sidecar.is_file() or sidecar.stat().st_size == 0:
+                  raise SystemExit(f"Missing checksum sidecar for published asset: {name}")
           PY
           mkdir -p publish-assets
-          while read -r _ name; do cp "dist/$name" "publish-assets/$name"; done < dist/SHA256SUMS
+          while read -r _ name; do
+            cp "dist/$name" "publish-assets/$name"
+            [ -f "dist/$name.sha256" ] && cp "dist/$name.sha256" "publish-assets/$name.sha256"
+          done < dist/SHA256SUMS
           cp dist/SHA256SUMS dist/update-stable.json dist/update-manifest.json publish-assets/
           (cd publish-assets && sha256sum --check SHA256SUMS)
       - name: Publish release
