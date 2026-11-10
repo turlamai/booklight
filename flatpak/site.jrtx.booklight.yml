@@ -96,7 +96,9 @@ modules:
         path: booklight-__VERSION__-linux-__ARCH__.tar.gz
         sha256: __SHA256__
       - type: file
-        path: design/app-icon.png
+        # 512px derivative of design/app-icon.png (1024x1024; flatpak's
+        # export check caps hicolor/512x512 icons at 512x512).
+        path: flatpak/icon-512.png
       - type: file
         path: flatpak/site.jrtx.booklight.desktop
     build-commands:
@@ -111,7 +113,7 @@ modules:
       # at the real binary so the runtime layout discovery works.
       - mkdir -p /app/bin
       - ln -s /app/booklight/RivetHost /app/bin/RivetHost
-      - install -Dm644 app-icon.png
+      - install -Dm644 icon-512.png
                     /app/share/icons/hicolor/512x512/apps/site.jrtx.booklight.png
       - install -Dm644 site.jrtx.booklight.desktop
                     /app/share/applications/site.jrtx.booklight.desktop
