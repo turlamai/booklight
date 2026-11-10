@@ -81,6 +81,15 @@ def snapshot(node, depth=0):
     return result
 
 # ---- preset-switch journey helpers ----
+journey_steps = []
+def record_step(output, name, detail=""):
+    # The CI step log floods with app noise, so each milestone lands in a
+    # small file that the acceptance artifact preserves verbatim.
+    journey_steps.append({"step": name, "detail": detail})
+    try:
+        (output / "journey-steps.json").write_text(json.dumps(journey_steps, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 def settings_frame(application):
     return next((node for node in walk(application) if role(node) == "frame" and (contains(node, "Provider preset") or contains(node, "服务商预设"))), None)
 def node_with_text(root, value):
@@ -88,21 +97,39 @@ def node_with_text(root, value):
 def preset_combo(root):
     labels = ("Ollama (local)", "Ollama（本地）", "DeepSeek", "Custom", "自定义", "Qwen (Alibaba)", "通义千问 Qwen")
     return next((node for node in walk(root) if role(node) == "combo box" and any(label in (descendant.name or "") or label in text(descendant) for descendant in walk(node) for label in labels)), None)
-def select_preset(application, names):
+def select_preset(application, output, names):
     combo = wait_for("provider preset combo box", lambda: preset_combo(application))
     if combo is None: raise AssertionError("provider preset combo box not found")
-    # GtkDropDown may expose its selection through the AT-SPI Selection
-    # interface; otherwise press it open and click the popup list item.
+    # 1) AT-SPI Selection interface, if GTK exposes the closed combo's items.
     try:
         selection = combo.querySelection()
         for index, child in enumerate(children(combo)):
             if (child.name or "") in names and selection.selectChild(index):
+                record_step(output, "preset selected", "Selection interface")
                 return
     except Exception:
         pass
-    press(combo)
-    item = wait_for("Qwen preset popup item", lambda: next((node for node in walk(application) if role(node) in ("list item", "menu item") and (node.name or "") in names), None))
-    press(item)
+    # 2) Open the popup and click the Qwen row (action, coordinates fallback).
+    popup_opened = False
+    try:
+        press(combo)
+        popup_opened = True
+        item = wait_for("Qwen preset popup item", lambda: next((node for node in walk(application) if role(node) in ("list item", "menu item") and (node.name or "") in names), None), timeout=8)
+        press(item)
+        record_step(output, "preset selected", "popup item press")
+        return
+    except AssertionError as failure:
+        record_step(output, "popup path failed", str(failure)[:160])
+    # 3) Keyboard: the cursor starts at the selected preset; walk up the
+    # fixed preset order (racket/booklight/providers.rkt: ollama=10,
+    # qwen=3) and activate. Works with the popup open or, if GTK keeps
+    # closed-selection semantics, on the closed combo directly.
+    for _ in range(7):
+        pyatspi.Registry.generateKeyboardEvent(0, "Up", pyatspi.KEY_SYM)
+        time.sleep(0.12)
+    pyatspi.Registry.generateKeyboardEvent(0, "Return", pyatspi.KEY_SYM)
+    time.sleep(0.3)
+    record_step(output, "preset selected", f"keyboard walk (popup_opened={popup_opened})")
 
 def main():
     parser = argparse.ArgumentParser(); parser.add_argument("--output", type=Path, required=True); args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True)
@@ -152,17 +179,22 @@ def main():
         # into Base URL/Model. Re-entering settings re-syncs the pane from
         # stored settings, so the second switch must follow after that sync
         # too (guards the tracked-preset divergence regression).
+        record_step(args.output, "settings surface open")
         wait_for("seeded provider endpoint in Base URL", lambda: node_with_text(application, "http://127.0.0.1:1/v1"))
         wait_for("seeded model in Model", lambda: node_with_text(application, "acceptance-never-send"))
-        select_preset(application, ("通义千问 Qwen", "Qwen (Alibaba)"))
+        record_step(args.output, "seeded provider fields asserted")
+        select_preset(application, args.output, ("通义千问 Qwen", "Qwen (Alibaba)"))
         wait_for("Base URL follows the Qwen preset", lambda: node_with_text(application, "https://dashscope.aliyuncs.com/compatible-mode/v1"))
         wait_for("Model follows the Qwen preset", lambda: node_with_text(application, "qwen3-max"))
+        record_step(args.output, "preset switch followed (round 1)")
         settings_button = wait_for("settings gear", lambda: next((node for node in walk(window) if role(node) == "push button" and (node.name or "") in ("Settings", "设置")), None))
         press(settings_button)
         wait_for("settings re-synced to stored provider", lambda: settings_frame(application) is not None and node_with_text(application, "http://127.0.0.1:1/v1") is not None)
-        select_preset(application, ("通义千问 Qwen", "Qwen (Alibaba)"))
+        record_step(args.output, "settings re-synced")
+        select_preset(application, args.output, ("通义千问 Qwen", "Qwen (Alibaba)"))
         wait_for("Base URL follows the Qwen preset after re-sync", lambda: node_with_text(application, "https://dashscope.aliyuncs.com/compatible-mode/v1"))
         wait_for("Model follows the Qwen preset after re-sync", lambda: node_with_text(application, "qwen3-max"))
+        record_step(args.output, "preset switch followed (round 2)")
         (args.output / "accessibility.json").write_text(json.dumps(snapshot(application), ensure_ascii=False, indent=2), encoding="utf-8")
         (args.output / "interaction-trace.json").write_text(json.dumps({"platform":"linux","actions":["launch:sample.epub","select:Outline","select:Annotations","press:AI Assistant","select:Translate","press:Translate current EPUB scope","assert:AI send review","press:Cancel","press:Settings","select:Qwen preset","assert:preset switch follows","press:Settings","select:Qwen preset","assert:preset switch follows after re-sync"],"assertions":["packaged GTK4 frame activated on native Wayland","sample EPUB crossed RVT1 into the embedded backend","native accessibility tree contains The Sample Book","native accessibility tree contains First Chapter","pending recovery crosses RVT1 on reopen","native Notes pane exposes recovered status and Retry Save","recovered annotation remains visible and exportable","native review exposes current-chapter scope and exact user-content total before provider launch","Cancel dismisses the review without starting the AI stream","Settings opens an app-level window with the provider section","switching the provider preset carries the preset endpoint and default model into Base URL and Model","the preset switch still follows after the pane re-syncs stored settings"]}, indent=2), encoding="utf-8")
     except Exception:

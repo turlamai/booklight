@@ -50,6 +50,15 @@ function Wait-Until {
     throw "timed out waiting for $Description"
 }
 
+$script:journeySteps = @()
+function Record-Step {
+    # The CI step log floods with app noise, so each milestone lands in a
+    # small file that the acceptance artifact preserves verbatim.
+    param([string]$Name)
+    $script:journeySteps += "$([DateTime]::UtcNow.ToString('HH:mm:ss')) $Name"
+    try { ConvertTo-Json -InputObject $script:journeySteps | Set-Content -LiteralPath (Join-Path $output 'journey-steps.json') -Encoding utf8 } catch { }
+}
+
 function Contains-Text {
     param($Root, [string]$Fragment)
     try {
@@ -244,19 +253,20 @@ function Find-PresetCombo {
         [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
         [System.Windows.Automation.ControlType]::ComboBox)
     $combos = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
-    # A collapsed WinUI ComboBox keeps its selected ComboBoxItem in the tree;
-    # identify the provider preset by that selection.
+    # A collapsed WinUI ComboBox exposes no items in the UIA tree; identify
+    # the preset through its Selection pattern (the selected item's name).
     for ($index = 0; $index -lt $combos.Count; $index++) {
         try {
-            $items = $combos[$index].FindAll([System.Windows.Automation.TreeScope]::Descendants,
-                [System.Windows.Automation.Condition]::TrueCondition)
-            for ($itemIndex = 0; $itemIndex -lt $items.Count; $itemIndex++) {
-                if ($presetLabels -contains $items[$itemIndex].Current.Name) {
-                    return $combos[$index]
-                }
+            $selection = $combos[$index].GetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern)
+            $selected = ([System.Windows.Automation.SelectionPattern]$selection).Current.GetSelection()
+            if ($selected.Count -gt 0 -and $presetLabels -contains $selected[0].Current.Name) {
+                return $combos[$index]
             }
         } catch { }
     }
+    # Fallback: the provider section leads the settings IA, so the first
+    # combo on the pane is the preset.
+    if ($combos.Count -gt 0) { return $combos[0] }
     return $null
 }
 
@@ -268,23 +278,36 @@ function Select-PresetItem {
         $expand = $combo.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
         ([System.Windows.Automation.ExpandCollapsePattern]$expand).Expand()
         # Inline poll: Wait-Until probes run under the caller's dynamic scope,
-        # so function locals ($combo/$ItemNames) would not resolve there.
+        # so function locals ($combo/$ItemNames) would not resolve there. The
+        # expanded items may live under the combo or in a process-owned popup
+        # window, so search both.
+        $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+        $pidCondition = [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::ProcessIdProperty,
+            $Root.Current.ProcessId)
         $deadline = [DateTime]::UtcNow.AddSeconds(15)
         $item = $null
         while ([DateTime]::UtcNow -lt $deadline) {
             Start-Sleep -Milliseconds 100
-            $items = $combo.FindAll([System.Windows.Automation.TreeScope]::Descendants,
-                [System.Windows.Automation.Condition]::TrueCondition)
-            for ($index = 0; $index -lt $items.Count; $index++) {
-                if ($ItemNames -contains $items[$index].Current.Name -and
-                    $items[$index].Current.ControlType -eq [System.Windows.Automation.ControlType]::ListItem) {
-                    $item = $items[$index]
-                    break
+            $scopes = @($combo)
+            $scopes += @($desktop.FindAll([System.Windows.Automation.TreeScope]::Children, $pidCondition))
+            for ($scopeIndex = 0; $scopeIndex -lt $scopes.Count -and -not $item; $scopeIndex++) {
+                $items = $scopes[$scopeIndex].FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                    [System.Windows.Automation.Condition]::TrueCondition)
+                for ($index = 0; $index -lt $items.Count; $index++) {
+                    if ($ItemNames -contains $items[$index].Current.Name -and
+                        $items[$index].Current.ControlType -eq [System.Windows.Automation.ControlType]::ListItem) {
+                        $item = $items[$index]
+                        break
+                    }
                 }
             }
             if ($item) { break }
         }
-        if (-not $item) { return $false }
+        if (-not $item) {
+            ([System.Windows.Automation.ExpandCollapsePattern]$expand).Collapse()
+            return $false
+        }
         $selection = $item.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
         ([System.Windows.Automation.SelectionItemPattern]$selection).Select()
         return $true
@@ -430,7 +453,9 @@ try {
             }
             return $null
         }
+        Record-Step 'settings surface open'
         Assert-PresetSwitchFollows $settingsRoot
+        Record-Step 'preset switch followed (round 1)'
         [void](Wait-Until 'settings close action' {
             Invoke-NamedControl $settingsRoot @('Close','关闭')
         })
@@ -451,7 +476,9 @@ try {
             }
             return $null
         }
+        Record-Step 'settings surface open (reload)'
         Assert-PresetSwitchFollows $settingsRoot
+        Record-Step 'preset switch followed (round 2, after pane reload)'
         [void](Wait-Until 'settings close action again' {
             Invoke-NamedControl $settingsRoot @('Close','关闭')
         })
