@@ -598,6 +598,10 @@ struct MainWindow : MainWindowT<MainWindow> {
   winrt::Microsoft::UI::Xaml::Controls::ScrollViewer settings_pane_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::CheckBox settings_sidecar_{nullptr};
   std::map<std::wstring, std::pair<std::wstring, std::wstring>> preset_stash_;
+  // The preset whose fields the pane currently shows. SelectionChanged
+  // fires after the ComboBox already holds the new selection, so the
+  // outgoing preset comes from here, not from SelectedProviderId().
+  std::wstring settings_preset_id_;
   bool settings_busy_ = false;
   bool settings_ui_updating_ = false;
 
