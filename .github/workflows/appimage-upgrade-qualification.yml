@@ -152,9 +152,11 @@ jobs:
         run: |
           cat > /tmp/qual/boot-probe.py <<'EOF'
           #!/usr/bin/env python3
-          # Boot + persistence proof: the "Booklight" frame maps and the
-          # seeded library document title is visible — the first assertions
-          # of scripts/e2e/linux-atspi.py, without the annotation journey.
+          # Boot proof: the "Booklight" frame maps — the packaged host
+          # starts, renders, and talks to the session bus. (The seeded
+          # state's survival is asserted at file level in the workflow;
+          # shelf rendering needs the document-open journey, which stays
+          # with scripts/e2e/linux-atspi.py.)
           import argparse, json, time
           from pathlib import Path
           import pyatspi
@@ -215,13 +217,9 @@ jobs:
           window = wait_for(
               "Booklight frame",
               lambda: next((n for n in walk(app) if role(n) == "frame"), None))
-          wait_for(
-              "seeded library content through the embedded backend",
-              lambda: contains(window, "The Sample Book"))
           args.output.mkdir(parents=True, exist_ok=True)
           (args.output / "boot-proof.json").write_text(
-              json.dumps({"boot": True, "frame": "Booklight",
-                          "seededLibraryVisible": True}))
+              json.dumps({"boot": True, "frame": "Booklight"}))
           EOF
           cat > /tmp/qual/boot-verify.sh <<'EOF'
           #!/usr/bin/env bash
@@ -290,7 +288,7 @@ jobs:
           EOF
           chmod +x /tmp/qual/boot-verify.sh /tmp/qual/boot-probe.py
 
-      - name: Install N (tarball extract) and seed the library
+      - name: Install N (tarball extract) and seed the config state
         run: |
           set -euo pipefail
           APPDIR="booklight-linux-${{ matrix.arch }}"
@@ -299,14 +297,23 @@ jobs:
           test -x "/tmp/qual/install/$APPDIR/RivetHost"
           # retain N beside the install for the executed rollback
           cp -a "/tmp/qual/install/$APPDIR" "/tmp/qual/install/$APPDIR.previous"
-          # seed the library through the shipped fixture tooling: the same
-          # sample EPUB scripts/e2e/e2e-linux.sh registers
+          # seed the config state through the shipped fixture tooling: the
+          # same annotation-recovery fixture scripts/e2e/e2e-linux.sh
+          # writes, plus a real settings.json for fresh-install parity
           racket scripts/acceptance/seed-annotation-recovery.rkt \
             "/tmp/qual/config/site.jrtx.booklight" \
             "racket/tests/fixtures/sample.epub"
-          grep -rq "The Sample Book" /tmp/qual/config/site.jrtx.booklight/ || true
+          racket scripts/acceptance/seed-ai-preview.rkt \
+            "/tmp/qual/config/site.jrtx.booklight"
+          # file-level persistence baseline: every seeded byte is compared
+          # after the upgrade boot and again after the rollback boot (the
+          # UI shelf rendering needs the document-open journey and stays
+          # with the e2e journey)
+          ( cd /tmp/qual/config && find . -type f | sort | xargs sha256sum ) \
+            > /tmp/qual/seed-manifest.txt
+          test -s /tmp/qual/seed-manifest.txt
 
-      - name: Boot N headlessly (the install works, the library loads)
+      - name: Boot N headlessly (the install works)
         run: |
           set -euo pipefail
           APPDIR="booklight-linux-${{ matrix.arch }}"
@@ -361,12 +368,18 @@ jobs:
           # the retained tree must still be N byte for byte
           diff -r --brief "/tmp/qual/install/$APPDIR.previous" "/tmp/qual/from-reference/$APPDIR"
 
-      - name: Boot N+1 headlessly (data must survive the upgrade)
+      - name: Boot N+1 headlessly (seeded state must survive the upgrade)
         run: |
           set -euo pipefail
           APPDIR="booklight-linux-${{ matrix.arch }}"
           dbus-run-session -- bash /tmp/qual/boot-verify.sh \
             "/tmp/qual/install/$APPDIR" /tmp/qual/boot-n1
+          # every seeded config byte survives the upgrade unchanged (the
+          # updater's own bookkeeping — updater.json, updates/ — may
+          # legitimately appear or change around it)
+          ( cd /tmp/qual/config && while read -r hex path; do
+              test "$(sha256sum "$path" | cut -d' ' -f1)" = "$hex"
+            done < /tmp/qual/seed-manifest.txt )
           touch /tmp/qual/boot-n1.ok
 
       - name: Execute the documented rollback and boot N again
@@ -378,6 +391,9 @@ jobs:
           diff -r --brief "/tmp/qual/install/$APPDIR" "/tmp/qual/from-reference/$APPDIR"
           dbus-run-session -- bash /tmp/qual/boot-verify.sh \
             "/tmp/qual/install/$APPDIR" /tmp/qual/boot-rollback
+          ( cd /tmp/qual/config && while read -r hex path; do
+              test "$(sha256sum "$path" | cut -d' ' -f1)" = "$hex"
+            done < /tmp/qual/seed-manifest.txt )
           touch /tmp/qual/rollback.ok
 
       - name: Write evidence
@@ -422,7 +438,7 @@ jobs:
               bootNplus1: $bootNplus1,
               rollback: $rollback,
               badSignatureDetail: $badSignatureDetail,
-              dataPersistence: "seeded library (The Sample Book) visible in the N+1 UI across the upgrade and rollback boots",
+              dataPersistence: "seeded config state (annotation recovery file + settings.json) byte-identical across the upgrade boot and the rollback boot (updater bookkeeping - updater.json and updates/ - is allowed to change around it)",
               runUrl: $runUrl
             }' > .rivet/qualification/evidence.json
           cat .rivet/qualification/evidence.json
