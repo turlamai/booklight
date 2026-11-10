@@ -1,0 +1,117 @@
+# Flatpak bundle manifest for the release payload (issue: the Linux
+# distribution contract — deb+rpm+AppImage+Flatpak+tar.gz).
+#
+# CI renders the __VERSION__ / __ARCH__ / __SHA256__ placeholders from the
+# linux tar.gz it just built and writes the generated manifest to the repo
+# root (see .github/workflows/release.yml, the Linux job's Flatpak bundle
+# step):
+#
+#   sed -e "s/__VERSION__/.../" -e "s/__ARCH__/.../" -e "s/__SHA256__/.../" \
+#     flatpak/site.jrtx.booklight.yml > site.jrtx.booklight.gen.yml
+#   flatpak-builder --user --force-clean --repo=repo build-dir \
+#     site.jrtx.booklight.gen.yml
+#   flatpak build-bundle repo booklight-<v>-linux-<arch>.flatpak \
+#     site.jrtx.booklight stable
+#
+# The payload is self-contained (embedded Racket CS runtime, res/, app/,
+# the bundled libpdfium.so — its only NEEDED entries are libc/libm/
+# libpthread/libgcc_s, all inside the runtime). readelf on the release
+# binary shows exactly two NEEDED entries outside the GNOME Platform
+# runtime — liblz4.so.1 and libtinfo.so.6 — provided by the two small
+# modules below (the same closure as every family product; WebKitGTK and
+# JavaScriptCore for the EPUB renderer ship in the runtime).
+app-id: site.jrtx.booklight
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+command: RivetHost
+# The release contract bundles from branch `stable` (build-bundle arg);
+# builder otherwise commits to master.
+branch: stable
+separate-locales: false
+finish-args:
+  # prefer_xwayland_backend() picks X11 exactly when DISPLAY is set and
+  # WAYLAND_DISPLAY is not; granting only the X11 socket keeps that
+  # decision deterministic. dri/ipc also serve the WebKitGTK EPUB
+  # renderer's compositing path.
+  - --socket=x11
+  - --device=dri
+  - --share=ipc
+  # Booklight is file-first (SECURITY.md): it opens PDF/EPUB documents
+  # where they already live — arbitrary locations under home — and writes
+  # the per-document annotation sidecars (<document>.booklight.json) next
+  # to them. Settings/annotations under the config dir follow
+  # XDG_CONFIG_HOME (racket/booklight/settings.rkt) and are redirected
+  # into the sandboxed home, needing no grant.
+  - --filesystem=home
+  # Outbound network per SECURITY.md: update checks/downloads against
+  # GitHub Releases, plus LLM requests to the user-configured BYOK
+  # provider endpoints (translate/summarize/chat streaming). Both are
+  # product behavior; EPUB rendering stays local (chapter HTML arrives
+  # sanitized with images inlined as data: URLs).
+  - --share=network
+  # The BYOK provider key lives in the OS credential store on Linux —
+  # Secret Service through `secret-tool` (racket/booklight/
+  # secure-store.rkt); the session-bus name below is what that traffic
+  # addresses. Without it the store would silently fall back to the
+  # mode-0600 file, which the contract calls the no-secret-service
+  # fallback, not the desktop default.
+  - --talk-name=org.freedesktop.secrets
+modules:
+  - name: lz4
+    # Upstream keeps meson under build/ (flatpak-builder needs it at the
+    # module root), so use the primary Makefile build — library only.
+    buildsystem: simple
+    build-commands:
+      - make lib-release PREFIX=/app
+      - make -C lib install PREFIX=/app
+    sources:
+      - type: git
+        url: https://github.com/lz4/lz4.git
+        tag: v1.9.4
+        commit: 5ff839680134437dbf4678f3d0c7b371d84f4964
+  - name: ncurses
+    # libtinfo.so.6 only (the payload's NEEDED entry); no programs, no
+    # terminfo database install — the host system's entries stay put.
+    config-opts:
+      - --prefix=/app
+      - --with-shared
+      - --with-termlib
+      - --without-progs
+      - --without-tack
+      - --without-tests
+      # We only need libtinfo; the C++ binding does not survive the
+      # GNOME 50 SDK's GCC 15 libstdc++ (cstddef redefinition).
+      - --without-cxx-binding
+      - --without-cxx
+      - --disable-db-install
+    sources:
+      - type: archive
+        url: https://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.5.tar.gz
+        sha256: 136d91bc269a9a5785e5f9e980bc76ab57428f604ce3e5a5a90cebc767971cc6
+  - name: booklight
+    buildsystem: simple
+    sources:
+      - type: archive
+        path: booklight-__VERSION__-linux-__ARCH__.tar.gz
+        sha256: __SHA256__
+      - type: file
+        path: design/app-icon.png
+      - type: file
+        path: flatpak/site.jrtx.booklight.desktop
+    build-commands:
+      # flatpak-builder strips the archive's leading directory: the payload
+      # (RivetHost, runtime/, res/, app/, libpdfium.so) lands flat in the
+      # build dir. libpdfium.so rides along — the host resolves it next to
+      # the binary.
+      - mkdir -p /app/booklight
+      - cp -a RivetHost runtime res app libpdfium.so /app/booklight/
+      # The bundle's `command` resolves on the sandbox PATH (/app/bin); the
+      # payload lives outside it. A symlink keeps /proc/self/exe pointing
+      # at the real binary so the runtime layout discovery works.
+      - mkdir -p /app/bin
+      - ln -s /app/booklight/RivetHost /app/bin/RivetHost
+      - install -Dm644 app-icon.png
+                    /app/share/icons/hicolor/512x512/apps/site.jrtx.booklight.png
+      - install -Dm644 site.jrtx.booklight.desktop
+                    /app/share/applications/site.jrtx.booklight.desktop

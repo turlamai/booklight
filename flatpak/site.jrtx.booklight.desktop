@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Booklight
+Comment=Native PDF and EPUB reader that keeps your files where they live
+Exec=RivetHost
+Icon=site.jrtx.booklight
+Terminal=false
+Categories=Office;Viewer;
+StartupWMClass=Booklight

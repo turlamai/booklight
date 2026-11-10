@@ -53,7 +53,7 @@ Assets follow `booklight-<version>-<os>-<arch>.<ext>`:
 |---|---|---|
 | macOS 14+ (Apple silicon / Intel) | `booklight-<version>-macos-arm64.dmg` · `-x64.dmg` | `booklight-<version>-macos-arm64.zip` · `-x64.zip` |
 | Windows 10+ x64 | `booklight-<version>-windows-x64.msi` | `booklight-<version>-windows-x64.zip` |
-| Linux x64 / arm64 | `booklight-<version>-linux-<arch>.deb` · `.rpm` · `.AppImage` · `-linux-<arch>.tar.gz` | `booklight-<version>-linux-<arch>.zip` |
+| Linux x64 / arm64 | `booklight-<version>-linux-<arch>.deb` · `.rpm` · `.AppImage` · `-linux-<arch>.tar.gz` · `.flatpak` (app id `site.jrtx.booklight`; install with `flatpak --user install ./booklight-<version>-linux-<arch>.flatpak`) | `booklight-<version>-linux-<arch>.zip` |
 
 Every release carries a checked `SHA256SUMS`, and the in-app updater
 consumes the Ed25519-signed `update-manifest.json` feed (key id

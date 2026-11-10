@@ -215,6 +215,44 @@ jobs:
         env:
           APPIMAGE_EXTRACT_AND_RUN: '1'
         run: raco rivet release --without-updates --development
+      # Wraps the tar.gz payload into a Flatpak bundle from the flatpak/
+      # manifest template (family contract: deb+rpm+AppImage+Flatpak+tar.gz).
+      # The manifest's module closure covers the two NEEDED entries outside
+      # the GNOME Platform runtime (liblz4.so.1, libtinfo.so.6). Like
+      # deb/rpm, the flatpak install shape is manual-by-design and stays
+      # out of the signed update feed. Runs before Family naming so the
+      # bundle joins the checksum sweep.
+      - name: Flatpak bundle
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCH="${{ matrix.arch }}"
+          case "$ARCH" in x64) FPARCH=x86_64 ;; arm64) FPARCH=aarch64 ;; esac
+          sudo apt-get install --yes flatpak flatpak-builder
+          # User-level everything: runner accounts install runtimes and
+          # build without root. GNOME 50 is the oldest supported platform
+          # runtime (48 went EOL 2026-03-24); its glibc covers the
+          # ubuntu-24.04-built payload.
+          flatpak --user remote-add --if-not-exists flathub \
+            https://flathub.org/repo/flathub.flatpakrepo
+          flatpak --user install -y --noninteractive flathub \
+            "org.gnome.Platform/${FPARCH}/50" "org.gnome.Sdk/${FPARCH}/50"
+          # The manifest template carries version/arch/sha placeholders so
+          # the archive source's checksum is exact per release.
+          cp "dist/booklight-${VERSION}-linux-${ARCH}.tar.gz" .
+          SHA="$(sha256sum "booklight-${VERSION}-linux-${ARCH}.tar.gz" | cut -d' ' -f1)"
+          sed -e "s/__VERSION__/${VERSION}/" -e "s/__ARCH__/${ARCH}/" \
+              -e "s/__SHA256__/${SHA}/" \
+              flatpak/site.jrtx.booklight.yml > site.jrtx.booklight.gen.yml
+          # --disable-rofiles-fuse: runners have no /dev/fuse.
+          flatpak-builder --user --force-clean --disable-rofiles-fuse \
+            --repo=flatpak-repo flatpak-build site.jrtx.booklight.gen.yml
+          flatpak build-bundle flatpak-repo \
+            "booklight-${VERSION}-linux-${ARCH}.flatpak" site.jrtx.booklight stable
+          mv "booklight-${VERSION}-linux-${ARCH}.flatpak" dist/
+          rm -rf flatpak-build flatpak-repo \
+            "booklight-${VERSION}-linux-${ARCH}.tar.gz" site.jrtx.booklight.gen.yml
+          test -f "dist/booklight-${VERSION}-linux-${ARCH}.flatpak"
       - name: Family naming + checksums
         run: |
           set -euo pipefail
@@ -312,6 +350,7 @@ jobs:
                   "linux-x64.tar.gz", "linux-x64.zip",
                   "linux-arm64.deb", "linux-amd64.deb",
                   "linux-aarch64.AppImage", "linux-x86_64.AppImage",
+                  "linux-arm64.flatpak", "linux-x64.flatpak",
               )
           }
           rows = [line.split() for line in Path("dist/SHA256SUMS").read_text().splitlines()]

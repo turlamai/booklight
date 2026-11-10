@@ -53,7 +53,7 @@ raco rivet acceptance --json
 |---|---|---|
 | macOS 14+（Apple silicon / Intel） | `booklight-<version>-macos-arm64.dmg` · `-x64.dmg` | `booklight-<version>-macos-arm64.zip` · `-x64.zip` |
 | Windows 10+ x64 | `booklight-<version>-windows-x64.msi` | `booklight-<version>-windows-x64.zip` |
-| Linux x64 / arm64 | `booklight-<version>-linux-<arch>.deb` · `.rpm` · `.AppImage` · `-linux-<arch>.tar.gz` | `booklight-<version>-linux-<arch>.zip` |
+| Linux x64 / arm64 | `booklight-<version>-linux-<arch>.deb` · `.rpm` · `.AppImage` · `-linux-<arch>.tar.gz` · `.flatpak`（app id `site.jrtx.booklight`；`flatpak --user install ./booklight-<version>-linux-<arch>.flatpak` 安装） | `booklight-<version>-linux-<arch>.zip` |
 
 每个版本都带校验过的 `SHA256SUMS`；应用内更新消费 Ed25519 签名的
 `update-manifest.json` feed（key id `booklight-2026-10`；Sigstore 溯源：
