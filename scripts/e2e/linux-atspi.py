@@ -114,14 +114,24 @@ def click_center(node):
         raise AssertionError(f"AT-SPI exposes no bounds for {node.name!r}")
     click_extents(extents)
 def popup_rows(application):
-    rows = []
-    for node in walk(application):
-        if role(node) == "list item":
-            extents = node.queryComponent().getExtents(pyatspi.WINDOW_COORDS)
-            if extents.height > 0:
-                rows.append((extents.y, node, extents))
-    rows.sort(key=lambda entry: entry[0])
-    return rows
+    # Search the settings window subtree first: the main reader window can
+    # expose its own list items (EPUB thumbnails), which would otherwise be
+    # sorted into the popup rows by y and shift the targeted index. Fall
+    # back to the whole application when the popup lives in a detached
+    # toplevel the settings frame does not contain.
+    frame = settings_frame(application)
+    roots = ([frame] if frame is not None else []) + [application]
+    for root in roots:
+        rows = []
+        for node in walk(root):
+            if role(node) == "list item":
+                extents = node.queryComponent().getExtents(pyatspi.WINDOW_COORDS)
+                if extents.height > 0:
+                    rows.append((extents.y, node, extents))
+        if len(rows) >= 4:
+            rows.sort(key=lambda entry: entry[0])
+            return rows
+    return []
 def select_preset(application, output, names):
     combo = wait_for("provider preset combo box", lambda: preset_combo(application))
     if combo is None: raise AssertionError("provider preset combo box not found")
@@ -135,7 +145,8 @@ def select_preset(application, output, names):
     qwen_index = 3
     if len(rows) <= qwen_index:
         raise AssertionError(f"preset popup exposed only {len(rows)} rows")
-    record_step(output, "click Qwen row", f"row {qwen_index} of {len(rows)}")
+    geometry = [f"y={entry[2].y} h={entry[2].height}" for entry in rows]
+    record_step(output, "click Qwen row", f"row {qwen_index} of {len(rows)}: {'; '.join(geometry)}")
     click_extents(rows[qwen_index][2])
 
 def main():
