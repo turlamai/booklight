@@ -56,13 +56,42 @@ jobs:
           $out | Write-Host
           $dir = ($out | Select-String -Pattern 'ZLIBDIR=(.+)').Matches.Groups[1].Value
           (Resolve-Path $dir).Path >> $env:GITHUB_PATH
+      # Temporary diagnostic: the acceptance suite truncates captured stdout
+      # at 64 KiB, which swallowed the MSBuild error. Compile the host
+      # project directly with the exact arguments rivet build uses and keep
+      # a full binary log as an artifact.
+      - name: Diagnostic verbose MSBuild
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild `
+            -find MSBuild\**\Bin\amd64\MSBuild.exe | Select-Object -First 1
+          if (-not $msbuild) { throw 'MSBuild not found via vswhere' }
+          Write-Host "msbuild: $msbuild"
+          & $msbuild "windows\RivetHost.vcxproj" "/restore" "/m" `
+            "/p:PreferredToolArchitecture=x64" "/p:Configuration=Debug" `
+            "/p:Platform=x64" "/p:RivetSelfContained=false" `
+            "/p:OutDir=$env:RUNNER_TEMP\diag-stage\" `
+            "/flp:logfile=$env:RUNNER_TEMP\msbuild-diag.log;verbosity=diagnostic" `
+            "/fl1:logfile=$env:RUNNER_TEMP\msbuild-errors.log;errorsonly"
+          $code = $LASTEXITCODE
+          if (Test-Path "$env:RUNNER_TEMP\msbuild-errors.log") {
+            Get-Content "$env:RUNNER_TEMP\msbuild-errors.log" | Write-Host
+          }
+          if ($code -ne 0) {
+            Get-Content "$env:RUNNER_TEMP\msbuild-diag.log" -Tail 120 | Write-Host
+            throw "diagnostic MSBuild failed with exit code $code"
+          }
       - name: Run executable product acceptance
         run: raco rivet acceptance --json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: booklight-acceptance-windows
-          path: .rivet/acceptance/
+          path: |
+            .rivet/acceptance/
+            ${{ runner.temp }}/msbuild-diag.log
+            ${{ runner.temp }}/msbuild-errors.log
           if-no-files-found: warn
 
   macos:
