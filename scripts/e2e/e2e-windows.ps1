@@ -219,6 +219,103 @@ function Save-Snapshot {
         Set-Content -LiteralPath $Path -Encoding utf8
 }
 
+function Find-EditWithValue {
+    param($Root, [string]$Value)
+    $condition = [System.Windows.Automation.PropertyCondition]::new(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [System.Windows.Automation.ControlType]::Edit)
+    $edits = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
+    for ($index = 0; $index -lt $edits.Count; $index++) {
+        try {
+            $pattern = $edits[$index].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+            if (([System.Windows.Automation.ValuePattern]$pattern).Current.Value -eq $Value) {
+                return $edits[$index]
+            }
+        } catch { }
+    }
+    return $null
+}
+
+function Find-PresetCombo {
+    param($Root)
+    $presetLabels = @('Ollama (local)', 'Ollama（本地）', 'DeepSeek', 'Custom', '自定义',
+        'Qwen (Alibaba)', '通义千问 Qwen')
+    $condition = [System.Windows.Automation.PropertyCondition]::new(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [System.Windows.Automation.ControlType]::ComboBox)
+    $combos = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
+    # A collapsed WinUI ComboBox keeps its selected ComboBoxItem in the tree;
+    # identify the provider preset by that selection.
+    for ($index = 0; $index -lt $combos.Count; $index++) {
+        try {
+            $items = $combos[$index].FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.Condition]::TrueCondition)
+            for ($itemIndex = 0; $itemIndex -lt $items.Count; $itemIndex++) {
+                if ($presetLabels -contains $items[$itemIndex].Current.Name) {
+                    return $combos[$index]
+                }
+            }
+        } catch { }
+    }
+    return $null
+}
+
+function Select-PresetItem {
+    param($Root, [string[]]$ItemNames)
+    $combo = Find-PresetCombo $Root
+    if (-not $combo) { return $false }
+    try {
+        $expand = $combo.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
+        ([System.Windows.Automation.ExpandCollapsePattern]$expand).Expand()
+        # Inline poll: Wait-Until probes run under the caller's dynamic scope,
+        # so function locals ($combo/$ItemNames) would not resolve there.
+        $deadline = [DateTime]::UtcNow.AddSeconds(15)
+        $item = $null
+        while ([DateTime]::UtcNow -lt $deadline) {
+            Start-Sleep -Milliseconds 100
+            $items = $combo.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.Condition]::TrueCondition)
+            for ($index = 0; $index -lt $items.Count; $index++) {
+                if ($ItemNames -contains $items[$index].Current.Name -and
+                    $items[$index].Current.ControlType -eq [System.Windows.Automation.ControlType]::ListItem) {
+                    $item = $items[$index]
+                    break
+                }
+            }
+            if ($item) { break }
+        }
+        if (-not $item) { return $false }
+        $selection = $item.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
+        ([System.Windows.Automation.SelectionItemPattern]$selection).Select()
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Assert-PresetSwitchFollows {
+    param($SettingsRoot)
+    # The seeded profile runs Ollama; switching the provider preset must
+    # carry the preset's endpoint and default model into Base URL/Model.
+    # GetNewClosure captures $SettingsRoot for probes Wait-Until invokes in
+    # its own dynamic scope.
+    [void](Wait-Until 'seeded provider endpoint in Base URL' {
+        if (Find-EditWithValue $SettingsRoot 'http://127.0.0.1:1/v1') { return $true }; return $false
+    }.GetNewClosure())
+    [void](Wait-Until 'seeded model in Model' {
+        if (Find-EditWithValue $SettingsRoot 'acceptance-never-send') { return $true }; return $false
+    }.GetNewClosure())
+    if (-not (Select-PresetItem $SettingsRoot @('通义千问 Qwen', 'Qwen (Alibaba)'))) {
+        throw 'provider preset combo did not offer the Qwen item'
+    }
+    [void](Wait-Until 'Base URL follows the Qwen preset' {
+        if (Find-EditWithValue $SettingsRoot 'https://dashscope.aliyuncs.com/compatible-mode/v1') { return $true }; return $false
+    }.GetNewClosure())
+    [void](Wait-Until 'Model follows the Qwen preset' {
+        if (Find-EditWithValue $SettingsRoot 'qwen3-max') { return $true }; return $false
+    }.GetNewClosure())
+}
+
 $process = $null
 $savedAppData = $env:APPDATA
 $savedLocalData = $env:LOCALAPPDATA
@@ -317,7 +414,9 @@ try {
             throw 'cancelling the AI send review created a stream card'
         }
         # Settings is an app-level surface, not a fourth AI tab. Open the
-        # native gear, require the provider section, then close the dialog.
+        # native gear, require the provider section, switch the preset, then
+        # close and reopen: the pane reloads stored settings on every open,
+        # so the second switch must follow after that reload too.
         [void](Wait-Until 'settings gear' {
             Invoke-NamedControl $window @('Settings','设置')
         })
@@ -331,10 +430,32 @@ try {
             }
             return $null
         }
+        Assert-PresetSwitchFollows $settingsRoot
         [void](Wait-Until 'settings close action' {
             Invoke-NamedControl $settingsRoot @('Close','关闭')
         })
         [void](Wait-Until 'settings dismissal' {
+            -not ((Contains-Text $window 'Provider preset') -or
+                  (Contains-Text $window '服务商预设'))
+        })
+        [void](Wait-Until 'settings gear again' {
+            Invoke-NamedControl $window @('Settings','设置')
+        })
+        $settingsRoot = Wait-Until 'app-level settings surface again' {
+            $candidates = @($window) + @(Process-Windows -ProcessId $process.Id)
+            foreach ($candidate in $candidates) {
+                if ((Contains-Text $candidate 'Provider preset') -or
+                    (Contains-Text $candidate '服务商预设')) {
+                    return $candidate
+                }
+            }
+            return $null
+        }
+        Assert-PresetSwitchFollows $settingsRoot
+        [void](Wait-Until 'settings close action again' {
+            Invoke-NamedControl $settingsRoot @('Close','关闭')
+        })
+        [void](Wait-Until 'settings dismissal again' {
             -not ((Contains-Text $window 'Provider preset') -or
                   (Contains-Text $window '服务商预设'))
         })
@@ -351,8 +472,8 @@ try {
     [ordered]@{
         platform = 'windows'
         artifact = $executable.FullName
-        actions = @('launch:two-original-epub-paths','switch:first-epub','press:Annotations','switch:second-epub','switch:first-epub','press:AI Assistant','press:Translate current EPUB scope','assert:AI send review','press:Cancel','press:Settings','assert:settings surface')
-        assertions = @('packaged WinUI window activated','branded titlebar icon is pixel-identical to the packaged exe group icon resource','sample EPUB crossed RVT1 into the embedded backend','native accessibility tree contains The Sample Book','native accessibility tree contains First Chapter','pending recovery crosses RVT1 on reopen','native Notes pane exposes recovered status and Retry Save','recovered annotation remains visible and exportable','two distinct native EPUB tabs persist across switches','first EPUB recovery state is isolated','both source EPUB hashes remain unchanged','native review exposes current-chapter scope and exact user-content total before provider launch','Cancel dismisses the review without starting the AI stream')
+        actions = @('launch:two-original-epub-paths','switch:first-epub','press:Annotations','switch:second-epub','switch:first-epub','press:AI Assistant','press:Translate current EPUB scope','assert:AI send review','press:Cancel','press:Settings','select:Qwen preset','assert:preset switch follows','press:Close','press:Settings','select:Qwen preset','assert:preset switch follows after reload','press:Close')
+        assertions = @('packaged WinUI window activated','branded titlebar icon is pixel-identical to the packaged exe group icon resource','sample EPUB crossed RVT1 into the embedded backend','native accessibility tree contains The Sample Book','native accessibility tree contains First Chapter','pending recovery crosses RVT1 on reopen','native Notes pane exposes recovered status and Retry Save','recovered annotation remains visible and exportable','two distinct native EPUB tabs persist across switches','first EPUB recovery state is isolated','both source EPUB hashes remain unchanged','native review exposes current-chapter scope and exact user-content total before provider launch','Cancel dismisses the review without starting the AI stream','switching the provider preset carries the preset endpoint and default model into Base URL and Model','the preset switch still follows after the pane reloads stored settings on reopen')
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output 'interaction-trace.json') -Encoding utf8
 
     $pattern = $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern)
