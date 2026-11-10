@@ -222,7 +222,14 @@ function Save-Snapshot {
         [System.Windows.Automation.Condition]::TrueCondition)
     $snapshot = for ($index = 0; $index -lt [Math]::Min($nodes.Count, 800); $index++) {
         $node = $nodes[$index]
-        [ordered]@{ name = $node.Current.Name; controlType = $node.Current.ControlType.ProgrammaticName; automationId = $node.Current.AutomationId }
+        $entry = [ordered]@{ name = $node.Current.Name; controlType = $node.Current.ControlType.ProgrammaticName; automationId = $node.Current.AutomationId }
+        # Field values separate "selection ran but fields did not follow"
+        # from "the fields never rendered" in failure evidence.
+        try {
+            $valuePattern = $node.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+            $entry.value = ([System.Windows.Automation.ValuePattern]$valuePattern).Current.Value
+        } catch { }
+        $entry
     }
     ConvertTo-Json -InputObject @($snapshot) -Depth 4 |
         Set-Content -LiteralPath $Path -Encoding utf8
@@ -328,12 +335,19 @@ function Assert-PresetSwitchFollows {
     [void](Wait-Until 'seeded model in Model' {
         if (Find-EditWithValue $SettingsRoot 'acceptance-never-send') { return $true }; return $false
     }.GetNewClosure())
+    Record-Step 'seeded provider fields asserted'
     if (-not (Select-PresetItem $SettingsRoot @('通义千问 Qwen', 'Qwen (Alibaba)'))) {
         throw 'provider preset combo did not offer the Qwen item'
     }
+    Record-Step 'Qwen item selected'
     [void](Wait-Until 'Base URL follows the Qwen preset' {
         if (Find-EditWithValue $SettingsRoot 'https://dashscope.aliyuncs.com/compatible-mode/v1') { return $true }; return $false
     }.GetNewClosure())
+    Record-Step 'Base URL followed'
+    [void](Wait-Until 'Model follows the Qwen preset' {
+        if (Find-EditWithValue $SettingsRoot 'qwen3-max') { return $true }; return $false
+    }.GetNewClosure())
+    Record-Step 'Model followed'
     [void](Wait-Until 'Model follows the Qwen preset' {
         if (Find-EditWithValue $SettingsRoot 'qwen3-max') { return $true }; return $false
     }.GetNewClosure())
