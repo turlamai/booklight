@@ -98,37 +98,18 @@ def node_with_text(root, value):
 def preset_combo(root):
     labels = ("Ollama (local)", "Ollama（本地）", "DeepSeek", "Custom", "自定义", "Qwen (Alibaba)", "通义千问 Qwen")
     return next((node for node in walk(root) if role(node) == "combo box" and any(label in (descendant.name or "") or label in text(descendant) for descendant in walk(node) for label in labels)), None)
-def settings_window_origin():
-    # Bare Xvfb has no window manager, but GTK still places the transient
-    # settings window wherever it likes, so WINDOW_COORDS extents must be
-    # translated by the window's real position before any XTest click.
-    # (v5 clicked one row high — the window sat at y≈37.)
-    for title in ("Settings", "设置"):
-        result = subprocess.run(
-            ["xdotool", "search", "--onlyvisible", "--name", title,
-             "getwindowgeometry", "--shell"],
-            capture_output=True, text=True)
-        values = {}
-        for line in result.stdout.strip().splitlines():
-            if "=" in line:
-                key, _, value = line.partition("=")
-                values[key] = value
-        if "X" in values and "Y" in values:
-            return int(values["X"]), int(values["Y"])
-    return 0, 0
-def click_extents(extents, origin):
-    # GTK4 reports broken (0,0) DESKTOP_COORDS on this stack, and AT-SPI
-    # press actions cannot open the dropdown, so every selection step goes
-    # through XTest pointer clicks at window origin + WINDOW_COORDS.
-    subprocess.run(["xdotool", "mousemove",
-                    str(origin[0] + extents.x + extents.width // 2),
-                    str(origin[1] + extents.y + extents.height // 2),
-                    "click", "1"], check=True)
-def click_center(node, origin):
+def click_center(node):
+    # GTK4 reports broken (0,0) DESKTOP_COORDS on this stack and AT-SPI
+    # press actions cannot open the dropdown, so the popup opens through an
+    # XTest pointer click at the combo's WINDOW_COORDS center (the bare
+    # Xvfb settings window sits at (0,0), verified via xdotool).
     extents = node.queryComponent().getExtents(pyatspi.WINDOW_COORDS)
     if extents.width <= 0 or extents.height <= 0:
         raise AssertionError(f"AT-SPI exposes no bounds for {node.name!r}")
-    click_extents(extents, origin)
+    subprocess.run(["xdotool", "mousemove",
+                    str(extents.x + extents.width // 2),
+                    str(extents.y + extents.height // 2),
+                    "click", "1"], check=True)
 def popup_rows(application):
     # Search the settings window subtree first: the main reader window can
     # expose its own list items (EPUB thumbnails), which would otherwise be
@@ -143,17 +124,22 @@ def popup_rows(application):
             if role(node) == "list item":
                 extents = node.queryComponent().getExtents(pyatspi.WINDOW_COORDS)
                 if extents.height > 0:
-                    rows.append((extents.y, node, extents))
+                    rows.append((extents.y, node))
         if len(rows) >= 4:
             rows.sort(key=lambda entry: entry[0])
             return rows
     return []
+def focused_row_index(application):
+    rows = popup_rows(application)
+    for index, (_, node) in enumerate(rows):
+        if node.getState().contains(pyatspi.STATE_FOCUSED):
+            return index
+    return None
 def select_preset(application, output, names):
     combo = wait_for("provider preset combo box", lambda: preset_combo(application))
     if combo is None: raise AssertionError("provider preset combo box not found")
-    origin = settings_window_origin()
-    record_step(output, "open preset popup", f"click combo center, window origin {origin}")
-    click_center(combo, origin)
+    record_step(output, "open preset popup", "click combo center")
+    click_center(combo)
     rows = wait_for("provider preset popup rows", lambda: popup_rows(application) or None, timeout=10)
     # The popup lists the fixed preset order from
     # racket/booklight/providers.rkt: glm-coding, zhipu, deepseek, qwen, ...
@@ -162,9 +148,25 @@ def select_preset(application, output, names):
     qwen_index = 3
     if len(rows) <= qwen_index:
         raise AssertionError(f"preset popup exposed only {len(rows)} rows")
-    geometry = [f"y={entry[2].y} h={entry[2].height}" for entry in rows]
-    record_step(output, "click Qwen row", f"row {qwen_index} of {len(rows)}: {'; '.join(geometry)}")
-    click_extents(rows[qwen_index][2], origin)
+    # The opened popup grabs the keyboard with its cursor on the FIRST row
+    # (not the selected one), and the first synthesized key after opening
+    # can be swallowed — so walk with observable feedback: read the focused
+    # row through AT-SPI after every key and steer until it reaches Qwen,
+    # then activate.
+    record_step(output, "keyboard walk start", f"rows={len(rows)} target={qwen_index}")
+    for _ in range(15):
+        index = focused_row_index(application)
+        if index == qwen_index:
+            break
+        subprocess.run(["xdotool", "key",
+                        "Down" if index is None or index < qwen_index else "Up"],
+                       check=True)
+        time.sleep(0.35)
+    else:
+        raise AssertionError(
+            f"keyboard walk ended on row {focused_row_index(application)}, expected {qwen_index}")
+    record_step(output, "click Qwen row", "keyboard walk reached the target row")
+    subprocess.run(["xdotool", "key", "Return"], check=True)
 
 def main():
     parser = argparse.ArgumentParser(); parser.add_argument("--output", type=Path, required=True); args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True)
