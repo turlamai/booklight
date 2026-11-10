@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Booklight — AI 助手 inspector</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* ==== ai 专属：外发永不过界 ==== */
+  .docpane { flex: 1; display: grid; place-items: center; position: relative; min-width: 0; }
+  .docpane .dim { color: var(--mute); font-size: 12.5px; text-align: center; line-height: 1.9; padding: 24px; }
+  .inspector {
+    width: 340px; flex: none; display: flex; flex-direction: column;
+    background: var(--sidebar); border-left: 1px solid var(--line);
+  }
+  .itabs { display: flex; gap: 2px; padding: 10px 10px 0; }
+  .itabs .itab {
+    flex: 1; height: 30px; border-radius: 8px 8px 0 0; display: grid; place-items: center;
+    font-size: 12.5px; color: var(--mute); cursor: default; user-select: none;
+  }
+  .itabs .itab.active { background: var(--panel); color: var(--accent); font-weight: 600; box-shadow: 0 -1px 0 var(--line) inset; }
+  .ipane { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-top: 1px solid var(--line); }
+  .iscope { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--mute); }
+  .iscope .seg2 { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-left: auto; }
+  .iscope .seg2 button { border: none; background: transparent; padding: 3px 9px; font-size: 11.5px; color: var(--mute); cursor: pointer; font-family: inherit; }
+  .iscope .seg2 button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .ichat { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 12px; }
+  .who { font-size: 10.5px; font-weight: 600; color: var(--mute); letter-spacing: .5px; margin-bottom: 4px; }
+  .bub { font-size: 13px; line-height: 1.7; }
+  .bub.me { padding: 9px 12px; background: var(--panel-alt); border-radius: 10px; max-width: 92%; }
+  .bub.ai { max-width: 96%; }
+  .cite {
+    display: flex; gap: 7px; align-items: flex-start; margin-top: 8px; padding: 7px 10px;
+    border: 1px solid var(--line); border-left: 2px solid var(--accent); border-radius: 6px;
+    background: var(--panel-alt); font-size: 11.5px; color: var(--mute); cursor: pointer;
+  }
+  .cite:hover { background: var(--accent-soft); }
+  .cite .loc { color: var(--accent); font-weight: 600; white-space: nowrap; }
+  .think { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--accent); }
+  .iinput { flex: none; display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
+  .iinput .q {
+    flex: 1; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg);
+    color: var(--mute); font-size: 12.5px; display: flex; align-items: center; padding: 0 10px;
+  }
+  .iinput .send { height: 32px; }
+  /* 发送前核对 sheet：只有「继续」才发请求 */
+  .sheetmask { position: absolute; inset: 0; background: rgba(23,20,18,.35); display: grid; place-items: center; z-index: 6; }
+  .sheet {
+    width: 430px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px 22px; box-shadow: 0 16px 48px rgba(23,20,18,.28);
+  }
+  .sheet h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .sheet .snote { font-size: 11.5px; color: var(--mute); line-height: 1.7; margin-bottom: 12px; }
+  .kv { display: flex; justify-content: space-between; font-size: 12.5px; padding: 7px 2px; border-bottom: 1px solid var(--line); }
+  .kv:last-of-type { border-bottom: none; font-weight: 600; }
+  .kv .v { font-variant-numeric: tabular-nums; color: var(--mute); }
+  .kv:last-of-type .v { color: var(--accent); }
+  .sheet .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+</style>
+</head>
+<body>
+  <div class="window" id="app">
+    <div class="titlebar">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <button class="iconbtn" title="显示/隐藏侧栏">◧</button>
+      <div><div class="t">The Sample Book</div><div class="sub">EPUB · 第 2 / 5 章</div></div>
+      <div class="sp"></div>
+      <button class="btn primary" title="AI 助手">✦ AI 助手</button>
+      <button class="iconbtn" id="themeBtn" title="切换亮暗主题">◐</button>
+    </div>
+    <div class="body">
+      <section class="docpane">
+        <div class="dim">正文在此处保持安静；<br>对话、总结、翻译都发生在右侧 inspector。<br><br>回答中的引用可点回原文位置。</div>
+      </section>
+      <aside class="inspector">
+        <div class="itabs">
+          <div class="itab active">对话</div>
+          <div class="itab">总结</div>
+          <div class="itab">翻译</div>
+        </div>
+        <div class="ipane">
+          <div class="iscope">上下文范围
+            <div class="seg2">
+              <button title="先在正文中选择一段文本">选区</button>
+              <button class="on">当前页</button>
+              <button>全文</button>
+            </div>
+          </div>
+          <div class="ichat">
+            <div class="bub me">
+              <div class="who">我</div>
+              这一章的核心论证是什么？
+            </div>
+            <div class="bub ai">
+              <div class="who">BOOKLIGHT · GLM-4.7</div>
+              本章把「起点的不平等」归结为两个变量：可驯化物种的初始分布，以及大陆轴线走向对传播速度的影响。作者主张地理禀赋先于制度差异。
+              <div class="cite">
+                <span>“粮食生产带来了定居、存储与人口密度……”</span>
+                <span class="loc">第 2 章 · 第 14 页 ↗</span>
+              </div>
+            </div>
+            <div class="think hidden" id="think">
+              <span class="spin"></span> 思考中… <button class="btn" style="margin-left: 6px; height: 24px;">停止</button>
+            </div>
+          </div>
+          <div class="iinput">
+            <div class="q">基于文档内容提问…</div>
+            <button class="btn primary send">发送</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+    <div class="statusbar">
+      <span>文档内容只有经你核对后才发送给所配置的服务商</span>
+      <span class="sp"></span>
+    </div>
+    <!-- 发送前核对（演示态） -->
+    <div class="sheetmask" id="preview">
+      <div class="sheet">
+        <h3>核对即将发送的内容</h3>
+        <div class="snote">只有点「继续」才会开始请求。服务商指令不计入用户内容字符数。</div>
+        <div class="kv"><span>操作</span><span class="v">对话</span></div>
+        <div class="kv"><span>范围</span><span class="v">当前页（第 2 章）</span></div>
+        <div class="kv"><span>文档内容</span><span class="v">2,431 个字符</span></div>
+        <div class="kv"><span>会话历史</span><span class="v">312 个字符</span></div>
+        <div class="kv"><span>你的问题</span><span class="v">18 个字符</span></div>
+        <div class="kv"><span>用户内容合计</span><span class="v">2,761 个字符</span></div>
+        <div class="acts">
+          <button class="btn">取消</button>
+          <button class="btn primary">继续</button>
+        </div>
+      </div>
+    </div>
+    <div class="demo">
+      <span>状态演示</span>
+      <div class="seg" id="stateSeg">
+        <button data-s="chat">对话态</button>
+        <button class="on" data-s="preview">发送核对</button>
+        <button data-s="think">思考中</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    document.getElementById('themeBtn').addEventListener('click', () => {
+      document.getElementById('app').classList.toggle('dark');
+    });
+    var seg = document.getElementById('stateSeg');
+    seg.addEventListener('click', (e) => {
+      var b = e.target.closest('button'); if (!b) return;
+      seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      document.getElementById('preview').classList.toggle('hidden', b.dataset.s !== 'preview');
+      document.getElementById('think').classList.toggle('hidden', b.dataset.s !== 'think');
+    });
+  </script>
+</body>
+</html>

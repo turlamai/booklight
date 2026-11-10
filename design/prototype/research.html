@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Booklight — 研究工作台（付费层）</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* ==== research 专属：跨书检索 + 可溯源引用（词表见 DESIGN.md ui.research.*）==== */
+  .qhead { flex: none; display: flex; gap: 10px; padding: 14px 20px 10px; align-items: center; }
+  .qbox {
+    flex: 1; height: 36px; display: flex; align-items: center; gap: 9px; padding: 0 14px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    font-size: 14px; color: var(--mute);
+  }
+  .pro-pill { font-size: 10.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 3px 10px; white-space: nowrap; }
+  .results { flex: 1; overflow-y: auto; padding: 4px 20px 20px; }
+  .rdoc { font-size: 12px; font-weight: 700; color: var(--mute); padding: 14px 4px 6px; }
+  .rcard {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 8px;
+  }
+  .rcard .ex { font-size: 13.5px; line-height: 1.75; font-family: Georgia, "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif; }
+  .rcard .src { display: inline-flex; align-items: center; gap: 5px; margin-top: 9px; font-size: 11.5px; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 2px 10px; cursor: pointer; }
+  .rcard .acts { display: flex; gap: 6px; margin-top: 9px; }
+  .rcard .acts .btn { height: 24px; font-size: 11px; padding: 0 9px; }
+  .rcard .acts .btn.pinned { color: var(--accent); border-color: var(--accent-soft); background: var(--accent-soft); }
+  .noresult { text-align: center; color: var(--mute); font-size: 13px; padding: 60px 0 0; }
+  .noresult .nr-t { font-size: 14.5px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+  .rempty { text-align: center; color: var(--mute); font-size: 12.5px; padding: 60px 24px 0; line-height: 1.8; }
+  .rempty .dash { border: 1.5px dashed var(--line); border-radius: 10px; padding: 22px; margin: 0 8px 14px; font-size: 13px; }
+  /* 引用集：每条可回溯 */
+  .deck { width: 288px; flex: none; display: flex; flex-direction: column; background: var(--sidebar); border-left: 1px solid var(--line); }
+  .deck .dh { flex: none; display: flex; align-items: center; padding: 12px 14px 8px; font-size: 13px; font-weight: 700; }
+  .deck .dh .cnt { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 1px 8px; }
+  .deck .dlist { flex: 1; overflow-y: auto; padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .ccard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; }
+  .ccard .cq { font-size: 12.5px; line-height: 1.7; font-family: Georgia, "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif; }
+  .ccard .csrc { display: flex; align-items: center; gap: 5px; margin-top: 8px; font-size: 11px; color: var(--mute); }
+  .ccard .csrc .jump { margin-left: auto; color: var(--accent); font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .ccard .cnote { margin-top: 8px; font-size: 11.5px; color: var(--mute); border-top: 1px solid var(--line); padding-top: 7px; }
+</style>
+</head>
+<body>
+  <div class="window" id="app">
+    <div class="titlebar">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div><div class="t">研究工作台</div><div class="sub">跨书检索 · 可溯源引用</div></div>
+      <div class="sp"></div>
+      <span class="pro-pill">付费层</span>
+      <button class="iconbtn" id="themeBtn" title="切换亮暗主题">◐</button>
+    </div>
+    <div class="body">
+      <aside class="sidebar">
+        <div class="sect">检索范围</div>
+        <div class="sect" style="padding-top: 2px; font-size: 12px; color: var(--ink); letter-spacing: 0;">打开的文档（3）</div>
+        <div class="item"><span style="color: var(--accent);">✓</span>枪炮、病菌与钢铁.epub</div>
+        <div class="item"><span style="color: var(--accent);">✓</span>激光干涉仪设计手册.pdf</div>
+        <div class="item" style="color: var(--mute);">▢ 2026 年度报税指南.pdf</div>
+        <div class="sect">最近文档</div>
+        <div class="item" style="color: var(--mute);">＋ The Sample Book.epub</div>
+        <div class="foot">检索不复制文件；命中来自文档原位。</div>
+      </aside>
+      <section class="main">
+        <div class="qhead">
+          <div class="qbox">⌕ 粮食生产 传播<span style="margin-left: auto;"><kbd>⌘F</kbd></span></div>
+          <button class="btn">检索</button>
+        </div>
+        <div class="banner busy hidden" id="busyBar" style="margin: 0 20px 8px;">
+          <span class="spin"></span><span style="flex: 1;">正在检索 3 份文档…</span>
+        </div>
+        <div class="results" id="results">
+          <div class="rdoc">枪炮、病菌与钢铁 · EPUB · 4 处命中</div>
+          <div class="rcard">
+            <div class="ex">……<mark>粮食生产</mark>带来了定居、存储与人口密度，也带来了与驯化动物共处而来的病菌。</div>
+            <span class="src">第 2 章 · 第 14 页 ↗</span>
+            <div class="acts">
+              <button class="btn">跳转原文</button>
+              <button class="btn">复制引用</button>
+              <button class="btn pinned">✓ 已加入引用集</button>
+            </div>
+          </div>
+          <div class="rcard">
+            <div class="ex">……作物与牲畜沿欧亚大陆的东西轴线<mark>传播</mark>，比跨气候带快得多。</div>
+            <span class="src">第 3 章 · 第 26 页 ↗</span>
+            <div class="acts">
+              <button class="btn">跳转原文</button>
+              <button class="btn">复制引用</button>
+              <button class="btn">加入引用集</button>
+            </div>
+          </div>
+          <div class="rdoc">激光干涉仪设计手册 · PDF · 1 处命中</div>
+          <div class="rcard">
+            <div class="ex">……隔震平台将<mark>传播</mark>路径上的高频振动衰减 40 dB 以上。</div>
+            <span class="src">第 47 页 ↗</span>
+            <div class="acts">
+              <button class="btn">跳转原文</button>
+              <button class="btn">复制引用</button>
+              <button class="btn">加入引用集</button>
+            </div>
+          </div>
+          <div class="noresult hidden" id="noResult">
+            <div class="nr-t">无结果</div>
+            <div>试试更短的关键词，或扩大检索范围。</div>
+          </div>
+          <div class="rempty hidden" id="noDocs">
+            <div class="dash">还没有可检索的文档</div>
+            <div>打开 PDF 或 EPUB，或从「最近文档」加入。<br>检索在原文件上进行，不复制进书库。</div>
+          </div>
+        </div>
+        <div class="statusbar">
+          <span>复制引用自带《文档》+ 页/章，粘贴即可溯源</span>
+          <span>3 份文档 · 5 处命中 · 0.4 秒</span>
+          <span class="sp"></span>
+        </div>
+      </section>
+      <aside class="deck">
+        <div class="dh">引用集<span class="cnt">2 条</span></div>
+        <div style="font-size: 11px; color: var(--mute); padding: 0 14px 8px;">随批注保存 · 可导出</div>
+        <div class="dlist">
+          <div class="ccard">
+            <div class="cq">「粮食生产带来了定居、存储与人口密度，也带来了与驯化动物共处而来的病菌。」</div>
+            <div class="csrc">《枪炮、病菌与钢铁》· 第 2 章 · 第 14 页<span class="jump">回跳原文 ↗</span></div>
+            <div class="cnote">论证链起点：地理禀赋 → 定居 → 病菌。</div>
+          </div>
+          <div class="ccard">
+            <div class="cq">「隔震平台将传播路径上的高频振动衰减 40 dB 以上。」</div>
+            <div class="csrc">《激光干涉仪设计手册》· 第 47 页<span class="jump">回跳原文 ↗</span></div>
+            <div class="cnote">跨书对照：传播问题的工程化表述。</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+    <div class="demo">
+      <span>状态演示</span>
+      <div class="seg" id="stateSeg">
+        <button class="on" data-s="results">有结果</button>
+        <button data-s="searching">检索中</button>
+        <button data-s="none">无结果</button>
+        <button data-s="empty">空文档</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    document.getElementById('themeBtn').addEventListener('click', () => {
+      document.getElementById('app').classList.toggle('dark');
+    });
+    var seg = document.getElementById('stateSeg');
+    seg.addEventListener('click', (e) => {
+      var b = e.target.closest('button'); if (!b) return;
+      seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      var s = b.dataset.s;
+      document.querySelectorAll('.rcard, .rdoc').forEach(x => x.classList.toggle('hidden', s !== 'results'));
+      document.getElementById('busyBar').classList.toggle('hidden', s !== 'searching');
+      document.getElementById('noResult').classList.toggle('hidden', s !== 'none');
+      document.getElementById('noDocs').classList.toggle('hidden', s !== 'empty');
+    });
+  </script>
+</body>
+</html>

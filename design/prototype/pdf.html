@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Booklight — PDF 双页与页面编辑</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* ==== pdf 专属：页面保真 + 内存态编辑的显式出口 ==== */
+  .tools {
+    flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .segm { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .segm button {
+    border: none; background: transparent; padding: 4px 11px; font-size: 12px; color: var(--mute);
+    cursor: pointer; font-family: inherit;
+  }
+  .segm button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .pagefield {
+    width: 64px; height: 26px; display: grid; place-items: center; font-size: 12px; font-variant-numeric: tabular-nums;
+    background: var(--panel-alt); border: 1px solid var(--line); border-radius: 6px; color: var(--ink);
+  }
+  .pages { flex: 1; display: flex; gap: 18px; align-items: flex-start; justify-content: center; padding: 24px; overflow-y: auto; }
+  .pg {
+    width: 300px; flex: none; background: var(--panel); border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(23,20,18,.12), 0 8px 22px rgba(23,20,18,.10);
+    padding: 26px 24px; position: relative;
+  }
+  .pg.current { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .pg .ptitle { font-size: 13px; font-weight: 700; text-align: center; margin-bottom: 14px; }
+  .tl { height: 7px; border-radius: 3px; background: var(--panel-alt); margin-bottom: 9px; }
+  .tl.w60 { width: 60%; } .tl.w80 { width: 80%; } .tl.w40 { width: 40%; }
+  .pg .rot {
+    position: absolute; top: 8px; right: 8px; font-size: 10px; font-weight: 600;
+    color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 2px 8px;
+  }
+  .pg .pnum { text-align: center; font-size: 10.5px; color: var(--mute); margin-top: 14px; font-variant-numeric: tabular-nums; }
+  /* 页面编辑菜单：锚定「页面」按钮的下拉面板 */
+  .pemenu {
+    position: absolute; top: 54px; right: 60px; width: 224px; z-index: 5;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px;
+    box-shadow: 0 8px 26px rgba(23,20,18,.18);
+  }
+  .pemenu .ph { font-size: 11px; color: var(--mute); padding: 6px 10px 4px; }
+  .pemenu .pi { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; font-size: 12.5px; }
+  .pemenu .pi:hover { background: var(--panel-alt); }
+  .pemenu .pi.danger { color: var(--danger); }
+  .pemenu .pi .k { margin-left: auto; }
+  .thumbs { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .thumb {
+    width: 120px; padding: 10px 9px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    cursor: default; position: relative;
+  }
+  .thumb.current { border-color: var(--accent); border-width: 2px; }
+  .thumb .tn { text-align: center; font-size: 10px; color: var(--mute); margin-top: 6px; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+  <div class="window" id="app">
+    <div class="titlebar">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <button class="iconbtn" title="显示/隐藏侧栏">◧</button>
+      <div><div class="t">激光干涉仪设计手册.pdf</div><div class="sub">PDF · 12 页 · 有未保存修改</div></div>
+      <div class="sp"></div>
+      <button class="btn" title="页面编辑" id="peBtn">⚒ 页面</button>
+      <button class="iconbtn" title="切换亮暗主题">◐</button>
+    </div>
+    <div class="body">
+      <aside class="sidebar">
+        <div class="vswitch">
+          <div class="v active" title="缩略图">▤<span>缩略图</span></div>
+          <div class="v" title="目录">☰<span>目录</span></div>
+          <div class="v" title="批注">✎<span>批注</span></div>
+          <div class="v" title="表单">⛃<span>表单</span></div>
+        </div>
+        <div class="thumbs">
+          <div class="thumb"><div class="tl w80"></div><div class="tl"></div><div class="tl w60"></div><div class="tl w40"></div><div class="tn">第 1 页</div></div>
+          <div class="thumb"><div class="tl"></div><div class="tl w80"></div><div class="tl w60"></div><div class="tl"></div><div class="tn">第 2 页</div></div>
+          <div class="thumb current"><div class="tl w60"></div><div class="tl w80"></div><div class="tl"></div><div class="tl w40"></div><div class="tn">第 3 页</div></div>
+          <div class="thumb"><div class="tl w80"></div><div class="tl w60"></div><div class="tl w40"></div><div class="tl"></div><div class="tn">第 4 页</div></div>
+          <div class="thumb"><div class="tl w40"></div><div class="tl w80"></div><div class="tl w60"></div><div class="tl"></div><div class="tn">第 5 页</div></div>
+        </div>
+        <div class="foot">共 12 页 · 连续双页</div>
+      </aside>
+      <section class="main">
+        <div class="tools">
+          <div class="segm">
+            <button>单页</button>
+            <button class="on">双页</button>
+          </div>
+          <div class="segm">
+            <button title="实际大小">1:1</button>
+            <button title="适应宽度">⇔ 适应宽度</button>
+          </div>
+          <button class="iconbtn" title="缩小">−</button>
+          <div class="pagefield">100%</div>
+          <button class="iconbtn" title="放大">＋</button>
+        </div>
+        <div class="banner warn" id="pendingBar" style="margin: 10px 20px;">
+          <span>⚠</span>
+          <span style="flex:1;">PDF 修改尚未保存——请另存一份已编辑副本，以免覆盖原始文件。</span>
+          <span class="go"><button class="btn" title="⌘⇧S">另存为…</button><button class="btn danger">放弃更改</button></span>
+        </div>
+        <div class="pages">
+          <div class="pg current">
+            <div class="rot">已旋转 90°（未保存）</div>
+            <div class="ptitle">2.3 共路干涉布局</div>
+            <div class="tl"></div><div class="tl w80"></div><div class="tl w60"></div><div class="tl w80"></div>
+            <div class="tl"></div><div class="tl w40"></div><div class="tl w60"></div>
+            <div class="tl w80"></div><div class="tl"></div><div class="tl w40"></div>
+            <div class="pnum">第 3 页</div>
+          </div>
+          <div class="pg">
+            <div class="ptitle">2.4 相位噪声预算</div>
+            <div class="tl w80"></div><div class="tl"></div><div class="tl w60"></div><div class="tl"></div>
+            <div class="tl w40"></div><div class="tl w80"></div><div class="tl w60"></div>
+            <div class="tl"></div><div class="tl w80"></div><div class="tl w40"></div>
+            <div class="pnum">第 4 页</div>
+          </div>
+        </div>
+        <div class="statusbar">
+          <span>操作对象：第 3 页</span>
+          <span>第 3 / 12 页</span>
+          <span><kbd>⌘⇧S</kbd> 保存 PDF…</span>
+          <span><kbd>⌘P</kbd> 打印</span>
+          <span class="sp"></span>
+        </div>
+      </section>
+    </div>
+    <!-- 页面编辑下拉面板（演示打开态） -->
+    <div class="pemenu" id="peMenu">
+      <div class="ph">页面编辑 · 只改内存，另存才落盘</div>
+      <div class="pi">↻ 旋转本页 90°</div>
+      <div class="pi danger">✕ 删除本页</div>
+      <div class="pi">▤ 插空白页</div>
+      <div class="pi">⇥ 提取本页…</div>
+      <div class="pi">⧉ 合并 PDF…</div>
+      <div class="pi">▚ 烘焙文字…（水印）</div>
+    </div>
+    <div class="demo">
+      <span>演示</span>
+      <div class="seg" id="demoSeg">
+        <button class="on" data-d="menu">编辑菜单开</button>
+        <button data-d="clean">无未保存修改</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    document.getElementById('themeBtn').addEventListener('click', () => {
+      document.getElementById('app').classList.toggle('dark');
+    });
+    document.getElementById('peBtn').addEventListener('click', () => {
+      document.getElementById('peMenu').classList.toggle('hidden');
+    });
+    document.getElementById('demoSeg').addEventListener('click', (e) => {
+      var b = e.target.closest('button'); if (!b) return;
+      document.querySelectorAll('#demoSeg button').forEach(x => x.classList.toggle('on', x === b));
+      if (b.dataset.d === 'clean') {
+        document.getElementById('pendingBar').classList.add('hidden');
+        document.querySelector('.titlebar .sub').textContent = 'PDF · 12 页';
+        document.querySelector('.pg.current .rot').classList.add('hidden');
+      } else {
+        document.getElementById('pendingBar').classList.remove('hidden');
+        document.querySelector('.titlebar .sub').textContent = 'PDF · 12 页 · 有未保存修改';
+        document.querySelector('.pg.current .rot').classList.remove('hidden');
+      }
+    });
+  </script>
+</body>
+</html>

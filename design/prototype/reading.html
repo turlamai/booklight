@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Booklight — EPUB 阅读（英雄屏）</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* ==== reading 专属：正文排版是产品资产 ==== */
+  .reader { flex: 1; overflow-y: auto; position: relative; }
+  .measure { max-width: 608px; margin: 0 auto; padding: 40px 24px 72px; }
+  .measure h2 { font-size: 21px; font-weight: 700; line-height: 1.35; margin-bottom: 22px; }
+  .measure p {
+    font-family: Georgia, "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif;
+    font-size: 17px; line-height: 1.9; text-align: justify; margin-bottom: 1em;
+  }
+  .measure .citeblock {
+    font-family: Georgia, "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif;
+    font-size: 15px; line-height: 1.8; margin: 1em 0; padding-left: 1em;
+    border-left: 3px solid var(--rline); color: inherit; opacity: .88;
+  }
+  .hl-y { background: var(--hl-yellow); border-radius: 2px; padding: 0 1px; }
+  .ul-u { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 4px; text-decoration-thickness: 2px; }
+  .selzone { position: relative; }
+  .selzone .seltext { background: var(--accent-soft); }
+  /* 划词浮条：直接操纵 */
+  .selbar {
+    position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 4px; padding: 5px 7px; border-radius: 8px;
+    background: var(--panel); border: 1px solid var(--line);
+    box-shadow: 0 4px 14px rgba(23,20,18,.16); z-index: 3;
+  }
+  .selbar .swatch { width: 17px; height: 17px; border-radius: 50%; border: 1px solid var(--line); cursor: pointer; }
+  .selbar .sw-y { background: var(--hl-yellow); } .selbar .sw-b { background: var(--hl-blue); } .selbar .sw-g { background: var(--hl-green); }
+  .selbar .act { font-size: 11.5px; color: var(--ink); padding: 3px 7px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+  .selbar .act:hover { background: var(--panel-alt); }
+  .selbar .sep { width: 1px; height: 16px; background: var(--line); }
+  .selbar .ai { color: var(--accent); font-weight: 600; }
+  /* 阅读主题（与窗口亮暗正交）：正文文字与分隔线只跟阅读主题，不跟窗口 token */
+  .reader.paper { background: #F5F2ED; color: #292524; --rline: rgba(0,0,0,.08); }
+  .reader.sepia { background: #EFE6D5; color: #292524; --rline: rgba(0,0,0,.10); }
+  .reader.night { background: #171412; color: #D6D3D1; --rline: rgba(255,255,255,.10); }
+  /* 批注侧栏 */
+  .arow { display: flex; gap: 9px; padding: 10px 10px; border-radius: 8px; }
+  .arow:hover { background: var(--panel-alt); }
+  .adot { width: 9px; height: 9px; border-radius: 50%; flex: none; margin-top: 5px; }
+  .arow .abody { flex: 1; min-width: 0; }
+  .arow .aloc { font-size: 11px; color: var(--mute); margin-bottom: 3px; font-variant-numeric: tabular-nums; }
+  .arow .aex { font-size: 12.5px; line-height: 1.55; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .arow .anote { font-size: 12px; color: var(--mute); line-height: 1.55; margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
+  .arow .amenu { flex: none; color: var(--mute); font-size: 13px; visibility: hidden; }
+  .arow:hover .amenu { visibility: visible; }
+</style>
+</head>
+<body>
+  <div class="window" id="app">
+    <div class="titlebar">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <button class="iconbtn" title="显示/隐藏侧栏">◧</button>
+      <div><div class="t">The Sample Book</div><div class="sub">EPUB · 第 2 / 5 章</div></div>
+      <div class="sp"></div>
+      <button class="btn" title="AI 助手">✦ AI 助手</button>
+      <button class="iconbtn" title="书签当前页（⌘B）"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
+      <button class="iconbtn" id="themeBtn" title="切换亮暗主题">◐</button>
+    </div>
+    <div class="body">
+      <aside class="sidebar">
+        <div class="vswitch">
+          <div class="v" title="缩略图">▤<span>缩略图</span></div>
+          <div class="v" title="目录">☰<span>目录</span></div>
+          <div class="v active" title="批注">✎<span>批注</span></div>
+          <div class="v" title="表单">⛃<span>表单</span></div>
+        </div>
+        <div class="sect">本章 3 条 · 全书 12 条</div>
+        <nav class="item" style="color: var(--mute); font-size: 12px;"><span>↓ 第 5 页</span></nav>
+        <div class="arow">
+          <div class="adot" style="background: var(--hl-yellow);"></div>
+          <div class="abody">
+            <div class="aloc">第 2 章 · 第 14 页</div>
+            <div class="aex">贸易把不同族群的禀赋连成网络，城市因此生长。</div>
+            <div class="anote">回应第二章的分工论。</div>
+          </div>
+          <div class="amenu" title="翻译 · 删除">⋯</div>
+        </div>
+        <div class="arow">
+          <div class="adot" style="background: var(--hl-blue);"></div>
+          <div class="abody">
+            <div class="aloc">第 2 章 · 第 15 页</div>
+            <div class="aex">技术的传播速度取决于社会的接纳成本。</div>
+          </div>
+          <div class="amenu">⋯</div>
+        </div>
+        <div class="arow">
+          <div class="adot" style="background: var(--hl-green);"></div>
+          <div class="abody">
+            <div class="aloc">第 2 章 · 第 18 页</div>
+            <div class="aex">气候带决定了可驯化物种的初始清单。</div>
+            <div class="anote">与第七章对照读。</div>
+          </div>
+          <div class="amenu">⋯</div>
+        </div>
+        <!-- 保存状态横幅：演示「失败恢复」态（原型演示区可切进行态） -->
+        <div class="banner warn" id="saveState" style="margin: 12px 4px 8px; flex-direction: column; align-items: stretch;">
+          <span style="line-height: 1.6;">⚠ 批注尚未保存，恢复副本已保留在本机。</span>
+          <span class="go" style="margin-top: 7px;"><button class="btn" style="height: 24px;">重试保存</button><button class="btn" style="height: 24px;">导出批注…</button></span>
+        </div>
+        <div class="foot">批注保存到文档旁（.booklight.json）</div>
+      </aside>
+      <section class="main">
+        <div class="reader paper" id="reader">
+          <div class="measure">
+            <h2>第二章 · 起点的不平等</h2>
+            <p>每个文明的起点并非一张白纸。可驯化的动植物在不同大陆的分布极不均匀，这份初始清单在数千年前就写定了后来的剧本。</p>
+            <div class="selzone">
+              <div class="selbar">
+                <span class="swatch sw-y" title="高亮（黄）"></span>
+                <span class="swatch sw-b" title="高亮（蓝）"></span>
+                <span class="swatch sw-g" title="高亮（绿）"></span>
+                <span class="sep"></span>
+                <span class="act">下划线</span>
+                <span class="act">删除线</span>
+                <span class="sep"></span>
+                <span class="act">复制</span>
+                <span class="act ai">✦ AI 助手</span>
+              </div>
+              <p class="seltext">粮食生产带来了定居、存储与人口密度，也带来了与驯化动物共处而来的病菌——后者在后来的碰撞中，比刀剑更加致命。</p>
+            </div>
+            <p>贸易把不同族群的禀赋连成网络，<span class="hl-y">城市因此生长</span>；而技术的传播速度，取决于社会的接纳成本。</p>
+            <div class="citeblock">「大陆轴线的走向，决定了作物与技术的传播是同纬度的顺流，还是跨气候带的逆流。」</div>
+            <p>把这些变量放回同一个模型，就能解释为什么<span class="ul-u">枪炮与钢铁出现在欧亚大陆的东端与西端</span>，而不是其他地方。</p>
+          </div>
+        </div>
+        <div class="statusbar">
+          <span>第 2 / 5 章</span>
+          <span><kbd>⌘F</kbd> 搜索</span>
+          <span><kbd>⌘B</kbd> 书签当前页</span>
+          <span id="themeNote">阅读主题：纸张</span>
+          <span class="sp"></span>
+        </div>
+      </section>
+    </div>
+    <div class="demo">
+      <span>阅读主题</span>
+      <div class="seg" id="rThemeSeg">
+        <button class="on" data-t="paper">纸张</button>
+        <button data-t="sepia">深纸</button>
+        <button data-t="night">夜间</button>
+      </div>
+      <span>保存状态</span>
+      <div class="seg" id="saveSeg">
+        <button data-s="warn" class="on">失败恢复</button>
+        <button data-s="busy">保存中</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    document.getElementById('themeBtn').addEventListener('click', () => {
+      document.getElementById('app').classList.toggle('dark');
+    });
+    var names = { paper: '纸张', sepia: '深纸', night: '夜间' };
+    var rseg = document.getElementById('rThemeSeg');
+    rseg.addEventListener('click', (e) => {
+      var b = e.target.closest('button'); if (!b) return;
+      rseg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      var r = document.getElementById('reader');
+      r.className = 'reader ' + b.dataset.t;
+      document.getElementById('themeNote').textContent = '阅读主题：' + names[b.dataset.t];
+    });
+    var sseg = document.getElementById('saveSeg');
+    sseg.addEventListener('click', (e) => {
+      var b = e.target.closest('button'); if (!b) return;
+      sseg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      var s = document.getElementById('saveState');
+      if (b.dataset.s === 'busy') {
+        s.className = 'banner busy';
+        s.innerHTML = '<span style="display:flex; align-items:center; gap:8px;"><span class="spin"></span>正在保存批注…</span>';
+      } else {
+        s.className = 'banner warn';
+        s.innerHTML = '<span style="line-height:1.6;">⚠ 批注尚未保存，恢复副本已保留在本机。</span><span class="go" style="margin-top:7px;"><button class="btn" style="height:24px;">重试保存</button><button class="btn" style="height:24px;">导出批注…</button></span>';
+      }
+    });
+  </script>
+</body>
+</html>

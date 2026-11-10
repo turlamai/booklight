@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Booklight — 欢迎与最近打开</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* ==== welcome 专属：编辑式两栏排版 ==== */
+  .welcome { flex: 1; display: flex; align-items: stretch; min-height: 0; }
+  .pitch {
+    flex: 1.1; display: flex; flex-direction: column; justify-content: center;
+    padding: 48px 56px; border-right: 1px solid var(--line);
+  }
+  .mark {
+    width: 60px; height: 60px; border-radius: 15px; background: var(--accent);
+    display: grid; place-items: center; color: #fff; margin-bottom: 22px;
+  }
+  .wordmark { font-size: 36px; font-weight: 600; letter-spacing: -.7px; margin-bottom: 10px; }
+  .promise { font-size: 16px; color: var(--mute); line-height: 1.6; margin-bottom: 26px; }
+  .open-cta {
+    width: fit-content; height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 20px;
+    border-radius: 10px; background: var(--accent); color: #fff; border: none;
+    font-size: 14.5px; font-weight: 600; cursor: pointer;
+  }
+  .open-cta:hover { background: var(--accent-hover); }
+  .draghint { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; color: var(--mute); }
+  .features { margin-top: 34px; font-size: 12.5px; color: var(--mute); letter-spacing: .3px; }
+  .privacy {
+    margin-top: auto; padding-top: 26px; font-size: 12px; color: var(--mute); line-height: 1.7;
+    border-top: 1px solid var(--line); max-width: 380px;
+  }
+  .recents {
+    flex: 1; display: flex; flex-direction: column; padding: 40px 40px 40px 44px; overflow-y: auto;
+  }
+  .recents h2 { font-size: 13px; font-weight: 600; color: var(--mute); letter-spacing: .6px; margin-bottom: 14px; }
+  .rrow {
+    display: flex; align-items: center; gap: 12px; padding: 12px 12px; border-radius: 10px;
+    background: var(--panel); border: 1px solid var(--line); margin-bottom: 8px;
+  }
+  .rrow:hover { background: var(--panel-alt); }
+  .ficon {
+    width: 34px; height: 44px; flex: none; border-radius: 4px; border: 1px solid var(--line);
+    display: grid; place-items: center; font-size: 9px; font-weight: 700; background: var(--panel-alt); color: var(--mute);
+  }
+  .rrow .fmeta { flex: 1; min-width: 0; }
+  .rrow .fname { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rrow .fpath { font-size: 11.5px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .rrow .resume { flex: none; font-size: 11.5px; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 2px 9px; }
+  .rrow .chev { color: var(--mute); font-size: 13px; }
+  .empty {
+    border: 1.5px dashed var(--line); border-radius: 10px; padding: 34px 24px; text-align: center;
+    color: var(--mute); margin-top: 4px;
+  }
+  .empty .et { font-size: 13.5px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+  .empty .eh { font-size: 12px; line-height: 1.7; }
+  /* 拖放悬停态 */
+  .dropmask { position: absolute; inset: 0; display: grid; place-items: center; background: var(--accent-soft); backdrop-filter: blur(2px); }
+  .dropmask .dz {
+    border: 2px dashed var(--accent); border-radius: 14px; padding: 36px 64px;
+    color: var(--accent); font-size: 17px; font-weight: 600; background: var(--panel);
+  }
+</style>
+</head>
+<body>
+  <div class="window" id="app">
+    <div class="titlebar">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div><div class="t">Booklight</div></div>
+      <div class="sp"></div>
+      <button class="iconbtn" id="themeBtn" title="切换亮暗主题">◐</button>
+    </div>
+    <div class="welcome">
+      <section class="pitch">
+        <div class="mark">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5c-2-1.5-4.5-2-8-2v16c3.5 0 6 .5 8 2 2-1.5 4.5-2 8-2V3c-3.5 0-6 .5-8 2z"/><path d="M12 5v16"/></svg>
+        </div>
+        <div class="wordmark">Booklight</div>
+        <div class="promise">打开 PDF 或 EPUB 开始阅读</div>
+        <button class="open-cta">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 3v5h5M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+          打开文档…
+        </button>
+        <div class="draghint">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
+          或拖到窗口任意位置
+        </div>
+        <div class="features">划词翻译 · 一键总结 · 与文档对话</div>
+        <div class="privacy">Booklight 直接打开原文件，不导入、不复制；只有你主动使用 AI 时才会发送所选文本。</div>
+      </section>
+      <section class="recents">
+        <h2>最近打开</h2>
+        <div id="recList">
+          <div class="rrow">
+            <div class="ficon">PDF</div>
+            <div class="fmeta">
+              <div class="fname">激光干涉仪设计手册.pdf</div>
+              <div class="fpath">~/Documents/光学/</div>
+            </div>
+            <div class="resume">第 47 页</div>
+            <span class="chev">›</span>
+          </div>
+          <div class="rrow">
+            <div class="ficon">EPUB</div>
+            <div class="fmeta">
+              <div class="fname">枪炮、病菌与钢铁.epub</div>
+              <div class="fpath">~/Documents/人类学/</div>
+            </div>
+            <div class="resume">第 12 页</div>
+            <span class="chev">›</span>
+          </div>
+          <div class="rrow">
+            <div class="ficon">PDF</div>
+            <div class="fmeta">
+              <div class="fname">2026 年度报税指南.pdf</div>
+              <div class="fpath">~/Downloads/</div>
+            </div>
+            <div class="resume">第 3 页</div>
+            <span class="chev">›</span>
+          </div>
+          <div class="rrow">
+            <div class="ficon">EPUB</div>
+            <div class="fmeta">
+              <div class="fname">The Sample Book.epub</div>
+              <div class="fpath">~/Codes/booklight/racket/tests/fixtures/</div>
+            </div>
+            <div class="resume">第 1 页</div>
+            <span class="chev">›</span>
+          </div>
+        </div>
+        <div id="recEmpty" class="empty hidden">
+          <div class="et">还没有最近打开的文档</div>
+          <div class="eh">打开 PDF 或 EPUB 后会显示在这里；<br>不会复制进书库。</div>
+        </div>
+      </section>
+    </div>
+    <div class="statusbar">
+      <span><kbd>⌘O</kbd> 打开文档</span>
+      <span>v0.10 · 原型 v0.1</span>
+      <span class="sp"></span>
+    </div>
+    <div id="dropOverlay" class="dropmask hidden">
+      <div class="dz">松开以打开文档</div>
+    </div>
+    <div class="demo">
+      <span>空态演示</span>
+      <div class="seg" id="stateSeg">
+        <button class="on" data-state="recents">最近文件</button>
+        <button data-state="empty">空态</button>
+        <button data-state="drop">拖放悬停</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    document.getElementById('themeBtn').addEventListener('click', () => {
+      document.getElementById('app').classList.toggle('dark');
+    });
+    var seg = document.getElementById('stateSeg');
+    seg.addEventListener('click', (e) => {
+      var b = e.target.closest('button'); if (!b) return;
+      seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      var s = b.dataset.state;
+      document.getElementById('recList').classList.toggle('hidden', s !== 'recents');
+      document.getElementById('recEmpty').classList.toggle('hidden', s !== 'empty');
+      document.getElementById('dropOverlay').classList.toggle('hidden', s !== 'drop');
+    });
+  </script>
+</body>
+</html>
