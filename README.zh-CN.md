@@ -44,6 +44,24 @@ raco rivet acceptance --json
 
 [文件优先产品决策与验收](docs/FILE-FIRST-DESIGN.md) · [工程指引](AGENTS.md)
 
+## 安装
+
+从 [Releases](https://github.com/turlamai/booklight/releases/latest) 下载。
+资产统一按 `booklight-<version>-<os>-<arch>.<ext>` 命名：
+
+| 平台 | 安装器 | 便携 zip（应用内更新） |
+|---|---|---|
+| macOS 14+（Apple silicon / Intel） | `booklight-<version>-macos-arm64.dmg` · `-x64.dmg` | `booklight-<version>-macos-arm64.zip` · `-x64.zip` |
+| Windows 10+ x64 | `booklight-<version>-windows-x64.msi` | `booklight-<version>-windows-x64.zip` |
+| Linux x64 / arm64 | `booklight-<version>-linux-<arch>.deb` · `.rpm` · `.AppImage` · `-linux-<arch>.tar.gz` | `booklight-<version>-linux-<arch>.zip` |
+
+每个版本都带校验过的 `SHA256SUMS`；应用内更新消费 Ed25519 签名的
+`update-manifest.json` feed（key id `booklight-2026-10`；Sigstore 溯源：
+`gh attestation verify <file> -R turlamai/booklight`）。
+
+macOS 构建仅有 ad-hoc 签名，未公证。首次启动时右键应用选「打开」即可
+清除 Gatekeeper 提示。
+
 ## 许可证
 
 [AGPL-3.0](LICENSE)

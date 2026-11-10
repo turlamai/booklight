@@ -44,6 +44,26 @@ raco rivet acceptance --json
 
 [Product decision and acceptance plan](docs/FILE-FIRST-DESIGN.md) · [Developer guide](AGENTS.md)
 
+## Install
+
+Download from [Releases](https://github.com/turlamai/booklight/releases/latest).
+Assets follow `booklight-<version>-<os>-<arch>.<ext>`:
+
+| Platform | Installers | Portable zip (in-app updates) |
+|---|---|---|
+| macOS 14+ (Apple silicon / Intel) | `booklight-<version>-macos-arm64.dmg` · `-x64.dmg` | `booklight-<version>-macos-arm64.zip` · `-x64.zip` |
+| Windows 10+ x64 | `booklight-<version>-windows-x64.msi` | `booklight-<version>-windows-x64.zip` |
+| Linux x64 / arm64 | `booklight-<version>-linux-<arch>.deb` · `.rpm` · `.AppImage` · `-linux-<arch>.tar.gz` | `booklight-<version>-linux-<arch>.zip` |
+
+Every release carries a checked `SHA256SUMS`, and the in-app updater
+consumes the Ed25519-signed `update-manifest.json` feed (key id
+`booklight-2026-10`; Sigstore provenance: `gh attestation verify <file>
+-R turlamai/booklight`).
+
+macOS builds carry an ad-hoc signature only, not a notarized one. On
+first launch, right-click the app and choose Open to clear the
+Gatekeeper prompt.
+
 ## License
 
 [AGPL-3.0](LICENSE)
