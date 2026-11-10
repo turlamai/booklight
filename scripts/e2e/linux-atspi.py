@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import subprocess
 import time
 from pathlib import Path
 
@@ -97,62 +98,45 @@ def node_with_text(root, value):
 def preset_combo(root):
     labels = ("Ollama (local)", "Ollama（本地）", "DeepSeek", "Custom", "自定义", "Qwen (Alibaba)", "通义千问 Qwen")
     return next((node for node in walk(root) if role(node) == "combo box" and any(label in (descendant.name or "") or label in text(descendant) for descendant in walk(node) for label in labels)), None)
+def click_extents(extents):
+    # The journey runs on bare Xvfb (no window manager), so the settings
+    # window sits at (0,0) and a widget's WINDOW_COORDS extents are already
+    # desktop coordinates. GTK4 reports broken (0,0) DESKTOP_COORDS on this
+    # stack, and AT-SPI press actions cannot open the dropdown, so every
+    # selection step goes through XTest pointer clicks at computed positions.
+    subprocess.run(["xdotool", "mousemove",
+                    str(extents.x + extents.width // 2),
+                    str(extents.y + extents.height // 2),
+                    "click", "1"], check=True)
 def click_center(node):
-    extents = node.queryComponent().getExtents(pyatspi.DESKTOP_COORDS)
+    extents = node.queryComponent().getExtents(pyatspi.WINDOW_COORDS)
     if extents.width <= 0 or extents.height <= 0:
         raise AssertionError(f"AT-SPI exposes no bounds for {node.name!r}")
-    pyatspi.Registry.generateMouseEvent(
-        extents.x + extents.width // 2,
-        extents.y + extents.height // 2,
-        "b1c",
-    )
-def popup_item(application, names):
-    return next((node for node in walk(application) if role(node) in ("list item", "menu item") and (node.name or "") in names), None)
-def combo_shows(application, names):
-    combo = preset_combo(application)
-    return combo is not None and any((descendant.name or "") in names for descendant in walk(combo))
+    click_extents(extents)
+def popup_rows(application):
+    rows = []
+    for node in walk(application):
+        if role(node) == "list item":
+            extents = node.queryComponent().getExtents(pyatspi.WINDOW_COORDS)
+            if extents.height > 0:
+                rows.append((extents.y, node, extents))
+    rows.sort(key=lambda entry: entry[0])
+    return rows
 def select_preset(application, output, names):
     combo = wait_for("provider preset combo box", lambda: preset_combo(application))
     if combo is None: raise AssertionError("provider preset combo box not found")
-    # 1) AT-SPI Selection interface, if GTK exposes the closed combo's rows.
-    try:
-        selection = combo.querySelection()
-        for index, child in enumerate(children(combo)):
-            if (child.name or "") in names and selection.selectChild(index):
-                wait_for("preset combo shows Qwen", lambda: combo_shows(application, names), timeout=5)
-                record_step(output, "preset selected", "Selection interface")
-                return
-    except Exception:
-        pass
-    # 2) Open the popup — the button action first, then a real pointer click
-    # (XTest under X11) — and activate the Qwen row. Every attempt is judged
-    # by the combo's own displayed label, not by the channel's success code.
-    for attempt in ("action", "pointer"):
-        try:
-            if attempt == "pointer":
-                click_center(combo)
-            else:
-                press(combo)
-            item = wait_for("Qwen preset popup item", lambda: popup_item(application, names), timeout=6)
-            press(item)
-            wait_for("preset combo shows Qwen", lambda: combo_shows(application, names), timeout=5)
-            record_step(output, "preset selected", f"popup {attempt}")
-            return
-        except AssertionError as failure:
-            record_step(output, f"popup {attempt} failed", str(failure)[:160])
-            # A stuck modal popup from this attempt must not eat the next
-            # attempt's click; Escape also no-ops when nothing is open.
-            pyatspi.Registry.generateKeyboardEvent(0, "Escape", pyatspi.KEY_SYM)
-            time.sleep(0.4)
-    # 3) Keyboard: the cursor starts at the selected preset; walk up the
-    # fixed preset order (racket/booklight/providers.rkt: ollama=10,
-    # qwen=3) and activate.
-    for _ in range(7):
-        pyatspi.Registry.generateKeyboardEvent(0, "Up", pyatspi.KEY_SYM)
-        time.sleep(0.12)
-    pyatspi.Registry.generateKeyboardEvent(0, "Return", pyatspi.KEY_SYM)
-    wait_for("preset combo shows Qwen", lambda: combo_shows(application, names), timeout=5)
-    record_step(output, "preset selected", "keyboard walk")
+    record_step(output, "open preset popup", "click combo center")
+    click_center(combo)
+    rows = wait_for("provider preset popup rows", lambda: popup_rows(application) or None, timeout=10)
+    # The popup lists the fixed preset order from
+    # racket/booklight/providers.rkt: glm-coding, zhipu, deepseek, qwen, ...
+    # Row labels are not reliably readable through AT-SPI, so target the row
+    # by its index in that order instead of by text.
+    qwen_index = 3
+    if len(rows) <= qwen_index:
+        raise AssertionError(f"preset popup exposed only {len(rows)} rows")
+    record_step(output, "click Qwen row", f"row {qwen_index} of {len(rows)}")
+    click_extents(rows[qwen_index][2])
 
 def main():
     parser = argparse.ArgumentParser(); parser.add_argument("--output", type=Path, required=True); args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True)
