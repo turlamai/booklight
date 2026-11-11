@@ -475,7 +475,7 @@ void MainWindow::LoadSettingsIntoPane() {
     settings_provider_.Items().Append(item);
     if (to_wide(preset.id) == to_wide(settings_.provider)) {
       settings_provider_.SelectedItem(item);
-      settings_preset_id_ = preset.id;
+      settings_preset_id_ = to_wide(preset.id);
     }
   }
   settings_ui_updating_ = false;
