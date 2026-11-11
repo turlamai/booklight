@@ -55,6 +55,32 @@ func pressSheetCancel(_ window: AXUIElement) -> Bool {
 }
 func snapshot(_ element: AXUIElement, depth: Int = 0) -> [String: Any] { var result: [String: Any] = ["role": stringAttribute(element, kAXRoleAttribute), "identifier": stringAttribute(element, kAXIdentifierAttribute), "title": stringAttribute(element, kAXTitleAttribute), "label": stringAttribute(element, kAXDescriptionAttribute), "value": stringAttribute(element, kAXValueAttribute)]; if depth < 10 { result["children"] = children(element).map { snapshot($0, depth: depth + 1) } }; return result }
 func writeJSON(_ value: Any, to url: URL) throws { try JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys]).write(to: url) }
+// Preset-switch journey helpers: the settings pane is a second window, so
+// re-fetch it per probe (window transitions can detach stale subtrees).
+func settingsSurface(_ application: AXUIElement) -> AXUIElement? {
+    let windows = (attribute(application, kAXWindowsAttribute) as? [AXUIElement]) ?? []
+    return windows.first { contains($0, "AI Provider") || contains($0, "AI 服务商") }
+}
+func presetPopUp(_ pane: AXUIElement) -> AXUIElement? {
+    walk(pane).first {
+        stringAttribute($0, kAXRoleAttribute) == "AXPopUpButton" &&
+        ["Ollama（本地）", "Ollama (local)", "DeepSeek", "自定义", "Custom"].contains(stringAttribute($0, kAXValueAttribute))
+    }
+}
+func presetFieldValues(_ pane: AXUIElement) -> [String] {
+    walk(pane)
+        .filter { ["AXTextField", "AXSecureTextField"].contains(stringAttribute($0, kAXRoleAttribute)) }
+        .map { stringAttribute($0, kAXValueAttribute) }
+}
+func pressMenuItem(_ application: AXUIElement, _ names: Set<String>) -> Bool {
+    for node in walk(application) where stringAttribute(node, kAXRoleAttribute) == "AXMenuItem" {
+        let values = [kAXTitleAttribute, kAXValueAttribute].map { stringAttribute(node, $0) }
+        if values.contains(where: names.contains) {
+            return AXUIElementPerformAction(node, kAXPressAction as CFString) == .success
+        }
+    }
+    return false
+}
 
 var diagnosticApplication: AXUIElement?
 var diagnosticOutput: URL?
@@ -130,14 +156,32 @@ do {
     _ = try waitFor("Settings menu item") {
         pressNamed(application, ["Settings…", "设置…"]) ? true : nil
     }
-    _ = try waitFor("app-level settings surface") { () -> AXUIElement? in
-        let windows = (attribute(application, kAXWindowsAttribute) as? [AXUIElement]) ?? []
-        return windows.first {
-            contains($0, "AI Provider") || contains($0, "AI 服务商")
-        }
+    let settingsPane = try waitFor("app-level settings surface") {
+        settingsSurface(application)
+    }
+    // v1 preset contract: the seeded profile runs Ollama; switching the
+    // provider preset must carry the preset's endpoint and default model
+    // into Base URL/Model. (The pane keeps its state while the scene lives,
+    // so a close/reopen adds no coverage here — the switch itself is the
+    // contract the other two hosts guard with a re-opened pane.)
+    _ = try waitFor("seeded provider endpoint in Base URL") {
+        presetFieldValues(settingsPane).first == "http://127.0.0.1:1/v1" ? true : nil
+    }
+    _ = try waitFor("provider preset popup") { () -> Bool? in
+        guard let popup = presetPopUp(settingsSurface(application) ?? settingsPane) else { return nil }
+        return AXUIElementPerformAction(popup, kAXPressAction as CFString) == .success ? true : nil
+    }
+    _ = try waitFor("Qwen preset menu item") {
+        pressMenuItem(application, ["通义千问 Qwen", "Qwen (Alibaba)"]) ? true : nil
+    }
+    _ = try waitFor("Base URL and Model follow the Qwen preset") { () -> Bool? in
+        let fields = presetFieldValues(settingsSurface(application) ?? settingsPane)
+        guard fields.count >= 2 else { return nil }
+        return fields[0] == "https://dashscope.aliyuncs.com/compatible-mode/v1"
+            && fields[1] == "qwen3-max" ? true : nil
     }
     try writeJSON(snapshot(application), to: output.appendingPathComponent("accessibility.json"))
-    try writeJSON(["platform": "macos", "actions": ["launch:sample.epub", "press:Annotations", "press:AI Assistant", "press:Translate current EPUB scope", "assert:AI send review", "press:Cancel", "press:Settings", "assert:settings surface"], "assertions": ["packaged SwiftUI window activated", "sample EPUB crossed RVT1 into the embedded backend", "native accessibility tree contains The Sample Book", "native accessibility tree contains First Chapter", "pending recovery crosses RVT1 on reopen", "native Notes pane exposes recovered status and Retry Save", "recovered annotation remains visible and exportable", "native review exposes current-chapter scope and exact user-content total before provider launch", "Cancel dismisses the review without starting the AI stream", "Settings opens an app-level surface with the AI provider section"]], to: output.appendingPathComponent("interaction-trace.json"))
+    try writeJSON(["platform": "macos", "actions": ["launch:sample.epub", "press:Annotations", "press:AI Assistant", "press:Translate current EPUB scope", "assert:AI send review", "press:Cancel", "press:Settings", "assert:settings surface", "select:Qwen preset", "assert:preset switch follows"], "assertions": ["packaged SwiftUI window activated", "sample EPUB crossed RVT1 into the embedded backend", "native accessibility tree contains The Sample Book", "native accessibility tree contains First Chapter", "pending recovery crosses RVT1 on reopen", "native Notes pane exposes recovered status and Retry Save", "recovered annotation remains visible and exportable", "native review exposes current-chapter scope and exact user-content total before provider launch", "Cancel dismisses the review without starting the AI stream", "Settings opens an app-level surface with the AI provider section", "switching the provider preset carries the preset endpoint and default model into Base URL and Model"]], to: output.appendingPathComponent("interaction-trace.json"))
     guard let running = NSRunningApplication(processIdentifier: pid), running.terminate() else { throw DriverError.failure("native application rejected termination") }
 } catch {
     if let application = diagnosticApplication, let output = diagnosticOutput { try? writeJSON(snapshot(application), to: output.appendingPathComponent("accessibility-failure.json")) }

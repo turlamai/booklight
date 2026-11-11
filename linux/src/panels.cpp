@@ -502,6 +502,12 @@ void AiPanel::sync_settings() {
       }
     }
     gtk_drop_down_set_selected(preset_dropdown_, selected);
+    // The switch handler stashes fields under the outgoing preset id and
+    // skips a selection equal to it. Every re-sync resets what the dropdown
+    // shows, so that id must track the displayed preset — otherwise a
+    // re-synced pane ignores re-selecting the same preset and can stash
+    // another preset's fields under the wrong id.
+    current_preset_id_ = ctx_->presets[selected].id;
   }
 
   gtk_entry_buffer_set_text(gtk_entry_get_buffer(base_url_),

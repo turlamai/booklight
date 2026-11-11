@@ -462,6 +462,9 @@ void MainWindow::LoadSettingsIntoPane() {
   } catch (...) {
   }
   settings_ui_updating_ = true;
+  // Cleared first so a stored provider id that matches no preset leaves no
+  // stale tracked selection from an earlier pane state.
+  settings_preset_id_.clear();
   for (auto const& preset : presets_) {
     auto item = muxc::ComboBoxItem();
     muxc::TextBlock label;
@@ -472,6 +475,7 @@ void MainWindow::LoadSettingsIntoPane() {
     settings_provider_.Items().Append(item);
     if (to_wide(preset.id) == to_wide(settings_.provider)) {
       settings_provider_.SelectedItem(item);
+      settings_preset_id_ = to_wide(preset.id);
     }
   }
   settings_ui_updating_ = false;
@@ -495,11 +499,15 @@ void MainWindow::LoadSettingsIntoPane() {
 
 void MainWindow::SwitchPreset(std::wstring const& id) {
   // v1 preset behavior: stash the edited URL/model under the old preset,
-  // restore the stash (or the preset defaults) for the new one.
-  std::wstring const old_id = SelectedProviderId();
+  // restore the stash (or the preset defaults) for the new one. The outgoing
+  // id comes from the pane's tracked preset: SelectionChanged fires after
+  // the ComboBox already holds the new selection, so SelectedProviderId()
+  // would return the incoming id here and every switch would early-return.
+  std::wstring const old_id = settings_preset_id_;
   if (old_id.empty() || old_id == id) return;
   preset_stash_[old_id] = {std::wstring(settings_base_url_.Text()),
                            std::wstring(settings_model_.Text())};
+  settings_preset_id_ = id;
   std::wstring const provider_id = id;
   auto const stash = preset_stash_.find(provider_id);
   if (stash != preset_stash_.end()) {

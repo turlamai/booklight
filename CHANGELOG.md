@@ -5,6 +5,18 @@ All notable changes to Booklight are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Switching the provider preset now carries the preset endpoint and default
+  model into Base URL and Model. The Windows handler compared the new
+  ComboBox selection against itself and always returned early, so no switch
+  ever updated the fields; the Linux pane kept its tracked preset id across
+  settings re-syncs, so re-selecting the same preset was ignored and the
+  per-preset stash could record another preset's fields. macOS already
+  followed. Packaged acceptance on all three hosts now switches the preset
+  and asserts Base URL/Model follow, including after the pane reloads or
+  re-syncs stored settings.
+
 ## [0.10.0] - 2026-11-09
 
 ### Removed

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import subprocess
 import time
 from pathlib import Path
 
@@ -80,6 +81,93 @@ def snapshot(node, depth=0):
     if depth < 10: result["children"] = [snapshot(child, depth + 1) for child in children(node)]
     return result
 
+# ---- preset-switch journey helpers ----
+journey_steps = []
+def record_step(output, name, detail=""):
+    # The CI step log floods with app noise, so each milestone lands in a
+    # small file that the acceptance artifact preserves verbatim.
+    journey_steps.append({"step": name, "detail": detail})
+    try:
+        (output / "journey-steps.json").write_text(json.dumps(journey_steps, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+def settings_frame(application):
+    return next((node for node in walk(application) if role(node) == "frame" and (contains(node, "Provider preset") or contains(node, "服务商预设"))), None)
+def node_with_text(root, value):
+    return next((node for node in walk(root) if text(node) == value), None)
+def preset_combo(root):
+    labels = ("Ollama (local)", "Ollama（本地）", "DeepSeek", "Custom", "自定义", "Qwen (Alibaba)", "通义千问 Qwen")
+    return next((node for node in walk(root) if role(node) == "combo box" and any(label in (descendant.name or "") or label in text(descendant) for descendant in walk(node) for label in labels)), None)
+def click_center(node):
+    # GTK4 reports broken (0,0) DESKTOP_COORDS on this stack and AT-SPI
+    # press actions cannot open the dropdown, so the popup opens through an
+    # XTest pointer click at the combo's WINDOW_COORDS center (the bare
+    # Xvfb settings window sits at (0,0), verified via xdotool).
+    extents = node.queryComponent().getExtents(pyatspi.WINDOW_COORDS)
+    if extents.width <= 0 or extents.height <= 0:
+        raise AssertionError(f"AT-SPI exposes no bounds for {node.name!r}")
+    subprocess.run(["xdotool", "mousemove",
+                    str(extents.x + extents.width // 2),
+                    str(extents.y + extents.height // 2),
+                    "click", "1"], check=True)
+def popup_rows(application):
+    # Search the settings window subtree first: the main reader window can
+    # expose its own list items (EPUB thumbnails), which would otherwise be
+    # sorted into the popup rows by y and shift the targeted index. Fall
+    # back to the whole application when the popup lives in a detached
+    # toplevel the settings frame does not contain.
+    frame = settings_frame(application)
+    roots = ([frame] if frame is not None else []) + [application]
+    for root in roots:
+        rows = []
+        for node in walk(root):
+            if role(node) == "list item":
+                extents = node.queryComponent().getExtents(pyatspi.WINDOW_COORDS)
+                if extents.height > 0:
+                    rows.append((extents.y, node))
+        if len(rows) >= 4:
+            rows.sort(key=lambda entry: entry[0])
+            return rows
+    return []
+def focused_row_index(application):
+    rows = popup_rows(application)
+    for index, (_, node) in enumerate(rows):
+        if node.getState().contains(pyatspi.STATE_FOCUSED):
+            return index
+    return None
+def select_preset(application, output, names):
+    combo = wait_for("provider preset combo box", lambda: preset_combo(application))
+    if combo is None: raise AssertionError("provider preset combo box not found")
+    record_step(output, "open preset popup", "click combo center")
+    click_center(combo)
+    rows = wait_for("provider preset popup rows", lambda: popup_rows(application) or None, timeout=10)
+    # The popup lists the fixed preset order from
+    # racket/booklight/providers.rkt: glm-coding, zhipu, deepseek, qwen, ...
+    # Row labels are not reliably readable through AT-SPI, so target the row
+    # by its index in that order instead of by text.
+    qwen_index = 3
+    if len(rows) <= qwen_index:
+        raise AssertionError(f"preset popup exposed only {len(rows)} rows")
+    # The opened popup grabs the keyboard with its cursor on the FIRST row
+    # (not the selected one), and the first synthesized key after opening
+    # can be swallowed — so walk with observable feedback: read the focused
+    # row through AT-SPI after every key and steer until it reaches Qwen,
+    # then activate.
+    record_step(output, "keyboard walk start", f"rows={len(rows)} target={qwen_index}")
+    for _ in range(15):
+        index = focused_row_index(application)
+        if index == qwen_index:
+            break
+        subprocess.run(["xdotool", "key",
+                        "Down" if index is None or index < qwen_index else "Up"],
+                       check=True)
+        time.sleep(0.35)
+    else:
+        raise AssertionError(
+            f"keyboard walk ended on row {focused_row_index(application)}, expected {qwen_index}")
+    record_step(output, "click Qwen row", "keyboard walk reached the target row")
+    subprocess.run(["xdotool", "key", "Return"], check=True)
+
 def main():
     parser = argparse.ArgumentParser(); parser.add_argument("--output", type=Path, required=True); args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True)
     application = None
@@ -121,10 +209,31 @@ def main():
         # Settings is an app-level window, not a fourth AI tab.
         settings_button = wait_for("settings gear", lambda: next((node for node in walk(window) if role(node) == "push button" and (node.name or "") in ("Settings", "设置")), None))
         press(settings_button)
-        settings_surface = wait_for("app-level settings surface", lambda: next((node for node in walk(application) if role(node) == "frame" and (contains(node, "Provider preset") or contains(node, "服务商预设"))), None))
+        settings_surface = wait_for("app-level settings surface", lambda: settings_frame(application))
         if settings_surface is None: raise AssertionError("settings window did not expose the provider section")
+        # v1 preset contract: the seeded profile runs Ollama; switching the
+        # provider preset must carry the preset's endpoint and default model
+        # into Base URL/Model. Re-entering settings re-syncs the pane from
+        # stored settings, so the second switch must follow after that sync
+        # too (guards the tracked-preset divergence regression).
+        record_step(args.output, "settings surface open")
+        wait_for("seeded provider endpoint in Base URL", lambda: node_with_text(application, "http://127.0.0.1:1/v1"))
+        wait_for("seeded model in Model", lambda: node_with_text(application, "acceptance-never-send"))
+        record_step(args.output, "seeded provider fields asserted")
+        select_preset(application, args.output, ("通义千问 Qwen", "Qwen (Alibaba)"))
+        wait_for("Base URL follows the Qwen preset", lambda: node_with_text(application, "https://dashscope.aliyuncs.com/compatible-mode/v1"))
+        wait_for("Model follows the Qwen preset", lambda: node_with_text(application, "qwen3-max"))
+        record_step(args.output, "preset switch followed (round 1)")
+        settings_button = wait_for("settings gear", lambda: next((node for node in walk(window) if role(node) == "push button" and (node.name or "") in ("Settings", "设置")), None))
+        press(settings_button)
+        wait_for("settings re-synced to stored provider", lambda: settings_frame(application) is not None and node_with_text(application, "http://127.0.0.1:1/v1") is not None)
+        record_step(args.output, "settings re-synced")
+        select_preset(application, args.output, ("通义千问 Qwen", "Qwen (Alibaba)"))
+        wait_for("Base URL follows the Qwen preset after re-sync", lambda: node_with_text(application, "https://dashscope.aliyuncs.com/compatible-mode/v1"))
+        wait_for("Model follows the Qwen preset after re-sync", lambda: node_with_text(application, "qwen3-max"))
+        record_step(args.output, "preset switch followed (round 2)")
         (args.output / "accessibility.json").write_text(json.dumps(snapshot(application), ensure_ascii=False, indent=2), encoding="utf-8")
-        (args.output / "interaction-trace.json").write_text(json.dumps({"platform":"linux","actions":["launch:sample.epub","select:Outline","select:Annotations","press:AI Assistant","select:Translate","press:Translate current EPUB scope","assert:AI send review","press:Cancel","press:Settings","assert:settings surface"],"assertions":["packaged GTK4 frame activated on native Wayland","sample EPUB crossed RVT1 into the embedded backend","native accessibility tree contains The Sample Book","native accessibility tree contains First Chapter","pending recovery crosses RVT1 on reopen","native Notes pane exposes recovered status and Retry Save","recovered annotation remains visible and exportable","native review exposes current-chapter scope and exact user-content total before provider launch","Cancel dismisses the review without starting the AI stream","Settings opens an app-level window with the provider section"]}, indent=2), encoding="utf-8")
+        (args.output / "interaction-trace.json").write_text(json.dumps({"platform":"linux","actions":["launch:sample.epub","select:Outline","select:Annotations","press:AI Assistant","select:Translate","press:Translate current EPUB scope","assert:AI send review","press:Cancel","press:Settings","select:Qwen preset","assert:preset switch follows","press:Settings","select:Qwen preset","assert:preset switch follows after re-sync"],"assertions":["packaged GTK4 frame activated on native Wayland","sample EPUB crossed RVT1 into the embedded backend","native accessibility tree contains The Sample Book","native accessibility tree contains First Chapter","pending recovery crosses RVT1 on reopen","native Notes pane exposes recovered status and Retry Save","recovered annotation remains visible and exportable","native review exposes current-chapter scope and exact user-content total before provider launch","Cancel dismisses the review without starting the AI stream","Settings opens an app-level window with the provider section","switching the provider preset carries the preset endpoint and default model into Base URL and Model","the preset switch still follows after the pane re-syncs stored settings"]}, indent=2), encoding="utf-8")
     except Exception:
         if application is not None: (args.output / "accessibility-failure.json").write_text(json.dumps(snapshot(application), ensure_ascii=False, indent=2), encoding="utf-8")
         raise
