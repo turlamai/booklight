@@ -58,8 +58,9 @@ jobs:
           (Resolve-Path $dir).Path >> $env:GITHUB_PATH
       # Temporary diagnostic: the acceptance suite truncates captured stdout
       # at 64 KiB, which swallowed the MSBuild error. Compile the host
-      # project directly with the exact arguments rivet build uses and keep
-      # a full binary log as an artifact.
+      # project directly with the exact arguments rivet build uses; this
+      # step runs alone, so its console output (including every compiler
+      # error) stays fully visible in the job log.
       - name: Diagnostic verbose MSBuild
         shell: pwsh
         run: |
@@ -68,22 +69,11 @@ jobs:
             -find MSBuild\**\Bin\amd64\MSBuild.exe | Select-Object -First 1
           if (-not $msbuild) { throw 'MSBuild not found via vswhere' }
           Write-Host "msbuild: $msbuild"
-          # PowerShell strips quotes around semicolon-bearing switches when
-          # passing them to native executables; build the argument with the
-          # embedded quotes so MSBuild sees one switch.
-          $flp = '/flp:logfile="' + (Join-Path (Get-Location) 'windows\obj\msbuild-diag.log') + ';verbosity=diagnostic"'
           & $msbuild "windows\RivetHost.vcxproj" "/restore" "/m" `
             "/p:PreferredToolArchitecture=x64" "/p:Configuration=Debug" `
             "/p:Platform=x64" "/p:RivetSelfContained=false" `
-            "/p:OutDir=$env:RUNNER_TEMP\diag-stage\" `
-            $flp
-          $code = $LASTEXITCODE
-          if (Test-Path 'windows\obj\msbuild-diag.log') {
-            Get-Content 'windows\obj\msbuild-diag.log' |
-              Select-String -Pattern 'error' | ForEach-Object { $_.Line } | Write-Host
-            Get-Content 'windows\obj\msbuild-diag.log' -Tail 150 | Write-Host
-          }
-          if ($code -ne 0) { throw "diagnostic MSBuild failed with exit code $code" }
+            "/p:OutDir=$env:RUNNER_TEMP\diag-stage\"
+          if ($LASTEXITCODE -ne 0) { throw "diagnostic MSBuild failed with exit code $LASTEXITCODE" }
       - name: Run executable product acceptance
         run: raco rivet acceptance --json
       - uses: actions/upload-artifact@v4
