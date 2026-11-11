@@ -5,17 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Booklight — 专注文件的 PDF / EPUB 阅读与轻编辑</title>
-    <meta name="description" content="本地优先的 AI PDF 阅读器：划词翻译、段落对照、一键总结、与文档对话。兼容任意 OpenAI 协议端点（GLM Coding、Kimi Code、DeepSeek、Qwen、Ollama…），API Key 只存本机。开源，AGPL-3.0。">
+    <meta name="description" content="本地优先的 PDF / EPUB 阅读器：纸感排版、三色高亮批注、PDF 轻编辑；可选 AI 翻译、总结与对话，发送前逐一核对。兼容任意 OpenAI 协议端点，API Key 只存本机。开源，AGPL-3.0。">
     <link rel="canonical" href="https://booklight.jrtx.site/">
     <meta name="theme-color" content="#D97757">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Booklight">
     <meta property="og:title" content="Booklight — 专注文件的 PDF / EPUB 阅读与轻编辑">
-    <meta property="og:description" content="本地优先的 AI PDF 阅读器：划词翻译、段落对照、总结与文档对话。兼容任意 OpenAI 协议端点，API Key 只存本机。开源，AGPL-3.0。">
+    <meta property="og:description" content="本地优先的 PDF / EPUB 阅读器：纸感排版、批注与轻编辑。可选 AI 翻译、总结与对话，发送前逐一核对。兼容任意 OpenAI 协议端点，API Key 只存本机。开源，AGPL-3.0。">
     <meta property="og:url" content="https://booklight.jrtx.site/">
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="Booklight — 专注文件的 PDF / EPUB 阅读与轻编辑">
-    <meta name="twitter:description" content="本地优先的 AI PDF 阅读器：划词翻译、段落对照、总结与文档对话。API Key 只存本机。开源，AGPL-3.0。">
+    <meta name="twitter:description" content="本地优先的 PDF / EPUB 阅读器：纸感排版、批注与轻编辑。可选 AI 翻译、总结与对话，发送前逐一核对。API Key 只存本机。开源，AGPL-3.0。">
 
     <!-- Theme & language pre-paint: no flash before the stylesheet paints.
          Language keeps the site's historical storage key (booklight-lang). -->
@@ -84,7 +84,7 @@
                 <span class="kit-eyebrow" data-i18n="hero.eyebrow">开源 · AGPL-3.0 · macOS 14+ · Windows 10+ · Linux</span>
                 <h1><span data-i18n="hero.h1a">打开文件，</span> <span class="kit-accent-word" data-i18n="hero.h1b">专注阅读。</span></h1>
                 <p class="kit-hero-meta"><span class="kit-badge" data-i18n="hero.badge">开发预览。已有阅读、批注、轻量编辑和单文档 BYOK 功能保持免费；本次重构不包含付费版。</span></p>
-                <p class="kit-lead" data-i18n="hero.lead">PDF / EPUB 文件留在原来的位置。打开即阅读，可靠批注，需要时轻编辑；没有书库数据库、文件副本、阅读时长、目标或打卡。AI 可选，并由你选择服务商。</p>
+                <p class="kit-lead" data-i18n="hero.lead">PDF / EPUB 文件留在原来的位置。纸感排版里打开即读，可靠批注，需要时轻编辑；没有书库数据库、文件副本、阅读时长、目标或打卡。AI 可选，并由你选择服务商。</p>
                 <div class="kit-btn-row">
                     <div class="kit-dl">
                         <a class="kit-btn kit-btn--primary" data-kit-dl-primary href="https://github.com/turlamai/booklight/releases/latest">
@@ -153,8 +153,8 @@
                 <div class="kit-grid kit-grid--3" style="margin-top: 44px;">
                     <div class="kit-card bl-span2">
                         <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h12M9 3v2m3.5 0C11 9 8 12 5 13.5M6 8c1.5 3 4.5 5.5 8 6.5"/><path d="M14 21l4-9 4 9m-6.7-3h5.4"/></svg></span>
-                        <h3 data-i18n="feat.f1.title">段落对照精读</h3>
-                        <p data-i18n="feat.f1.body">一键把当前页变成原文/译文成对对照，逐段并行流式——读外文文献不用再来回切窗口。</p>
+                        <h3 data-i18n="feat.f1.title">页面与整章翻译</h3>
+                        <p data-i18n="feat.f1.body">除划词外，还可把当前页或 EPUB 整章交给 AI 流式翻译；推理模型的思维过程自动置灰，不打断阅读。</p>
                     </div>
                     <div class="kit-card">
                         <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.8l2 5.2 5.2 2-5.2 2-2 5.2-2-5.2L4.8 10l5.2-2 2-5.2z"/></svg></span>
@@ -164,7 +164,7 @@
                     <div class="kit-card">
                         <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></span>
                         <h3 data-i18n="feat.f3.title">总结与文档对话</h3>
-                        <p data-i18n="feat.f3.body">当前页、选区或整份文档的一键结构化总结；对话基于你正在读的内容作答。</p>
+                        <p data-i18n="feat.f3.body">当前页、选区或全文范围的结构化总结与文档对话；每次发送前先核对操作、范围与字符数，确认后才请求，进行中可随时停止。</p>
                     </div>
                     <div class="kit-card">
                         <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg></span>
@@ -174,7 +174,7 @@
                     <div class="kit-card">
                         <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg></span>
                         <h3 data-i18n="feat.f5.title">顺手的阅读器</h3>
-                        <p data-i18n="feat.f5.body">多标签、续读、双页视图、缩略图、目录、全文搜索、深色模式、打印——基本功，认真做。</p>
+                        <p data-i18n="feat.f5.body">多标签、续读、双页视图、缩略图、目录、全文搜索、打印——基本功认真做；纸张/深纸/夜间阅读主题与窗口亮暗各自独立。</p>
                     </div>
                     <div class="kit-card">
                         <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v5h5"/><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-5z"/></svg></span>
@@ -184,7 +184,12 @@
                     <div class="kit-card">
                         <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
                         <h3 data-i18n="feat.f7.title">高亮进笔记</h3>
-                        <p data-i18n="feat.f7.body">三色高亮 + 笔记、批注面板、Obsidian 友好的 Markdown 导出——你的阅读笔记永远属于你。</p>
+                        <p data-i18n="feat.f7.body">三色高亮 + 笔记、批注面板、Obsidian 友好的 Markdown 导出；批注写盘状态始终可见：失败可重试或先导出，已恢复待写入的笔记不会静默丢失。</p>
+                    </div>
+                    <div class="kit-card">
+                        <span class="kit-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 3.5V8h-4.5"/></svg></span>
+                        <h3 data-i18n="feat.f8.title">PDF 轻编辑</h3>
+                        <p data-i18n="feat.f8.body">旋转、删除、插入页面或合并文档；修改先留在内存，另存时自行确认位置——原文件永不被静默覆盖。</p>
                     </div>
                 </div>
             </div>
@@ -194,7 +199,7 @@
         <section class="kit-section kit-section--alt" id="models">
             <div class="kit-container">
                 <h2 class="kit-h2" data-i18n="models.title">你的套餐，你的模型</h2>
-                <p class="kit-lead" data-i18n="models.lead">UPDF 把 AI 锁在自己的订阅配额里；Booklight 直连任意 OpenAI 协议端点——包括你已经付费的编程套餐。</p>
+                <p class="kit-lead" data-i18n="models.lead">AI 不必被锁进别人的订阅配额。Booklight 直连任意 OpenAI 协议端点——包括你已经付费的编程套餐。</p>
                 <div class="kit-card prov-wrap">
                     <div class="kit-platforms prov-chips">
                         <span class="kit-chip chip-hot">GLM Coding 套餐</span>
@@ -242,31 +247,31 @@
         <section class="kit-section kit-section--alt" id="download">
             <div class="kit-container">
                 <h2 class="kit-h2" data-i18n="dl.title">下载</h2>
-                <p class="kit-lead" data-i18n="dl.lead">现有阅读器免费，新增研究能力尚未开售。处理重要文档前请阅读安装、隐私与恢复说明。</p>
+                <p class="kit-lead" data-i18n="dl.lead">现有阅读器免费。研究工作台（跨书检索与可溯源引用）仍在设计探索阶段：是否推出与如何提供尚待产品负责人决策，未交付、暂不可购买。处理重要文档前请阅读安装、隐私与恢复说明。</p>
                 <div class="dl-grid">
                     <div class="kit-card dl-card">
                         <h3>macOS</h3>
                         <p class="fmt kit-mono">Apple silicon · dmg</p>
-                        <p><a class="kit-btn kit-btn--primary" href="https://github.com/turlamai/booklight/releases/latest/download/booklight-macos-arm64.dmg" data-i18n="dl.card-btn">下载</a></p>
+                        <p><a class="kit-btn kit-btn--primary" href="https://github.com/turlamai/booklight/releases/latest" data-kit-dl="mac" data-i18n="dl.card-btn">下载</a></p>
                     </div>
                     <div class="kit-card dl-card">
                         <h3>macOS (Intel)</h3>
                         <p class="fmt kit-mono">Intel 芯片 · dmg</p>
-                        <p><a class="kit-btn kit-btn--primary" href="https://github.com/turlamai/booklight/releases/latest/download/booklight-macos-x64.dmg" data-i18n="dl.card-btn">下载</a></p>
+                        <p><a class="kit-btn kit-btn--primary" href="https://github.com/turlamai/booklight/releases/latest" data-i18n="dl.card-btn">下载</a></p>
                     </div>
                     <div class="kit-card dl-card">
                         <h3>Windows</h3>
                         <p class="fmt kit-mono">x64 · MSI 安装包</p>
-                        <p><a class="kit-btn kit-btn--primary" href="https://github.com/turlamai/booklight/releases/latest/download/booklight-windows-x64.msi" data-i18n="dl.card-btn">下载</a></p>
+                        <p><a class="kit-btn kit-btn--primary" href="https://github.com/turlamai/booklight/releases/latest" data-kit-dl="win" data-i18n="dl.card-btn">下载</a></p>
                     </div>
                     <div class="kit-card dl-card">
                         <h3>Linux</h3>
                         <p class="fmt kit-mono">x64 · deb / rpm / AppImage / tar.gz</p>
-                        <p><a class="kit-btn kit-btn--primary" href="https://github.com/turlamai/booklight/releases/latest/download/booklight-linux-x86_64.AppImage" data-i18n="dl.card-btn">下载</a></p>
+                        <p><a class="kit-btn kit-btn--primary" href="https://github.com/turlamai/booklight/releases/latest" data-kit-dl="linux" data-i18n="dl.card-btn">下载</a></p>
                     </div>
                 </div>
                 <p class="dl-all"><a href="https://github.com/turlamai/booklight/releases" target="_blank" rel="noopener" data-i18n="dl.all">全部版本</a></p>
-                <p class="kit-hero-meta dl-sha" data-i18n="dl.note">请使用 Release 提供的 SHA256SUMS 校验下载文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均支持应用内自动更新。</p>
+                <p class="kit-hero-meta dl-sha" data-i18n="dl.note">请使用 Release 提供的 SHA256SUMS 校验下载文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均带应用内更新检查，更新是否安装以 Release 说明与使用指南为准。</p>
             </div>
         </section>
 
@@ -286,7 +291,7 @@
                         <p data-i18n="start.s3">轻编辑 PDF，明确选择导出位置，不静默覆盖原文件。</p>
                     </div>
                 </div>
-                <p class="start-limits kit-text-2" data-i18n="start.limits">文件优先重构仍在开发中，发布前必须完成三端原生打包验收。</p>
+                <p class="start-limits kit-text-2" data-i18n="start.limits">当前为 0.x 开发预览：界面与文件格式仍可能调整。升级前备份文档与批注，实际行为以各版本 Release 说明与使用指南为准。</p>
                 <div class="start-links">
                     <a href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.md">English guide</a>
                     <a href="https://github.com/turlamai/booklight/blob/main/docs/USER-GUIDE.zh-CN.md">中文使用指南</a>
@@ -351,7 +356,7 @@
             "hero.eyebrow": "开源 · AGPL-3.0 · macOS 14+ · Windows 10+ · Linux",
             "hero.h1a": "打开文件，", "hero.h1b": "专注阅读。",
             "hero.badge": "开发预览。已有阅读、批注、轻量编辑和单文档 BYOK 功能保持免费；本次重构不包含付费版。",
-            "hero.lead": "PDF / EPUB 文件留在原来的位置。打开即阅读，可靠批注，需要时轻编辑；没有书库数据库、文件副本、阅读时长、目标或打卡。AI 可选，并由你选择服务商。",
+            "hero.lead": "PDF / EPUB 文件留在原来的位置。纸感排版里打开即读，可靠批注，需要时轻编辑；没有书库数据库、文件副本、阅读时长、目标或打卡。AI 可选，并由你选择服务商。",
             "hero.source": "GitHub 源码",
             "hero.note": "使用自行配置的兼容模型接口或本地模型；可用性与用量费用以服务商为准。",
             "shot.note": "打开一份小型 PDF 或 EPUB，添加批注，再关闭并重新打开。确认批注仍在后，再用重要文件执行同样流程。",
@@ -364,34 +369,35 @@
             "vs.caption": "功能流程示意，非软件界面截图。实际界面、可用性与交互以当前安装版本和用户手册为准。",
             "feat.title": "以阅读为本，AI 贯穿其中",
             "feat.lead": "不做臃肿的全能编辑器——只把「读文献 + AI」这一件事做透。",
-            "feat.f1.title": "段落对照精读", "feat.f1.body": "一键把当前页变成原文/译文成对对照，逐段并行流式——读外文文献不用再来回切窗口。",
+            "feat.f1.title": "页面与整章翻译", "feat.f1.body": "除划词外，还可把当前页或 EPUB 整章交给 AI 流式翻译；推理模型的思维过程自动置灰，不打断阅读。",
             "feat.f2.title": "划词翻译", "feat.f2.body": "选中即译，流式输出；对推理模型做了专门处理，思维过程自动置灰不碍眼。",
-            "feat.f3.title": "总结与文档对话", "feat.f3.body": "当前页、选区或整份文档的一键结构化总结；对话基于你正在读的内容作答。",
+            "feat.f3.title": "总结与文档对话", "feat.f3.body": "当前页、选区或全文范围的结构化总结与文档对话；每次发送前先核对操作、范围与字符数，确认后才请求，进行中可随时停止。",
             "feat.f4.title": "全文搜索", "feat.f4.body": "Ctrl+F 从当前页向外渐进扫描全文档，高亮全部命中，Enter/Shift+Enter 上下跳转。",
-            "feat.f5.title": "顺手的阅读器", "feat.f5.body": "多标签、续读、双页视图、缩略图、目录、全文搜索、深色模式、打印——基本功，认真做。",
+            "feat.f5.title": "顺手的阅读器", "feat.f5.body": "多标签、续读、双页视图、缩略图、目录、全文搜索、打印——基本功认真做；纸张/深纸/夜间阅读主题与窗口亮暗各自独立。",
             "feat.f6.title": "EPUB 也一样", "feat.f6.body": "章节流式排版、字号调节、书内搜索与深色模式——电子书享受同一套 AI 工作流。",
-            "feat.f7.title": "高亮进笔记", "feat.f7.body": "三色高亮 + 笔记、批注面板、Obsidian 友好的 Markdown 导出——你的阅读笔记永远属于你。",
+            "feat.f7.title": "高亮进笔记", "feat.f7.body": "三色高亮 + 笔记、批注面板、Obsidian 友好的 Markdown 导出；批注写盘状态始终可见：失败可重试或先导出，已恢复待写入的笔记不会静默丢失。",
+            "feat.f8.title": "PDF 轻编辑", "feat.f8.body": "旋转、删除、插入页面或合并文档；修改先留在内存，另存时自行确认位置——原文件永不被静默覆盖。",
             "models.title": "你的套餐，你的模型",
-            "models.lead": "UPDF 把 AI 锁在自己的订阅配额里；Booklight 直连任意 OpenAI 协议端点——包括你已经付费的编程套餐。",
+            "models.lead": "AI 不必被锁进别人的订阅配额。Booklight 直连任意 OpenAI 协议端点——包括你已经付费的编程套餐。",
             "models.chip-any": "任意 OpenAI 兼容端点",
             "models.note": "预设内置各套餐专属端点（如 open.bigmodel.cn/api/coding/paas/v4），模型列表按需拉取，一键测试连接。",
             "priv.c1.title": "Key 只存本机", "priv.c1.body": "设置与 API Key 保存在本机用户配置目录，绝不上传。",
             "priv.c2.title": "请求直达你的服务商", "priv.c2.body": "没有中间服务器，应用只和你配置的端点通信。",
             "priv.c3.title": "开源可审计", "priv.c3.body": "AGPL-3.0，接触你文档的每一行代码都可查证。",
             "dl.title": "下载",
-            "dl.lead": "现有阅读器免费，新增研究能力尚未开售。处理重要文档前请阅读安装、隐私与恢复说明。",
+            "dl.lead": "现有阅读器免费。研究工作台（跨书检索与可溯源引用）仍在设计探索阶段：是否推出与如何提供尚待产品负责人决策，未交付、暂不可购买。处理重要文档前请阅读安装、隐私与恢复说明。",
             "dl.generic": "下载 Booklight",
             "dl.mac": "macOS 版", "dl.win": "Windows 版", "dl.linux": "Linux 版",
             "dl.menu-note": "移动端与未知平台请前往 Releases 页面选取对应安装包。",
             "dl.card-btn": "下载",
             "dl.all": "全部版本",
-            "dl.note": "请使用 Release 提供的 SHA256SUMS 校验下载文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均支持应用内自动更新。",
+            "dl.note": "请使用 Release 提供的 SHA256SUMS 校验下载文件。Linux 另有 deb / rpm / tar.gz（arm64 版在 Release 页）；Windows 便携 zip 与 macOS 便携 zip 同在 Release 页。三平台均带应用内更新检查，更新是否安装以 Release 说明与使用指南为准。",
             "start.title": "打开、阅读、编辑。",
             "start.body": "提供 macOS、Windows、Linux 桌面预览版；具体以发布附件为准。无需导入书库，也没有强制编目。",
             "start.s1": "从原目录打开 PDF / EPUB，或者直接拖进应用。",
             "start.s2": "阅读、搜索、批注，重要笔记先确认已保存。",
             "start.s3": "轻编辑 PDF，明确选择导出位置，不静默覆盖原文件。",
-            "start.limits": "文件优先重构仍在开发中，发布前必须完成三端原生打包验收。",
+            "start.limits": "当前为 0.x 开发预览：界面与文件格式仍可能调整。升级前备份文档与批注，实际行为以各版本 Release 说明与使用指南为准。",
             "start.help": "反馈与帮助",
             "footer.tagline": "专注文件的 PDF / EPUB 阅读与轻编辑。",
             "footer.product": "产品", "footer.family": "家族", "footer.legal": "条款",
@@ -403,7 +409,7 @@
             "hero.eyebrow": "Open source · AGPL-3.0 · macOS 14+ · Windows 10+ · Linux",
             "hero.h1a": "Open a file.", "hero.h1b": "Stay with the words.",
             "hero.badge": "Development preview. Existing reading, annotation, light editing and single-document BYOK features remain free. No paid Booklight edition is planned for this refactor.",
-            "hero.lead": "Your PDFs and EPUBs stay where they belong. Open a file, read beautifully, annotate and edit with care. No bookshelf database, copied books, reading timer, goals or streaks. Optional AI uses your chosen provider.",
+            "hero.lead": "Your PDFs and EPUBs stay where they belong. Open and read in calm, paper-like typography, annotate reliably and edit with care. No bookshelf database, copied books, reading timer, goals or streaks. Optional AI uses your chosen provider.",
             "hero.source": "View on GitHub",
             "hero.note": "Use a compatible model endpoint or local model you configure; availability and usage fees depend on your provider.",
             "shot.note": "Open a small PDF or EPUB, add an annotation, close the document and reopen it. Confirm the annotation remains before relying on the workflow with important files.",
@@ -416,34 +422,35 @@
             "vs.caption": "Conceptual workflow, not an app screenshot. Refer to the installed version and user guide for actual UI and availability.",
             "feat.title": "Reading first, AI everywhere",
             "feat.lead": "No bloat. A fast, focused reader with the AI workflow literature actually needs.",
-            "feat.f1.title": "Paragraph-aligned bilingual reading", "feat.f1.body": "One click turns the current page into original/translation pairs, streamed in parallel paragraph by paragraph — read foreign papers without switching windows.",
+            "feat.f1.title": "Page and chapter translation", "feat.f1.body": "Beyond selection translation, hand the current page or a whole EPUB chapter to streaming AI translation; reasoning-model thoughts are dimmed automatically, never in the way.",
             "feat.f2.title": "Selection translation", "feat.f2.body": "Select any text, one click, streaming result — with a reasoning-model-aware display that keeps chain-of-thought out of your face.",
-            "feat.f3.title": "Summaries & document chat", "feat.f3.body": "Structured summaries for the current page, a selection or the whole document — and a chat grounded in what you are reading.",
+            "feat.f3.title": "Summaries & document chat", "feat.f3.body": "Structured summaries and document chat over the current page, a selection or the whole document. Every request opens a pre-send review of action, scope and exact character counts — nothing is sent until you continue, and you can stop mid-stream.",
             "feat.f4.title": "Full-text search", "feat.f4.body": "Ctrl+F searches the whole document with highlight overlays and match navigation, starting from where you are.",
-            "feat.f5.title": "A reader that feels right", "feat.f5.body": "Tabs, continue-reading, two-page view, thumbnails, outline, full-text search, dark mode, printing — the essentials, done properly.",
+            "feat.f5.title": "A reader that feels right", "feat.f5.body": "Tabs, continue-reading, two-page view, thumbnails, outline, full-text search, printing — the essentials, done properly. Paper, sepia and night reading themes stay independent of the window's light or dark appearance.",
             "feat.f6.title": "EPUB, too", "feat.f6.body": "Reflowable chapters with font-size control, table of contents, whole-book search and dark mode — same AI workflow on e-books.",
-            "feat.f7.title": "Highlights into your notes", "feat.f7.body": "Three-color highlights with notes, an annotation panel, and Obsidian-friendly Markdown export — your reading notes stay yours.",
+            "feat.f7.title": "Highlights into your notes", "feat.f7.body": "Three-color highlights with notes, an annotation panel and Obsidian-friendly Markdown export. Annotation saves are never silent: failures offer retry or export, and recovered notes wait to be written instead of vanishing.",
+            "feat.f8.title": "PDF light editing", "feat.f8.body": "Rotate, delete or insert pages and merge documents. Edits stay in memory until you save to an explicit destination — the original file is never silently overwritten.",
             "models.title": "Your subscription, your models",
-            "models.lead": "UPDF locks AI behind its own quota. Booklight connects to any OpenAI-compatible endpoint — including the coding plans you already pay for.",
+            "models.lead": "AI does not have to live inside someone else's subscription quota. Booklight connects to any OpenAI-compatible endpoint — including the coding plans you already pay for.",
             "models.chip-any": "Any OpenAI-compatible endpoint",
             "models.note": "Presets ship with the correct plan endpoints (e.g. open.bigmodel.cn/api/coding/paas/v4), on-demand model list fetching and a connection test.",
             "priv.c1.title": "Key stays local", "priv.c1.body": "Settings and API keys live in your user config directory — never uploaded.",
             "priv.c2.title": "Requests go straight to your provider", "priv.c2.body": "No middleman servers. The app talks to the endpoint you configured, nothing else.",
             "priv.c3.title": "Open source, auditable", "priv.c3.body": "AGPL-3.0. Read every line that touches your documents.",
             "dl.title": "Download",
-            "dl.lead": "The existing reader is free. New research features are not on sale. Read the installation, privacy and recovery guide before using valuable documents.",
+            "dl.lead": "The existing reader is free. The research workbench (cross-book search with traceable citations) is in design exploration only — whether it ships and how it is offered still await an owner decision. It is not delivered and not for sale. Read the installation, privacy and recovery guide before using valuable documents.",
             "dl.generic": "Download Booklight",
             "dl.mac": "For macOS", "dl.win": "For Windows", "dl.linux": "For Linux",
             "dl.menu-note": "On mobile or unknown platforms, pick the right package from the Releases page.",
             "dl.card-btn": "Download",
             "dl.all": "All releases",
-            "dl.note": "Verify published downloads using the release SHA256SUMS file. Linux also comes as deb / rpm / tar.gz (arm64 builds on the release page); Windows portable zip and macOS portable zip are on the release page too. Update behavior depends on the installation channel; consult the release notes and user guide.",
+            "dl.note": "Verify published downloads using the release SHA256SUMS file. Linux also comes as deb / rpm / tar.gz (arm64 builds on the release page); Windows portable zip and macOS portable zip are on the release page too. All three platforms include an in-app update check; whether an update installs follows the release notes and user guide.",
             "start.title": "Open, read, edit.",
             "start.body": "Desktop previews for macOS, Windows and Linux; check the actual release assets for supported builds. No book import or managed catalog.",
             "start.s1": "Open any PDF / EPUB from its original folder or drag it into the app.",
             "start.s2": "Read, search and annotate. Confirm a note is saved before relying on it.",
             "start.s3": "Edit PDFs in a working view and export explicitly; your original must not be silently replaced.",
-            "start.limits": "The file-first refactor is in development. Native cross-platform acceptance is required before a release claim.",
+            "start.limits": "This is a 0.x development preview: interfaces and file formats may still change. Back up documents and annotations before upgrading, and trust each release's notes and the user guide for actual behavior.",
             "start.help": "Get help",
             "footer.tagline": "File-focused PDF / EPUB reading and light editing.",
             "footer.product": "Product", "footer.family": "Family", "footer.legal": "Legal",
