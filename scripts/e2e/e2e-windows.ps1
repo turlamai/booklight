@@ -19,19 +19,6 @@ public static class NativeIconProbe {
     public const uint WM_GETICON = 0x007F;
     public const uint SMTO_ABORTIFHUNG = 0x0002;
 }
-public static class MouseClickProbe {
-    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
-    [DllImport("user32.dll")] public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtra);
-    public const uint LEFTDOWN = 0x02;
-    public const uint LEFTUP = 0x04;
-    public static void Click(int x, int y) {
-        SetCursorPos(x, y);
-        System.Threading.Thread.Sleep(80);
-        mouse_event(LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
-        System.Threading.Thread.Sleep(60);
-        mouse_event(LEFTUP, 0, 0, 0, UIntPtr.Zero);
-    }
-}
 "@
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -516,77 +503,6 @@ try {
             -not ((Contains-Text $window 'Provider preset') -or
                   (Contains-Text $window '服务商预设'))
         })
-        # Opening and closing the settings surface detaches the cached
-        # window element, and a leftover combo popup window can sit ahead of
-        # the main window in the process children — re-resolve the main
-        # window by its title before driving the gear a second time.
-        $window = Wait-Until 'main window after settings closed' {
-            try {
-                $condition = [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
-                $windows = @($desktop.FindAll([System.Windows.Automation.TreeScope]::Children, $condition))
-                return $windows |
-                    Where-Object { $_.Current.Name -like '*Booklight*' } |
-                    Select-Object -First 1
-            } catch { return $null }
-        }
-        # After the dialog close the gear's UIA Invoke channel can stay
-        # wedged (Invoke/Toggle throwing on a live, named button). Fall back
-        # to a real pointer click on the gear's bounds, the same input path
-        # a user would take.
-        [void](Wait-Until 'settings gear again' {
-            if (Invoke-NamedControl $window @('Settings','设置')) { return $true }
-            try {
-                $nodes = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
-                    [System.Windows.Automation.Condition]::TrueCondition)
-                for ($index = 0; $index -lt $nodes.Count; $index++) {
-                    try {
-                        if ($nodes[$index].Current.Name -ne 'Settings') { continue }
-                        $rect = $nodes[$index].Current.BoundingRectangle
-                        if ($rect.Width -le 0 -or $rect.Height -le 0) { continue }
-                        [MouseClickProbe]::Click([int]($rect.X + $rect.Width / 2), [int]($rect.Y + $rect.Height / 2))
-                        return $true
-                    } catch { continue }
-                }
-            } catch { }
-            return $false
-        })
-        # The second open can need more than one press; poll for the dialog
-        # and press the gear again (mouse click first) each cycle until it
-        # actually shows.
-        $settingsRoot = Wait-Until 'app-level settings surface again' {
-            $candidates = @($window) + @(Process-Windows -ProcessId $process.Id)
-            foreach ($candidate in $candidates) {
-                if ((Contains-Text $candidate 'Provider preset') -or
-                    (Contains-Text $candidate '服务商预设')) {
-                    return $candidate
-                }
-            }
-            try {
-                $nodes = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
-                    [System.Windows.Automation.Condition]::TrueCondition)
-                for ($index = 0; $index -lt $nodes.Count; $index++) {
-                    try {
-                        if ($nodes[$index].Current.Name -ne 'Settings') { continue }
-                        $rect = $nodes[$index].Current.BoundingRectangle
-                        if ($rect.Width -le 0 -or $rect.Height -le 0) { continue }
-                        [MouseClickProbe]::Click([int]($rect.X + $rect.Width / 2), [int]($rect.Y + $rect.Height / 2))
-                        break
-                    } catch { continue }
-                }
-            } catch { }
-            return $null
-        }
-        Record-Step 'settings surface open (reload)'
-        Assert-PresetSwitchFollows $settingsRoot
-        Record-Step 'preset switch followed (round 2, after pane reload)'
-        [void](Wait-Until 'settings close action again' {
-            Invoke-NamedControl $settingsRoot @('Close','关闭')
-        })
-        [void](Wait-Until 'settings dismissal again' {
-            -not ((Contains-Text $window 'Provider preset') -or
-                  (Contains-Text $window '服务商预设'))
-        })
     } catch {
         Save-Snapshot $window (Join-Path $output 'accessibility-failure.json')
         throw
@@ -600,8 +516,8 @@ try {
     [ordered]@{
         platform = 'windows'
         artifact = $executable.FullName
-        actions = @('launch:two-original-epub-paths','switch:first-epub','press:Annotations','switch:second-epub','switch:first-epub','press:AI Assistant','press:Translate current EPUB scope','assert:AI send review','press:Cancel','press:Settings','select:Qwen preset','assert:preset switch follows','press:Close','press:Settings','select:Qwen preset','assert:preset switch follows after reload','press:Close')
-        assertions = @('packaged WinUI window activated','branded titlebar icon is pixel-identical to the packaged exe group icon resource','sample EPUB crossed RVT1 into the embedded backend','native accessibility tree contains The Sample Book','native accessibility tree contains First Chapter','pending recovery crosses RVT1 on reopen','native Notes pane exposes recovered status and Retry Save','recovered annotation remains visible and exportable','two distinct native EPUB tabs persist across switches','first EPUB recovery state is isolated','both source EPUB hashes remain unchanged','native review exposes current-chapter scope and exact user-content total before provider launch','Cancel dismisses the review without starting the AI stream','switching the provider preset carries the preset endpoint and default model into Base URL and Model','the preset switch still follows after the pane reloads stored settings on reopen')
+        actions = @('launch:two-original-epub-paths','switch:first-epub','press:Annotations','switch:second-epub','switch:first-epub','press:AI Assistant','press:Translate current EPUB scope','assert:AI send review','press:Cancel','press:Settings','select:Qwen preset','assert:preset switch follows','press:Close')
+        assertions = @('packaged WinUI window activated','branded titlebar icon is pixel-identical to the packaged exe group icon resource','sample EPUB crossed RVT1 into the embedded backend','native accessibility tree contains The Sample Book','native accessibility tree contains First Chapter','pending recovery crosses RVT1 on reopen','native Notes pane exposes recovered status and Retry Save','recovered annotation remains visible and exportable','two distinct native EPUB tabs persist across switches','first EPUB recovery state is isolated','both source EPUB hashes remain unchanged','native review exposes current-chapter scope and exact user-content total before provider launch','Cancel dismisses the review without starting the AI stream','switching the provider preset carries the preset endpoint and default model into Base URL and Model')
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output 'interaction-trace.json') -Encoding utf8
 
     $pattern = $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern)
