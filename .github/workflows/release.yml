@@ -139,15 +139,6 @@ jobs:
         run: |
           echo "::error::Tag releases must be production-signed: set the macOS signing secrets (DEVELOPER_ID_P12_B64, DEVELOPER_ID_P12_PASSWORD, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8_B64) on this repository before tagging."
           exit 1
-      # localize-app.sh re-signs the bundle ad-hoc after mutating it, so it
-      # must never run on a production-signed bundle (its own header says it
-      # belongs only to the ad-hoc release job). Production keeps the
-      # Developer ID signature and staple; declaring CFBundleLocalizations
-      # for production bundles is a rivet.rktd follow-up
-      # (macos-localizations, supported natively by the pinned rivet).
-      - name: Declare bundle localizations (zh-Hans + en system chrome)
-        if: env.MACOS_SIGNING_CONFIGURED != 'true'
-        run: bash scripts/localize-app.sh dist/booklight.app
       - name: Portable zip + checksum
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
