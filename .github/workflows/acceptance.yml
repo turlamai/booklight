@@ -57,23 +57,11 @@ jobs:
           $dir = ($out | Select-String -Pattern 'ZLIBDIR=(.+)').Matches.Groups[1].Value
           (Resolve-Path $dir).Path >> $env:GITHUB_PATH
       # Temporary diagnostic: the acceptance suite truncates captured stdout
-      # at 64 KiB, which swallowed the MSBuild error. Compile the host
-      # project directly with the exact arguments rivet build uses; this
-      # step runs alone, so its console output (including every compiler
-      # error) stays fully visible in the job log.
-      - name: Diagnostic verbose MSBuild
-        shell: pwsh
-        run: |
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild `
-            -find MSBuild\**\Bin\amd64\MSBuild.exe | Select-Object -First 1
-          if (-not $msbuild) { throw 'MSBuild not found via vswhere' }
-          Write-Host "msbuild: $msbuild"
-          & $msbuild "windows\RivetHost.vcxproj" "/restore" "/m" `
-            "/p:PreferredToolArchitecture=x64" "/p:Configuration=Debug" `
-            "/p:Platform=x64" "/p:RivetSelfContained=false" `
-            "/p:OutDir=$env:RUNNER_TEMP\diag-stage\"
-          if ($LASTEXITCODE -ne 0) { throw "diagnostic MSBuild failed with exit code $LASTEXITCODE" }
+      # at 64 KiB, which swallowed the MSBuild error. Run the same build
+      # verb alone first — plain console output lands untruncated in this
+      # step's log — and let the acceptance suite then build incrementally.
+      - name: Diagnostic raco rivet build
+        run: raco rivet build
       - name: Run executable product acceptance
         run: raco rivet acceptance --json
       - uses: actions/upload-artifact@v4
