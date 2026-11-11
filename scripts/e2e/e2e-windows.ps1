@@ -19,6 +19,19 @@ public static class NativeIconProbe {
     public const uint WM_GETICON = 0x007F;
     public const uint SMTO_ABORTIFHUNG = 0x0002;
 }
+public static class MouseClickProbe {
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtra);
+    public const uint LEFTDOWN = 0x02;
+    public const uint LEFTUP = 0x04;
+    public static void Click(int x, int y) {
+        SetCursorPos(x, y);
+        System.Threading.Thread.Sleep(80);
+        mouse_event(LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+        System.Threading.Thread.Sleep(60);
+        mouse_event(LEFTUP, 0, 0, 0, UIntPtr.Zero);
+    }
+}
 "@
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -502,19 +515,26 @@ try {
                     Select-Object -First 1
             } catch { return $null }
         }
-        # Evidence for the recurring gear-again timeout: dump every control
-        # name the main window exposes right now, then press the gear.
-        try {
-            $buttonDump = @($window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
-                [System.Windows.Automation.Condition]::TrueCondition)) |
-                ForEach-Object { try { $_.Current.Name } catch { '<stale>' } } |
-                Where-Object { $_ }
-            Record-Step ('buttons visible: ' + ($buttonDump -join ' | '))
-        } catch {
-            Record-Step 'buttons visible: <scan faulted>'
-        }
+        # After the dialog close the gear's UIA Invoke channel can stay
+        # wedged (Invoke/Toggle throwing on a live, named button — see the
+        # buttons-visible evidence). Fall back to a real pointer click on
+        # the gear's bounds, the same input path a user would take.
         [void](Wait-Until 'settings gear again' {
-            Invoke-NamedControl $window @('Settings','设置')
+            if (Invoke-NamedControl $window @('Settings','设置')) { return $true }
+            try {
+                $nodes = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                    [System.Windows.Automation.Condition]::TrueCondition)
+                for ($index = 0; $index -lt $nodes.Count; $index++) {
+                    try {
+                        if ($nodes[$index].Current.Name -ne 'Settings') { continue }
+                        $rect = $nodes[$index].Current.BoundingRectangle
+                        if ($rect.Width -le 0 -or $rect.Height -le 0) { continue }
+                        [MouseClickProbe]::Click([int]($rect.X + $rect.Width / 2), [int]($rect.Y + $rect.Height / 2))
+                        return $true
+                    } catch { continue }
+                }
+            } catch { }
+            return $false
         })
         $settingsRoot = Wait-Until 'app-level settings surface again' {
             $candidates = @($window) + @(Process-Windows -ProcessId $process.Id)
