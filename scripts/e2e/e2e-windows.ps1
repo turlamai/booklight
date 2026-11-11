@@ -551,6 +551,9 @@ try {
             } catch { }
             return $false
         })
+        # The second open can need more than one press; poll for the dialog
+        # and press the gear again (mouse click first) each cycle until it
+        # actually shows.
         $settingsRoot = Wait-Until 'app-level settings surface again' {
             $candidates = @($window) + @(Process-Windows -ProcessId $process.Id)
             foreach ($candidate in $candidates) {
@@ -559,6 +562,19 @@ try {
                     return $candidate
                 }
             }
+            try {
+                $nodes = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                    [System.Windows.Automation.Condition]::TrueCondition)
+                for ($index = 0; $index -lt $nodes.Count; $index++) {
+                    try {
+                        if ($nodes[$index].Current.Name -ne 'Settings') { continue }
+                        $rect = $nodes[$index].Current.BoundingRectangle
+                        if ($rect.Width -le 0 -or $rect.Height -le 0) { continue }
+                        [MouseClickProbe]::Click([int]($rect.X + $rect.Width / 2), [int]($rect.Y + $rect.Height / 2))
+                        break
+                    } catch { continue }
+                }
+            } catch { }
             return $null
         }
         Record-Step 'settings surface open (reload)'
