@@ -488,13 +488,19 @@ try {
             -not ((Contains-Text $window 'Provider preset') -or
                   (Contains-Text $window '服务商预设'))
         })
-        # Opening and closing the settings surface can detach the cached
-        # window element, so re-resolve the main window before driving the
-        # gear a second time.
+        # Opening and closing the settings surface detaches the cached
+        # window element, and a leftover combo popup window can sit ahead of
+        # the main window in the process children — re-resolve the main
+        # window by its title before driving the gear a second time.
         $window = Wait-Until 'main window after settings closed' {
-            $condition = [System.Windows.Automation.PropertyCondition]::new(
-                [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
-            $desktop.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition)
+            try {
+                $condition = [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
+                $windows = @($desktop.FindAll([System.Windows.Automation.TreeScope]::Children, $condition))
+                return $windows |
+                    Where-Object { $_.Current.Name -like '*Booklight*' } |
+                    Select-Object -First 1
+            } catch { return $null }
         }
         [void](Wait-Until 'settings gear again' {
             Invoke-NamedControl $window @('Settings','设置')
