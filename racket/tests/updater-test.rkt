@@ -103,10 +103,10 @@
                (lambda ()
                  (appimage-asset-name "pdfgist-0.1.1-linux-arm.tar.gz" 'arm64))))
 
-  (test-case "manifest url joins base and channel file name"
+  (test-case "manifest url joins base and canonical feed name"
     (check-equal?
      (manifest-url)
-     (string-append default-update-base-url "/update-stable.json")))
+     (string-append default-update-base-url "/update-manifest.json")))
 
   (test-case "rollout bucket is sticky and persists to updater.json"
     (check-true (exact-integer? (rollout-bucket)))

@@ -11,13 +11,13 @@
 #   <key-der-path> Ed25519 private key in DER (SubjectPublicKeyInfo/OneAsymmetricKey)
 #                  form; the CI secret stores it base64-encoded.
 #
-# Overwrites <dist-dir>/update-stable.json — the signed stable-channel
+# Overwrites <dist-dir>/update-manifest.json — the signed stable-channel
 # manifest (family format: schema + base64 payload + signature block, as
-# written by rivet's own signer). The same bytes are also published as
-# <dist-dir>/update-manifest.json, the family-standard feed name: existing
-# installs keep pulling update-stable.json, while anything probing the
-# standard name gets the identical manifest instead of a 404. Host code
-# switching to the standard name is a later, separate change. One artifact
+# written by rivet's own signer) under the family-canonical feed name,
+# which current installs pull. The same bytes are also published as
+# <dist-dir>/update-stable.json, a byte-identical alias for pre-switch
+# installs; it retires once those installs clear the field (family
+# transition policy). One artifact
 # entry per macOS architecture, the Windows x64 portable zip and the Linux
 # x64/arm64 tarballs; clients pick theirs via rivet/distribution's platform
 # + architecture filter, so every entry must be present and correctly
@@ -58,7 +58,7 @@ for artifact in "$DIST/booklight-$VERSION-macos-arm64.zip" \
 done
 
 # ---- build + sign the manifest with rivet's own signer -----------------------
-MANIFEST="$DIST/update-stable.json"
+MANIFEST="$DIST/update-manifest.json"
 
 SCRIPT="$(mktemp /tmp/booklight-manifest-XXXXXX.rkt)"
 trap 'rm -f "$SCRIPT"' EXIT
@@ -123,7 +123,7 @@ cat > "$SCRIPT" <<RKT
 ;; write-signed-manifest validates the struct against the manifest schema
 ;; before signing, so a malformed manifest fails the release instead of
 ;; shipping something every client would reject.
-(call-with-output-file (build-path dist "update-stable.json")
+(call-with-output-file (build-path dist "update-manifest.json")
   #:exists 'truncate/replace
   (lambda (out)
     (write-signed-manifest manifest
@@ -132,7 +132,7 @@ cat > "$SCRIPT" <<RKT
                            out)
     (newline out)))
 (printf "manifest: ~a (~a artifacts, key-id ~a)\\n"
-        (build-path dist "update-stable.json")
+        (build-path dist "update-manifest.json")
         (length (update-manifest-artifacts manifest))
         key-id)
 RKT
@@ -140,9 +140,9 @@ RKT
 # rivet must be installed for the signer; the publish job links a checkout
 racket "$SCRIPT"
 
-# Family-standard alias: identical bytes under the name the rest of the
-# family probes (update-manifest.json), so the family feed check stops 404
-# while existing stable-name installs keep working untouched.
-cp "$DIST/update-stable.json" "$DIST/update-manifest.json"
+# Pre-switch alias: identical bytes under the retired channel-file name
+# (update-stable.json) so installs that still pull it keep working
+# untouched until the transition window closes.
+cp "$DIST/update-manifest.json" "$DIST/update-stable.json"
 
-echo "manifest: $MANIFEST + update-manifest.json alias (macos arm64/x64 + windows x64 zips + linux x64/arm64 tar.gz)"
+echo "manifest: $MANIFEST + update-stable.json alias (macos arm64/x64 + windows x64 zips + linux x64/arm64 tar.gz)"

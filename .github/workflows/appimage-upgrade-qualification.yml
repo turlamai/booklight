@@ -3,8 +3,8 @@ name: Published upgrade qualification (N -> N+1)
 # Real-feed upgrade qualification (owner mandate #14 evidence ladder):
 # install the previous *published* release, drive the updater entry points
 # that release shipped against the real signed feed
-# (releases/latest/download/update-stable.json — booklight's channel-file
-# carrier of the family manifest), extract the downloaded N+1 tarball over
+# (releases/latest/download/update-manifest.json — the family-canonical
+# feed name), extract the downloaded N+1 tarball over
 # the app directory, relaunch both versions headlessly on the same config
 # directory, execute the documented rollback, and refuse a one-byte-
 # tampered live feed. Green offline tests never prove an upgrade; the
@@ -136,7 +136,7 @@ jobs:
           grep "$TO_ASSET" /tmp/qual/to/SHA256SUMS
           grep "$TO_ASSET" /tmp/qual/to/SHA256SUMS | grep -q "$(sha256sum "$TO_TAR" | cut -d' ' -f1)"
           # the live feed we exercise is the moving latest, and it must offer N+1
-          LIVE_FEED_URL="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/update-stable.json"
+          LIVE_FEED_URL="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/update-manifest.json"
           curl -fsSL -o /tmp/qual/update-manifest.json "$LIVE_FEED_URL"
           FEED_VERSION="$(jq -r .payload /tmp/qual/update-manifest.json | base64 -d | jq -r .version)"
           test "$FEED_VERSION" = "$TO_VERSION"
@@ -333,10 +333,10 @@ jobs:
           i = payload.index(b'"version"')
           payload[i + 1] ^= 0x01  # "version" -> "wersion": valid JSON, dead signature
           env['payload'] = base64.b64encode(bytes(payload)).decode()
-          open('/tmp/qual/tamper/update-stable.json', 'w').write(json.dumps(env))
+          open('/tmp/qual/tamper/update-manifest.json', 'w').write(json.dumps(env))
           PY
           PRISTINE_BYTES_PATH=/tmp/qual/update-manifest.json \
-          TAMPER_BYTES_PATH=/tmp/qual/tamper/update-stable.json \
+          TAMPER_BYTES_PATH=/tmp/qual/tamper/update-manifest.json \
           OUTPUT_JSON=/tmp/qual/bad-signature.json \
           racket scripts/acceptance/upgrade-qualification.rkt
           # a refused manifest must never reach disk as an artifact
@@ -424,7 +424,7 @@ jobs:
               format: "booklight-published-upgrade-qualification",
               formatVersion: 1,
               arch: $arch,
-              installShape: "tar.gz extracted over the app directory (feed entry linux/targz via the update-stable.json channel-file carrier); the AppImage sibling path swaps the running image via a checksum sidecar and is qualified separately",
+              installShape: "tar.gz extracted over the app directory (feed entry linux/targz via the update-manifest.json family-canonical carrier); the AppImage sibling path swaps the running image via a checksum sidecar and is qualified separately",
               throttleBypass: "direct updater entry points; the 24h check throttle (family-deviating contract) lives in the check-updates RPC and is never consulted",
               updaterSource: $updaterSource,
               feedUrl: $feedUrl,

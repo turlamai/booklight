@@ -5,8 +5,8 @@
 ;; shipped updater entry points against the real feed. Two modes:
 ;;
 ;; upgrade (default) — perform-check! against the live signed feed
-;;   (releases/latest/download/update-stable.json, booklight's channel-file
-;;   carrier), then start-download! and wait for the terminal phase. Emits
+;;   (releases/latest/download/update-manifest.json, the family-canonical
+;;   feed name), then start-download! and wait for the terminal phase. Emits
 ;;   one JSON object with the offered version, the downloaded path and its
 ;;   SHA-256. Booklight's throttle contract deviates from the family
 ;;   baseline (24h, booklight#docs): the interval lives in the
