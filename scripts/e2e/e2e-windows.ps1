@@ -502,6 +502,17 @@ try {
                     Select-Object -First 1
             } catch { return $null }
         }
+        # Evidence for the recurring gear-again timeout: dump every control
+        # name the main window exposes right now, then press the gear.
+        try {
+            $buttonDump = @($window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.Condition]::TrueCondition)) |
+                ForEach-Object { try { $_.Current.Name } catch { '<stale>' } } |
+                Where-Object { $_ }
+            Record-Step ('buttons visible: ' + ($buttonDump -join ' | '))
+        } catch {
+            Record-Step 'buttons visible: <scan faulted>'
+        }
         [void](Wait-Until 'settings gear again' {
             Invoke-NamedControl $window @('Settings','设置')
         })
