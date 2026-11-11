@@ -317,6 +317,11 @@ function Select-PresetItem {
         }
         $selection = $item.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
         ([System.Windows.Automation.SelectionItemPattern]$selection).Select()
+        # A UIA selection can leave the popup window open, which blocks the
+        # dialog's Close button from the tree; collapse it before returning.
+        try {
+            ([System.Windows.Automation.ExpandCollapsePattern]$expand).Collapse()
+        } catch { }
         return $true
     } catch {
         return $false
