@@ -93,7 +93,13 @@ function Invoke-NamedControlInner {
         [System.Windows.Automation.Condition]::TrueCondition)
     for ($index = 0; $index -lt $nodes.Count; $index++) {
         $node = $nodes[$index]
-        if ($Names -notcontains $node.Current.Name) { continue }
+        # A single stale element in the tree must not abort the scan —
+        # read its name defensively or the real target later in the
+        # enumeration becomes unreachable.
+        try {
+            $name = $node.Current.Name
+        } catch { continue }
+        if ($Names -notcontains $name) { continue }
         try {
             $pattern = $node.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
             ([System.Windows.Automation.InvokePattern]$pattern).Invoke()
