@@ -497,30 +497,25 @@ try {
         [void](Wait-Until 'settings close action' {
             Invoke-NamedControl $settingsRoot @('Close','关闭')
         })
+        # The dialog is its own top-level window, so the main-window
+        # dismissal probe cannot see it. Verify it actually left the screen
+        # across every process window and re-press Close when the first
+        # invoke landed without effect — a lingering modal blocks the gear.
+        [void](Wait-Until 'settings dialog left the screen' {
+            $candidates = @($window) + @(Process-Windows -ProcessId $process.Id)
+            foreach ($candidate in $candidates) {
+                if ((Contains-Text $candidate 'Provider preset') -or
+                    (Contains-Text $candidate '服务商预设')) {
+                    [void](Invoke-NamedControl $candidate @('Close','关闭'))
+                    return $false
+                }
+            }
+            return $true
+        })
         [void](Wait-Until 'settings dismissal' {
             -not ((Contains-Text $window 'Provider preset') -or
                   (Contains-Text $window '服务商预设'))
         })
-        # Opening and closing the settings surface detaches the cached
-        # window element, and a leftover combo popup window can sit ahead of
-        # the main window in the process children — re-resolve the main
-        # window by its title before driving the gear a second time.
-        $window = Wait-Until 'main window after settings closed' {
-            try {
-                $condition = [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
-                $windows = @($desktop.FindAll([System.Windows.Automation.TreeScope]::Children, $condition))
-                return $windows |
-                    Where-Object { $_.Current.Name -like '*Booklight*' } |
-                    Select-Object -First 1
-            } catch { return $null }
-        }
-        # After the dialog close the gear's UIA Invoke channel can stay
-        # wedged (Invoke/Toggle throwing on a live, named button — see the
-        # buttons-visible evidence). Fall back to a real pointer click on
-        # the gear's bounds, the same input path a user would take.
-        [void](Wait-Until 'settings gear again' {
-            if (Invoke-NamedControl $window @('Settings','设置')) { return $true }
             try {
                 $nodes = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
                     [System.Windows.Automation.Condition]::TrueCondition)
