@@ -482,6 +482,14 @@ try {
             -not ((Contains-Text $window 'Provider preset') -or
                   (Contains-Text $window '服务商预设'))
         })
+        # Opening and closing the settings surface can detach the cached
+        # window element, so re-resolve the main window before driving the
+        # gear a second time.
+        $window = Wait-Until 'main window after settings closed' {
+            $condition = [System.Windows.Automation.PropertyCondition]::new(
+                [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
+            $desktop.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition)
+        }
         [void](Wait-Until 'settings gear again' {
             Invoke-NamedControl $window @('Settings','设置')
         })
