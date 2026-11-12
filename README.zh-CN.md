@@ -32,7 +32,7 @@ Booklight 是 macOS、Windows、Linux 原生 PDF / EPUB 阅读器与轻量 PDF �
 | Windows | WinUI 3、PDFium |
 | Linux | GTK4、PDFium、WebKitGTK |
 
-一份 Racket 领域核心经 [Rivet](https://github.com/turlamai/rivet) 类型化 RPC 连接三端原生宿主。书库 RPC 暂作为**无持久化的旧客户端兼容占位**；目前仍在重构，不能把 PR 源码修改当成已发布、已通过三端实测。
+一份 Racket 领域核心经 [Rivet](https://github.com/turlamai/rivet) 类型化 RPC 连接三端原生宿主。RPC 契约只有一套：旧书库端点已移除，三端宿主全部使用当前 schema。
 
 ```bash
 raco rivet doctor --json

@@ -32,7 +32,7 @@ There is no book import step. New profiles prefer annotation sidecars next to th
 | Windows | WinUI 3, PDFium |
 | Linux | GTK4, PDFium, WebKitGTK |
 
-One Racket core communicates through [Rivet](https://github.com/turlamai/rivet) typed RPC. The old shelf RPC endpoints remain transitional non-persistent compatibility shims; this is a **refactor in progress**, not an assertion that every platform release is already rebuilt and verified.
+One Racket core communicates through [Rivet](https://github.com/turlamai/rivet) typed RPC. The RPC surface is the single contract: the legacy shelf endpoints are gone and every host speaks the current schema.
 
 ```bash
 raco rivet doctor --json
