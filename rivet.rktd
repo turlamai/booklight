@@ -7,6 +7,7 @@
         (url-schemes . ())
         (file-associations . ())
         (macos-min-version . "14.0")
+        (macos-localizations . ("zh-Hans" "en"))
         (windows-min-version . "10.0.19041.0")
         (backend . "app/backend.rkt")
         (module . "backend")
