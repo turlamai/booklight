@@ -7,7 +7,7 @@ on:
 # Single source of truth for the rivet pin; every install step below
 # references this so a bump is one edit, not a grep-replace across jobs.
 env:
-  RIVET_PIN: v0.12.0
+  RIVET_PIN: d6e98896fffa3f484e9ea0162d807ad2518c1538
 permissions:
   contents: write
   id-token: write
@@ -243,10 +243,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Ubuntu 26.04's rpm 4.19 changed the buildroot location; the
-          # pinned Rivet v0.12.0 stages the RPM into the old BUILDROOT and
-          # rpmbuild then reports an empty /opt/booklight. Keep the x64
-          # release leg on 24.04 (arm64 already is) until the pin moves.
+          # Legacy pin workaround, kept while unverified on the new pin:
+          # Ubuntu 26.04's rpm 4.19 changed the buildroot location and the
+          # old Rivet pin staged the RPM into the old BUILDROOT, so
+          # rpmbuild reported an empty /opt/booklight. Rivet d6e9889 carries
+          # the later RPM fixes (rpmdb topdir, unquoted %files globs,
+          # unprivileged dbpath); try the x64 release leg on ubuntu-latest
+          # again before retiring this pin to 24.04.
           - { arch: x64, runner: ubuntu-24.04, racket-arch: x64 }
           - { arch: arm64, runner: ubuntu-24.04-arm, racket-arch: arm64 }
     steps:
@@ -255,7 +258,7 @@ jobs:
       # ci.yml's copy of this step) — it ships the runtime the pinned rivet
       # expects.
       - name: Set up embeddable Racket CS
-        uses: turlamai/rivet/.github/actions/setup-embed-racket@v0.12.0
+        uses: turlamai/rivet/.github/actions/setup-embed-racket@d6e98896fffa3f484e9ea0162d807ad2518c1538
       - name: Install Rivet (catalog) and backend packages
         run: |
           raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'

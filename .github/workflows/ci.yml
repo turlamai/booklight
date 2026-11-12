@@ -7,7 +7,7 @@ on:
 # Single source of truth for the rivet pin; every install step below
 # references this so a bump is one edit, not a grep-replace across jobs.
 env:
-  RIVET_PIN: v0.12.0
+  RIVET_PIN: d6e98896fffa3f484e9ea0162d807ad2518c1538
 concurrency:
   # GitHub retains at most one pending job per concurrency group.
   # Every main push needs its own evidence; only newer revisions of the
@@ -53,7 +53,7 @@ jobs:
           # re-publish is pending). Pin the fixed keel first so --auto
           # keeps it. Remove this line once the catalog serves keel >=
           # d56e38f.
-          raco pkg install --auto --no-docs 'https://github.com/turlamai/keel.git#d56e38f6ad89a5e85c455ac1b26acd2dfd312165'
+          raco pkg install --auto --no-docs 'https://github.com/turlamai/keel.git#e11aa621df48daaa319b17ec742ffce808274c81'
           raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}' crypto
       - name: Domain core tests
         run: raco test racket/
@@ -126,14 +126,14 @@ jobs:
       # release.yml's copy of this step) — it ships the runtime the pinned
       # rivet expects.
       - name: Set up embeddable Racket CS
-        uses: turlamai/rivet/.github/actions/setup-embed-racket@v0.12.0
+        uses: turlamai/rivet/.github/actions/setup-embed-racket@d6e98896fffa3f484e9ea0162d807ad2518c1538
       # Installed after the embeddable runtime so the catalog dependency
       # closure (cext-lib, crypto-lib, keel) resolves against the minimal
       # build — it ships no packages of its own. crypto backs the updater.
       - name: Install Rivet (catalog) and backend packages
         run: |
           # TEMP (upstream outage): see the racket-tests keel pin above.
-          raco pkg install --auto --no-docs 'https://github.com/turlamai/keel.git#d56e38f6ad89a5e85c455ac1b26acd2dfd312165'
+          raco pkg install --auto --no-docs 'https://github.com/turlamai/keel.git#e11aa621df48daaa319b17ec742ffce808274c81'
           raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
           raco pkg install --auto --no-docs crypto
       - name: Install GTK4, WebKitGTK and packaging toolchain
