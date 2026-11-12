@@ -18,7 +18,7 @@
 (ssl-default-verify-sources (list bundle))
 
 (define keel-pin "e11aa621df48daaa319b17ec742ffce808274c81")
-(define rivet-pin (or (getenv "RIVET_PIN") "d6e98896fffa3f484e9ea0162d807ad2518c1538"))
+(define rivet-pin (or (getenv "RIVET_PIN") "v0.16.0"))
 (define keel-url (format "https://github.com/turlamai/keel.git#~a" keel-pin))
 (define rivet-url (format "https://github.com/turlamai/rivet.git#~a" rivet-pin))
 (define include-crypto?
