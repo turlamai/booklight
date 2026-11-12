@@ -22,23 +22,18 @@
 - **AI 永不过界**：任何发送前必核对（操作 / 范围 / 精确字符数），只有「继续」才发请求；进行中可停止；回答里的引用可点回原文位置。
 - **键盘与可达性是一等**：每个列表支持方向键遍历，每个图标控件有标签与帮助文本；⌘O / ⌘F / ⌘B / ⌘P / ⌘W / ⌘⇧S 语义三平台一致。
 
-## Tokens（与实现 1:1）
+## Tokens（语义与推导依据；值不在此复制）
 
-| Token | Light | Dark | 用途 |
-|---|---|---|---|
-| `--bg` | `#F7F4EF` | `#171412` | 阅读画布、欢迎纸 |
-| `--sidebar` | `#EFEBE4` | `#211D1A` | 导航面、inspector |
-| `--panel` | `#FFFDF9` | `#2A2521` | 分组行、浮动控件、核对弹层 |
-| `--panel-alt` | `#F2EEE7` | `#322C27` | 悬停、页码框、次级填充 |
-| `--ink` | `#292524` | `#D6D3D1` | 主文字（取 EPUB 页 fg 实现值） |
-| `--mute` | `#6F6860` | `#A39C92` | 次级文字（宿主用 secondaryLabel；原型推导值，需 ≥4.5:1） |
-| `--line` | `rgba(0,0,0,.08)` | `rgba(255,255,255,.08)` | hairline（宿主为 separator @70% / hairline；原型近似） |
-| `--accent` | `#C4623E` | `#E8926A` | 品牌标记、主操作、选中导航、进行态 |
-| `--accent-hover` | `#AD5130` | `#F0A07C` | accent 悬停 |
-| `--accent-soft` | `rgba(196,98,62,.12)` | `rgba(232,146,106,.12)` | accent 弱底（徽标、选中行） |
-| `--danger` | `#C73E2C` | `#E8665A` | 失败、恢复提示（宿主 systemRed；原型暖化推导） |
-| `--success` | `#2E7D4F` | `#5FBF87` | 恢复成功（宿主 systemGreen；原型推导） |
-| 高亮三色 | 黄 `#FFD500` · 蓝 `#569CFF` · 绿 `#4CC383`（透明度 .85–.9） | 同左 | 用户批注墨色（`Theme.annotationColor`），检索命中共用黄 |
+值类 token 真源 = 宿主实现（`macos-host/Sources/RivetHost/Theme.swift` 与 EPUB 阅读 CSS `linux/src/epub.cpp`、`windows/MainWindow.Epub.cpp`，两端逐字节一致）；原型 `design/prototype/shared.css` 与实现值一一对应，本表只记语义与推导依据。宿主用系统语义色（separator、secondaryLabel）之处，原型取近似值并标注「推导」。
+
+| Token | 语义 | 来源 |
+|---|---|---|
+| `--bg --sidebar --panel --panel-alt` | 纸感画布 / 导航面 / 分组行与浮层（双平面层级） | 实现值 |
+| `--ink --mute` | 主/次级文字 | 实现值（`--mute` 推导，需 ≥4.5:1） |
+| `--line` | hairline 分隔 | 推导（宿主 separator @70% / hairline） |
+| `--accent --accent-hover --accent-soft` | terracotta 品牌标记/主操作/选中导航/进行态 | 实现值 |
+| `--danger --success` | 失败 / 恢复成功 | 推导（宿主 systemRed/systemGreen 暖化） |
+| 高亮三色（黄/蓝/绿） | 用户批注墨色（`Theme.annotationColor`），是内容色不是 UI 色，检索命中共用黄 | 实现值 |
 
 - **字体**：UI 用系统栈 `system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei"`；**阅读正文** serif 栈 `Georgia, "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif`，17 px × 用户缩放、行高 1.9、版心 ≈608 px 居中、两端对齐。PDF 页保留自身排版，永不被产品重排。
 - **圆角**：控件 6 · 分组行 10 · 大面板/欢迎标记 14。**间距**：4/8/12/16/24/32。**动效**：120–180 ms ease-out，无弹跳无视差。
