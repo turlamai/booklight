@@ -74,7 +74,7 @@ client verifies.
 {
   "schema": 1,
   "payload": "<base64 of the inner manifest JSON>",
-  "signature": { "algorithm": "ed25519", "key_id": "booklight-2026-10",
+  "signature": { "algorithm": "ed25519", "key_id": "booklight-2026-11",
                  "value": "<base64, 64 bytes>" }
 }
 ```

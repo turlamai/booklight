@@ -57,7 +57,7 @@ Assets follow `booklight-<version>-<os>-<arch>.<ext>`:
 
 Every release carries a checked `SHA256SUMS`, and the in-app updater
 consumes the Ed25519-signed `update-manifest.json` feed (key id
-`booklight-2026-10`; Sigstore provenance: `gh attestation verify <file>
+`booklight-2026-11`; Sigstore provenance: `gh attestation verify <file>
 -R turlamai/booklight`).
 
 macOS builds carry an ad-hoc signature only, not a notarized one. On

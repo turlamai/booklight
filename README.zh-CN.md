@@ -56,7 +56,7 @@ raco rivet acceptance --json
 | Linux x64 / arm64 | `booklight-<version>-linux-<arch>.deb` · `.rpm` · `.AppImage` · `-linux-<arch>.tar.gz` · `.flatpak`（app id `site.jrtx.booklight`；`flatpak --user install ./booklight-<version>-linux-<arch>.flatpak` 安装） | `booklight-<version>-linux-<arch>.zip` |
 
 每个版本都带校验过的 `SHA256SUMS`；应用内更新消费 Ed25519 签名的
-`update-manifest.json` feed（key id `booklight-2026-10`；Sigstore 溯源：
+`update-manifest.json` feed（key id `booklight-2026-11`；Sigstore 溯源：
 `gh attestation verify <file> -R turlamai/booklight`）。
 
 macOS 构建仅有 ad-hoc 签名，未公证。首次启动时右键应用选「打开」即可

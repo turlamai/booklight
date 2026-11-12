@@ -281,7 +281,7 @@
   (test-case "embedded release identity is coherent"
     (check-equal? app-identifier "site.jrtx.booklight")
     (check-equal? app-channel 'stable)
-    (check-equal? update-key-id "booklight-2026-10")
+    (check-equal? update-key-id "booklight-2026-11")
     (check-true (string? app-version))
     (check-equal? app-build 1))
 

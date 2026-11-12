@@ -14,7 +14,7 @@
 #   - private OneAsymmetricKey DER, base64 -> GitHub secret + vault
 # Rotation needs a release that trusts the NEXT key first (see the note
 # above update-public-key-b64 in app/version.rkt; key id
-# booklight-2026-10).
+# booklight-2026-11).
 # Requires OpenSSL 3 (Ed25519; macOS ships LibreSSL, which cannot do it).
 
 set -euo pipefail

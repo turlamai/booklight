@@ -23,7 +23,7 @@ In scope:
 - Update trust: verification of the Ed25519-signed `update-manifest.json`
   and its artifacts, key handling and rotation
   (`app/updater.rkt`, `app/version.rkt` — embedded public key and key id
-  `booklight-2026-10`, `scripts/make-update-manifest.sh`,
+  `booklight-2026-11`, `scripts/make-update-manifest.sh`,
   `scripts/update-keys.sh`, `scripts/check-update-signing-key.py`), and
   the bounded transfer (800 MiB cap, stall and total limits)
 - Document parsing and rendering: everything Booklight concludes from an

@@ -30,7 +30,7 @@ right to submit it.
 4. **The update contract is fail-closed.** `shared/spec/UPDATE.md` pins
    the triggers (silent check throttled to once per 24 h, manual
    bypass), silent-mode behavior and the backend-verified Ed25519 feed
-   (key id `booklight-2026-10`, keys: `scripts/update-keys.sh`). A
+   (key id `booklight-2026-11`, keys: `scripts/update-keys.sh`). A
    failed verification aborts and the running version keeps working —
    never add an unsigned fallback path.
 5. **Fail honestly.** Network failure / rate limit / throttle is silent

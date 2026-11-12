@@ -20,14 +20,18 @@
 (define app-channel 'stable)
 (define app-display-name "Booklight")
 
-(define update-key-id "booklight-2026-10")
+(define update-key-id "booklight-2026-11")
 
 ;; SubjectPublicKeyInfo DER, base64. Rotate by shipping a build that trusts
 ;; the next key before signing releases exclusively with it (rivet
 ;; docs/release-and-updates.md). The private half lives only in ~/Sync/Keys
 ;; plus the repo's UPDATE_ED25519_PRIVATE_KEY_B64 secret; it never ships.
+;; Rotated 2026-11-12 to booklight-2026-11: the previous booklight-2026-10
+;; private half never reached the shared vault, and with no installed base
+;; the hard cut replaces the two-release trust-both transition. Manifests
+;; signed with the old key verify against nothing — that is the point.
 (define update-public-key-b64
-  "MCowBQYDK2VwAyEAglfp6BpekL4uFAh7mVR6hbnZJYe7hNX4QZujkUY2gxI=")
+  "MCowBQYDK2VwAyEAep+GEgZ5U02onaKBT4kRdzDudOnTgeGkT5QRGmDZdjU=")
 
 (define default-update-base-url
   "https://github.com/turlamai/booklight/releases/latest/download")
