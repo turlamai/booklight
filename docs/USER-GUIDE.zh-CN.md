@@ -67,6 +67,6 @@ API Key 不会写入 `settings.json`。Booklight 将其保存在操作系统凭�
 
 ## 深入阅读
 
-- [阅读详细手册](../docs/guide.html)
+- [阅读详细手册](../site/guide.html)
 - [项目说明与开发入口](../README.zh-CN.md)
 - [现行许可证](../LICENSE)

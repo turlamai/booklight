@@ -71,6 +71,6 @@ Report problems in [GitHub Issues](https://github.com/turlamai/booklight/issues)
 
 ## Further reading
 
-- [Detailed reading manual](../docs/guide.html)
+- [Detailed reading manual](../site/guide.html)
 - [Project overview and development](../README.md)
 - [Current licence](../LICENSE)

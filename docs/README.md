@@ -3,7 +3,7 @@
 ## Use the product
 
 - [English user guide](USER-GUIDE.md) · [简体中文](USER-GUIDE.zh-CN.md): availability, installation, first use, data/recovery, network/privacy and support.
-- [Detailed reading manual](../docs/guide.html)
+- [Detailed reading manual](../site/guide.html)
 
 ## Maintain the product
 
