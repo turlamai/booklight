@@ -21,6 +21,10 @@ All notable changes to Booklight are documented here. Format follows
 
 ### Fixed
 
+- An AppImage download reserves a unique staging name without leaving a
+  pre-created empty file beside the running image; a failed verification no
+  longer strands that file (the managed downloader cleans only its own
+  `.partial`).
 - Switching the provider preset now carries the preset endpoint and default
   model into Base URL and Model. The Windows handler compared the new
   ComboBox selection against itself and always returned early, so no switch
