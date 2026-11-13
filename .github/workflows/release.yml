@@ -7,7 +7,7 @@ on:
 # Single source of truth for the rivet pin; every install step below
 # references this so a bump is one edit, not a grep-replace across jobs.
 env:
-  RIVET_PIN: 994047c310c749d3e16d873f33fc073dca0c6521
+  RIVET_PIN: e90f6513419ec2a518629a79e6ce13c37eeefd8b
 permissions:
   contents: write
   id-token: write
@@ -258,7 +258,7 @@ jobs:
       # ci.yml's copy of this step) — it ships the runtime the pinned rivet
       # expects.
       - name: Set up embeddable Racket CS
-        uses: turlamai/rivet/.github/actions/setup-embed-racket@994047c310c749d3e16d873f33fc073dca0c6521
+        uses: turlamai/rivet/.github/actions/setup-embed-racket@e90f6513419ec2a518629a79e6ce13c37eeefd8b
       - name: Install Rivet (catalog) and backend packages
         run: |
           raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
@@ -322,9 +322,8 @@ jobs:
           set -euo pipefail
           cd dist
           ls -1
-          # The AppImage sidecar (write-appimage-checksum!) backs the
-          # AppImage self-update flow — keep it verbatim. Everything else
-          # gets a sidecar if it lacks one.
+          # Every published asset ships with a detached checksum for manual
+          # verification; the updater verifies through the signed manifest.
           for f in booklight-*; do
             case "$f" in
               *.sha256) ;;
@@ -441,11 +440,10 @@ jobs:
               path = Path("dist") / name
               if not path.is_file() or path.stat().st_size == 0:
                   raise SystemExit(f"Missing or empty installer: {name}")
-              # Every published body ships with its per-asset sidecar: the
-              # AppImage self-update flow downloads `<asset>.sha256` from
-              # this release and refuses the swap without it, so a release
-              # whose sidecars did not make it to publish-assets would
-              # strand every AppImage install on an update error.
+              # Every published body ships with its per-asset sidecar for
+              # manual verification; updates verify through the signed
+              # manifest, but a release whose sidecars did not make it to
+              # publish-assets is still an incomplete asset set.
               sidecar = Path("dist") / (name + ".sha256")
               if not sidecar.is_file() or sidecar.stat().st_size == 0:
                   raise SystemExit(f"Missing checksum sidecar for published asset: {name}")

@@ -12,8 +12,8 @@ name: Published upgrade qualification (N -> N+1)
 #
 # Install shape: the feed's Linux entry is the tar.gz (extract-anywhere
 # install; upgrades overlay the newer tarball over the app directory). The
-# updater also derives an AppImage sibling path for AppImage-running
-# installs, which swaps the running image via a checksum sidecar — this
+# updater also selects the signed AppImage artifact for AppImage-running
+# installs, which swaps the running image through #:after-download — this
 # workflow qualifies the tarball feed path and records `installShape` in
 # the evidence; the file name keeps the family workflow name.
 #
@@ -23,13 +23,13 @@ name: Published upgrade qualification (N -> N+1)
 # the updater entry points directly, which never consult it.
 #
 # Updater note: the workflow checks out the N tag but overlays
-# app/updater.rkt and the driver from main. The published tags' shim
+# app/updater.rkt and the driver from main. The published tags' config shim
 # constructed the ten-field updater-config with the wrong component ('app
 # against a component-less feed), so their real check path answered
-# up-to-date forever; the fix landed in main and the overlay is exactly
-# what the next release will run. Once a release ships the fix the overlay
-# becomes a no-op. The evidence records the overlay commit as
-# `updaterSource`.
+# up-to-date forever; main's managed updater replaces that shim and takes
+# the rivet pin from its own revision (below). Once a release ships the
+# managed updater the overlay becomes a no-op. The evidence records the
+# overlay commit as `updaterSource`.
 
 on:
   workflow_dispatch:
@@ -83,15 +83,25 @@ jobs:
           git checkout FETCH_HEAD -- app/updater.rkt scripts/acceptance/upgrade-qualification.rkt
           echo "OVERLAY_SHA=$(git rev-parse FETCH_HEAD)" >> "$GITHUB_ENV"
 
-      - name: Read the rivet pin the N release was built against
+      - name: Read the rivet pin the updater under test was built against
         run: |
           set -euo pipefail
-          spec="$(grep -ohE "https://[^']+rivet\.git#[^']+" .github/workflows/ci.yml | head -1)"
+          # The overlay runs main's updater against the N tag; that updater
+          # needs the pin from its own revision, not the N release's pin
+          # (which predates the managed-updater hooks it calls). Without an
+          # overlay (a future release that ships this updater), the checked
+          # out tag's pin is the right one.
+          if [ -n "${OVERLAY_SHA:-}" ]; then
+            ci="$(git show "$OVERLAY_SHA:.github/workflows/ci.yml")"
+          else
+            ci="$(cat .github/workflows/ci.yml)"
+          fi
+          spec="$(printf '%s\n' "$ci" | grep -ohE "https://[^']+rivet\.git#[^']+" | head -1)"
           test -n "$spec"
-          # the N workflows may pin through the env indirection (a
-          # "RIVET_PIN:" env block at the top) rather than a literal ref
+          # workflows may pin through the env indirection (a "RIVET_PIN:"
+          # env block at the top) rather than a literal ref
           if echo "$spec" | grep -qF 'env.RIVET_PIN'; then
-            pin="$(grep -m1 -E '^ *RIVET_PIN:' .github/workflows/ci.yml | sed -E 's/.*RIVET_PIN:[[:space:]]*//')"
+            pin="$(printf '%s\n' "$ci" | grep -m1 -E '^ *RIVET_PIN:' | sed -E 's/.*RIVET_PIN:[[:space:]]*//')"
             test -n "$pin"
             spec="$(echo "$spec" | cut -d'#' -f1)#$pin"
           fi
@@ -424,7 +434,7 @@ jobs:
               format: "booklight-published-upgrade-qualification",
               formatVersion: 1,
               arch: $arch,
-              installShape: "tar.gz extracted over the app directory (feed entry linux/targz via the update-manifest.json family-canonical carrier); the AppImage sibling path swaps the running image via a checksum sidecar and is qualified separately",
+              installShape: "tar.gz extracted over the app directory (feed entry linux/targz via the update-manifest.json family-canonical carrier); the AppImage install selects the signed appimage artifact and swaps the running image in place, qualified separately",
               throttleBypass: "direct updater entry points; the 24h check throttle (family-deviating contract) lives in the check-updates RPC and is never consulted",
               updaterSource: $updaterSource,
               feedUrl: $feedUrl,

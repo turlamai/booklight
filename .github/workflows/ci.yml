@@ -7,7 +7,7 @@ on:
 # Single source of truth for the rivet pin; every install step below
 # references this so a bump is one edit, not a grep-replace across jobs.
 env:
-  RIVET_PIN: 994047c310c749d3e16d873f33fc073dca0c6521
+  RIVET_PIN: e90f6513419ec2a518629a79e6ce13c37eeefd8b
 concurrency:
   # GitHub retains at most one pending job per concurrency group.
   # Every main push needs its own evidence; only newer revisions of the
@@ -126,7 +126,7 @@ jobs:
       # release.yml's copy of this step) — it ships the runtime the pinned
       # rivet expects.
       - name: Set up embeddable Racket CS
-        uses: turlamai/rivet/.github/actions/setup-embed-racket@994047c310c749d3e16d873f33fc073dca0c6521
+        uses: turlamai/rivet/.github/actions/setup-embed-racket@e90f6513419ec2a518629a79e6ce13c37eeefd8b
       # Installed after the embeddable runtime so the catalog dependency
       # closure (cext-lib, crypto-lib, keel) resolves against the minimal
       # build — it ships no packages of its own. crypto backs the updater.
