@@ -7,7 +7,7 @@ on:
 # Single source of truth for the rivet pin; every install step below
 # references this so a bump is one edit, not a grep-replace across jobs.
 env:
-  RIVET_PIN: c2e3760c504677cffe77c06bf30744572992cbf2
+  RIVET_PIN: 994047c310c749d3e16d873f33fc073dca0c6521
 permissions:
   contents: write
   id-token: write
@@ -258,7 +258,7 @@ jobs:
       # ci.yml's copy of this step) — it ships the runtime the pinned rivet
       # expects.
       - name: Set up embeddable Racket CS
-        uses: turlamai/rivet/.github/actions/setup-embed-racket@c2e3760c504677cffe77c06bf30744572992cbf2
+        uses: turlamai/rivet/.github/actions/setup-embed-racket@994047c310c749d3e16d873f33fc073dca0c6521
       - name: Install Rivet (catalog) and backend packages
         run: |
           raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
