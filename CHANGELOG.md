@@ -5,6 +5,20 @@ All notable changes to Booklight are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The updater now runs on `rivet/distribution`'s managed `make-updater` state
+  machine: candidate selection, the download worker, the stall/total
+  watchdog, cancellation and the terminal state are shared family code.
+  Booklight supplies its key, feed, staging path and the AppImage in-place
+  swap through `#:destination`/`#:after-download`. The `update-state` wire
+  shape is unchanged.
+- Linux AppImage updates now select the **signed** AppImage artifact from
+  the update manifest (the feed gained `appimage` entries for both
+  architectures) instead of downloading a sibling `.AppImage` and trusting
+  its detached `.sha256` sidecar. The sidecar is still published for manual
+  verification, but updates no longer depend on it.
+
 ### Fixed
 
 - Switching the provider preset now carries the preset endpoint and default

@@ -61,6 +61,8 @@ raco rivet sign-manifest \
   --artifact "windows:x64:zip:$DIST/booklight-$VERSION-windows-x64.zip" \
   --artifact "linux:x64:targz:$DIST/booklight-$VERSION-linux-x64.tar.gz" \
   --artifact "linux:arm64:targz:$DIST/booklight-$VERSION-linux-arm64.tar.gz" \
+  --artifact "linux:x64:appimage:$DIST/booklight-$VERSION-linux-x86_64.AppImage" \
+  --artifact "linux:arm64:appimage:$DIST/booklight-$VERSION-linux-aarch64.AppImage" \
   --rollback-allowed
 
-echo "manifest: $DIST/update-manifest.json + update-stable.json alias (macos arm64/x64 + windows x64 zips + linux x64/arm64 tar.gz)"
+echo "manifest: $DIST/update-manifest.json + update-stable.json alias (macos arm64/x64 + windows x64 zips + linux x64/arm64 tar.gz + AppImages)"
