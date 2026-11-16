@@ -320,6 +320,9 @@ inline constexpr struct WinStringEntry {
     {"ui.welcome.resume", L"第 {0} 页", L"Page {0}"},
     {"update.dev-copy", L"当前是开发副本，自动更新不可用。", L"This is a development copy — auto-update is unavailable."},
     {"update.msi-installed", L"当前副本通过 MSI 安装，请到发布页下载新安装包完成升级。", L"This copy was installed via the MSI — grab the new installer from the releases page."},
+    {"ui.welcome.drop-open", L"松开以打开文档", L"Release to open the document"},
+    {"ui.pdf.unsaved-suffix", L"有未保存修改", L"unsaved changes"},
+    {"ui.pdf.discard-confirm", L"确定放弃全部页面修改？放弃后无法恢复。", L"Discard all page edits? This cannot be undone."},
 };
 
 }  // namespace pdfgist
