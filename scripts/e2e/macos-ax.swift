@@ -9,7 +9,19 @@ enum DriverError: Error, CustomStringConvertible {
 func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? { var value: CFTypeRef?; return AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success ? value : nil }
 func stringAttribute(_ element: AXUIElement, _ name: String) -> String { attribute(element, name) as? String ?? "" }
 func children(_ element: AXUIElement) -> [AXUIElement] { attribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? [] }
-func walk(_ element: AXUIElement) -> [AXUIElement] { [element] + children(element).flatMap(walk) }
+// AX trees can loop back on themselves (self-referencing applications, menu
+// item ⇄ submenu cycles): unguarded recursion is a stack overflow, and a bare
+// depth cap alone turns the cycle into a combinatorial walk that never
+// finishes. CFEqual on AXUIElement is server-side identity, so a visited set
+// deduplicates aliases; the depth cap is belt and braces.
+func walk(_ element: AXUIElement) -> [AXUIElement] {
+    var visited = Set<AXUIElement>()
+    func rec(_ e: AXUIElement, _ depth: Int) -> [AXUIElement] {
+        guard depth < 64, visited.insert(e).inserted else { return [] }
+        return [e] + children(e).flatMap { rec($0, depth + 1) }
+    }
+    return rec(element, 0)
+}
 func contains(_ root: AXUIElement, _ fragment: String) -> Bool { walk(root).contains { node in [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute, kAXHelpAttribute].contains { stringAttribute(node, $0).contains(fragment) } } }
 func pressNamed(_ root: AXUIElement, _ names: Set<String>) -> Bool { for node in walk(root) { let values = [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute].map { stringAttribute(node, $0) }; if values.contains(where: names.contains) && AXUIElementPerformAction(node, kAXPressAction as CFString) == .success { return true } }; return false }
 func waitFor<T>(_ description: String, timeout: TimeInterval = 90, probe: () -> T?) throws -> T { let deadline = Date().addingTimeInterval(timeout); while Date() < deadline { if let value = probe() { return value }; Thread.sleep(forTimeInterval: 0.05) }; throw DriverError.failure("timed out waiting for \(description)") }
