@@ -307,5 +307,8 @@
   "ui.welcome.privacy": "Booklight opens files where they live. Nothing is copied, imported, or uploaded unless you ask AI.",
   "ui.welcome.resume": "Page {0}",
   "update.dev-copy": "This is a development copy — auto-update is unavailable.",
-  "update.msi-installed": "This copy was installed via the MSI — grab the new installer from the releases page."
+  "update.msi-installed": "This copy was installed via the MSI — grab the new installer from the releases page.",
+  "ui.welcome.drop-open": "Release to open the document",
+  "ui.pdf.unsaved-suffix": "unsaved changes",
+  "ui.pdf.discard-confirm": "Discard all page edits? This cannot be undone."
 }

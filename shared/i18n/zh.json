@@ -307,5 +307,8 @@
   "ui.welcome.privacy": "Booklight 直接打开原文件，不导入、不复制；只有你主动使用 AI 时才会发送所选文本。",
   "ui.welcome.resume": "第 {0} 页",
   "update.dev-copy": "当前是开发副本，自动更新不可用。",
-  "update.msi-installed": "当前副本通过 MSI 安装，请到发布页下载新安装包完成升级。"
+  "update.msi-installed": "当前副本通过 MSI 安装，请到发布页下载新安装包完成升级。",
+  "ui.welcome.drop-open": "松开以打开文档",
+  "ui.pdf.unsaved-suffix": "有未保存修改",
+  "ui.pdf.discard-confirm": "确定放弃全部页面修改？放弃后无法恢复。"
 }

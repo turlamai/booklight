@@ -227,34 +227,65 @@ final class EpubTab: ObservableObject, Identifiable {
 
     /// v1 READING_CSS typography + theme; the marks helpers power search.
     static func pageHTML(sections: [String], theme: String) -> String {
+        // Typography is the design contract (design/DESIGN.md invariant 2 +
+        // design/prototype/reading.html): ~608px measure, 1.9 line height,
+        // justified serif body. --rline/--rsel/--uacc follow the reading
+        // theme, which is orthogonal to the window theme. The selection bar
+        // is UI chrome, so it uses the UI font stack and the reading-theme
+        // surface pair (never the window tokens).
         let css = """
         :root { --fs: 1; }
-        :root[data-theme="light"] { --fg: #292524; --bg: #F5F2ED; }
-        :root[data-theme="sepia"] { --fg: #57534E; --bg: #EFE6D5; }
-        :root[data-theme="dark"] { --fg: #D6D3D1; --bg: #171412; }
+        :root[data-theme="light"] { --fg: #292524; --bg: #F5F2ED;
+          --rline: rgba(0,0,0,.08); --rsel: rgba(196,98,62,.16); --uacc: #C4623E;
+          --bar-bg: #FFFDF9; --bar-hover: #F2EEE7; --bar-line: rgba(0,0,0,.08); --bar-ink: #292524; }
+        :root[data-theme="sepia"] { --fg: #57534E; --bg: #EFE6D5;
+          --rline: rgba(0,0,0,.10); --rsel: rgba(196,98,62,.16); --uacc: #C4623E;
+          --bar-bg: #FFFDF9; --bar-hover: #F2EEE7; --bar-line: rgba(0,0,0,.10); --bar-ink: #292524; }
+        :root[data-theme="dark"] { --fg: #D6D3D1; --bg: #171412;
+          --rline: rgba(255,255,255,.10); --rsel: rgba(232,146,106,.20); --uacc: #E8926A;
+          --bar-bg: #2A2521; --bar-hover: #322C27; --bar-line: rgba(255,255,255,.08); --bar-ink: #D6D3D1; }
         html { background: var(--bg); }
-        body { margin: 0; padding: 0 0 40vh; color: var(--fg);
-          font-family: "New York", "Iowan Old Style", Georgia,
-            "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif;
-          font-size: calc(17px * var(--fs)); line-height: 1.75;
+        body { margin: 0; padding: 0 0 72px; color: var(--fg);
+          font-family: Georgia, "Source Han Serif SC", "Noto Serif SC",
+            "Songti SC", serif;
+          font-size: calc(17px * var(--fs)); line-height: 1.9;
           -webkit-font-smoothing: antialiased; }
-        p { margin: 0 0 1.05em; text-align: left; text-wrap: pretty; }
+        p { margin: 0 0 1em; text-align: justify; }
         h1, h2, h3, h4 { line-height: 1.3; margin: 1.6em 0 0.55em;
           font-weight: 600; letter-spacing: -0.01em; }
         h1 { font-size: 1.9em; }
         h2 { font-size: 1.45em; }
         h3 { font-size: 1.18em; }
         img, svg { max-width: 100%; height: auto; }
-        blockquote { margin: 1.2em 0; padding-left: 1em;
-          border-left: 3px solid #8884; color: #888; }
+        blockquote { margin: 1em 0; padding-left: 1em; font-size: 15px;
+          line-height: 1.8; border-left: 3px solid var(--rline); opacity: .88; }
         a { color: inherit; pointer-events: none; }
-        ::selection { background: rgba(196, 98, 62, 0.22); }
-        .epub-book-title { max-width: 38rem; margin: 0 auto;
-          padding: 16vh 28px 8vh; text-align: center; }
+        ::selection { background: var(--rsel); }
+        .epub-book-title { max-width: 608px; box-sizing: border-box;
+          margin: 0 auto; padding: 16vh 24px 8vh; text-align: center; }
         .book-title-text { font-size: 2.1em; font-weight: 600;
           letter-spacing: -0.02em; }
-        .epub-chapter { max-width: 38rem; margin: 0 auto; padding: 0 28px; }
-        mark.epub-hit { background: #FFD500; color: inherit; border-radius: 2px; }
+        .epub-chapter { max-width: 608px; box-sizing: border-box;
+          margin: 0 auto; padding: 0 24px; }
+        mark.epub-hit { background: rgba(255,213,0,.9); color: inherit;
+          border-radius: 2px; }
+        /* 划词浮条（design/prototype/reading.html .selbar）：直接操纵 */
+        .selbar { position: absolute; display: none; align-items: center; gap: 4px;
+          padding: 5px 7px; border-radius: 8px; background: var(--bar-bg);
+          border: 1px solid var(--bar-line); box-shadow: 0 4px 14px rgba(23,20,18,.16);
+          z-index: 5; font-family: system-ui, -apple-system, "Segoe UI",
+            "PingFang SC", "Hiragino Sans GB", sans-serif; }
+        .selbar.on { display: flex; }
+        .selbar .sw { width: 17px; height: 17px; border-radius: 50%;
+          border: 1px solid var(--bar-line); cursor: pointer; padding: 0; }
+        .selbar .sw-y { background: rgba(255,213,0,.9); }
+        .selbar .sw-b { background: rgba(86,156,255,.85); }
+        .selbar .sw-g { background: rgba(76,195,131,.85); }
+        .selbar .act { font-size: 11.5px; color: var(--bar-ink); padding: 3px 7px;
+          border-radius: 5px; cursor: pointer; white-space: nowrap; }
+        .selbar .act:hover { background: var(--bar-hover); }
+        .selbar .sep { width: 1px; height: 16px; background: var(--bar-line); }
+        .selbar .ai { color: var(--uacc); font-weight: 600; }
         """
         let script = """
         function clearMarks(root) {
@@ -318,7 +349,45 @@ final class EpubTab: ObservableObject, Identifiable {
           window.webkit.messageHandlers.bridge.postMessage(
             JSON.stringify({ kind: 'selection', text: text.slice(0, 800),
                              chapter: chapter, start: start, end: end }));
+          placeSelBar(range);
         });
+
+        // 划词浮条（design/prototype/reading.html .selbar）：浮动于选区上方，
+        // 动作经 bridge 交回宿主，避免在页面里复制业务逻辑。This script runs
+        // in <head>, so the bar element is only wired once the DOM exists —
+        // a top-level null lookup here would abort the rest of the script
+        // (annotation injection and chapter reporting live below it).
+        var selbar = null;
+        function hideSelBar() { if (selbar) selbar.classList.remove('on'); }
+        function placeSelBar(range) {
+          if (!selbar) return;
+          var rect = range.getBoundingClientRect();
+          selbar.classList.add('on');
+          var bw = selbar.offsetWidth, bh = selbar.offsetHeight;
+          var left = rect.left + window.scrollX + rect.width / 2 - bw / 2;
+          left = Math.max(8, Math.min(left,
+            document.documentElement.clientWidth - bw - 8));
+          var top = rect.top + window.scrollY - bh - 10;
+          if (top < window.scrollY) top = rect.bottom + window.scrollY + 10;
+          selbar.style.left = left + 'px';
+          selbar.style.top = top + 'px';
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+          selbar = document.getElementById('selbar');
+          if (!selbar) return;
+          selbar.addEventListener('mousedown', e => e.stopPropagation());
+          selbar.addEventListener('click', e => {
+            var t = e.target.closest('[data-a]');
+            if (!t) return;
+            window.webkit.messageHandlers.bridge.postMessage(
+              JSON.stringify({ kind: 'sel-action', action: t.dataset.a }));
+            var sel = window.getSelection();
+            if (sel) sel.removeAllRanges();
+            hideSelBar();
+          });
+        });
+        window.addEventListener('mousedown', hideSelBar);
+        window.addEventListener('scroll', hideSelBar);
 
         function textNodeMap(root) {
           const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -328,10 +397,13 @@ final class EpubTab: ObservableObject, Identifiable {
           return { nodes, total };
         }
 
+        // Annotation ink follows the prototype (reading.html): highlighter
+        // swatches at the locked alphas, underline/strike drawn in the
+        // reading-theme accent (--uacc), like the prototype's .ul-u.
         function styleFor(kind, color) {
-          if (kind === 'underline') return 'text-decoration: underline; text-decoration-color:' + markColor(color) + ';';
-          if (kind === 'strike') return 'text-decoration: line-through; text-decoration-color:' + markColor(color) + ';';
-          const alpha = { yellow: '0.45', green: '0.35', blue: '0.28' }[color] || '0.4';
+          if (kind === 'underline') return 'text-decoration: underline; text-decoration-color: var(--uacc); text-underline-offset: 4px; text-decoration-thickness: 2px;';
+          if (kind === 'strike') return 'text-decoration: line-through; text-decoration-color: var(--uacc); text-decoration-thickness: 2px;';
+          const alpha = { yellow: '0.9', green: '0.85', blue: '0.85' }[color] || '0.9';
           return 'background:' + hexToRgba(markColor(color), alpha) + ';';
         }
         function markColor(color) {
@@ -392,10 +464,25 @@ final class EpubTab: ObservableObject, Identifiable {
         });
         """
         let themeAttr = theme == "dark" ? "dark" : (theme == "light" ? "light" : "light")
+        // Selection bar labels come from the i18n table (invariant 5); the
+        // bar itself is inert chrome — every action routes to the host.
+        let selbarHTML = """
+        <div class="selbar" id="selbar">
+          <button class="sw sw-y" data-a="hl-yellow" title="\(L10n.t("ui.menu.highlight-yellow"))"></button>
+          <button class="sw sw-b" data-a="hl-blue" title="\(L10n.t("ui.menu.highlight-blue"))"></button>
+          <button class="sw sw-g" data-a="hl-green" title="\(L10n.t("ui.menu.highlight-green"))"></button>
+          <span class="sep"></span>
+          <span class="act" data-a="underline">\(L10n.t("ui.menu.underline"))</span>
+          <span class="act" data-a="strike">\(L10n.t("ui.menu.strike"))</span>
+          <span class="sep"></span>
+          <span class="act" data-a="copy">\(L10n.t("ui.card.copy"))</span>
+          <span class="act ai" data-a="ai">✦ \(L10n.t("ui.toolbar.ai"))</span>
+        </div>
+        """
         return """
         <!doctype html><html data-theme="\(themeAttr)"><head><meta charset="utf-8">
         <style>\(css)</style><script>\(script)</script></head>
-        <body>\(sections.joined(separator: "\n"))</body></html>
+        <body>\(sections.joined(separator: "\n"))\(selbarHTML)</body></html>
         """
     }
 
@@ -475,6 +562,10 @@ extension EpubTab {
                     if let ch = obj["chapter"] as? Int {
                         tab.currentPage = ch
                         tab.reader?.noteEpubChapter(tab)
+                    }
+                case "sel-action":
+                    if let action = obj["action"] as? String {
+                        tab.reader?.handleEpubSelectionAction(action)
                     }
                 default:
                     break

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import WebKit
 
 @MainActor
 final class BooklightAppDelegate: NSObject, NSApplicationDelegate {
@@ -264,6 +265,9 @@ struct AppCommands: Commands {
 /// Off-screen window render used only by the design-review environment
 /// variable above. AppKit caches the existing backing store, so this needs no
 /// Screen Recording permission and never changes what the user sees.
+/// WKWebView composites out-of-process and stays empty in a cached render,
+/// so its subtree is additionally grabbed with the web view's own snapshot
+/// API and written beside the window shot as <name>-web.png.
 @MainActor
 private enum BooklightSnapshot {
     static func write(view: NSView, to url: URL) {
@@ -272,6 +276,25 @@ private enum BooklightSnapshot {
         view.cacheDisplay(in: view.bounds, to: rep)
         guard let png = rep.representation(using: .png, properties: [:]) else { return }
         try? png.write(to: url)
+        // WKWebView's snapshot completion arrives on the main queue — never
+        // block the main thread waiting for it; write from the completion.
+        guard let web = firstWebView(in: view) else { return }
+        web.takeSnapshot(with: nil) { snapshot, _ in
+            guard let tiff = snapshot?.tiffRepresentation,
+                  let webRep = NSBitmapImageRep(data: tiff),
+                  let webPng = webRep.representation(using: .png, properties: [:]) else { return }
+            let stem = url.deletingPathExtension().lastPathComponent
+            try? webPng.write(to: url.deletingLastPathComponent()
+                .appendingPathComponent("\(stem)-web.png"))
+        }
+    }
+
+    private static func firstWebView(in view: NSView) -> WKWebView? {
+        if let web = view as? WKWebView { return web }
+        for sub in view.subviews {
+            if let web = firstWebView(in: sub) { return web }
+        }
+        return nil
     }
 }
 #endif

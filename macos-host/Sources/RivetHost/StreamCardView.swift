@@ -208,7 +208,11 @@ struct StreamCardView: View {
         if case .notice = card.phase {
             EmptyView()
         } else if !card.sourceText.isEmpty {
-            sourceExcerpt
+            if card.sourceJump != nil {
+                citeChip
+            } else {
+                sourceExcerpt
+            }
         }
     }
 
@@ -220,6 +224,48 @@ struct StreamCardView: View {
             .padding(6)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 5).fill(Theme.panelAlt))
+    }
+
+    /// AiCiteChip（design/prototype/ai.html .cite）：摘句 + 位置 ↗，
+    /// 点击回跳发送时锁定的原文位置。
+    private var citeChip: some View {
+        Button {
+            card.sourceJump?()
+        } label: {
+            HStack(alignment: .top, spacing: 7) {
+                Text(card.sourceText)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.textDim)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 6)
+                HStack(spacing: 2) {
+                    Text(card.sourceLoc)
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                        .lineLimit(1)
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 6).fill(Theme.panelAlt))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Theme.border, lineWidth: 1))
+            .overlay(alignment: .leading) {
+                // Prototype .cite's 2px accent left edge.
+                Rectangle()
+                    .fill(Theme.accent)
+                    .frame(width: 2)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(verbatim: "\(card.sourceLoc)"))
     }
 
     @ViewBuilder

@@ -91,6 +91,10 @@ final class StreamCard: ObservableObject, Identifiable {
     let title: String
     let meta: String
     let sourceText: String
+    /// 摘句 chip（design/DESIGN.md 不变式 4「引用可点回原文」）：发送时锁定
+    /// 的位置标签与回跳；为空则按纯摘句展示。
+    var sourceLoc: String = ""
+    var sourceJump: (() -> Void)?
     @Published var reasoning = ""
     @Published var content = ""
     @Published var phase: Phase = .streaming

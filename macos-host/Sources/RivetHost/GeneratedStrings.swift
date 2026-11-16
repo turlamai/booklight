@@ -314,6 +314,9 @@ enum L10n {
     "ui.welcome.resume": "第 {0} 页",
     "update.dev-copy": "当前是开发副本，自动更新不可用。",
     "update.msi-installed": "当前副本通过 MSI 安装，请到发布页下载新安装包完成升级。",
+    "ui.welcome.drop-open": "松开以打开文档",
+    "ui.pdf.unsaved-suffix": "有未保存修改",
+    "ui.pdf.discard-confirm": "确定放弃全部页面修改？放弃后无法恢复。",
     ]
 
     private static let en: [String: String] = [
@@ -626,6 +629,9 @@ enum L10n {
     "ui.welcome.resume": "Page {0}",
     "update.dev-copy": "This is a development copy — auto-update is unavailable.",
     "update.msi-installed": "This copy was installed via the MSI — grab the new installer from the releases page.",
+    "ui.welcome.drop-open": "Release to open the document",
+    "ui.pdf.unsaved-suffix": "unsaved changes",
+    "ui.pdf.discard-confirm": "Discard all page edits? This cannot be undone.",
     ]
 
     /// Look up a key in the active language, falling back to zh then the key

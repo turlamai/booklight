@@ -239,6 +239,7 @@ struct ReaderWindowView: View {
     @Environment(\.openWindow) private var openWindowEnv
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .automatic
     @State private var isKeyWindow = false
+    @State private var dropTargeted = false
 
     /// File-first: a window without a document shows a small open-file view; a window
     /// with one is a reader. Shared window plumbing wraps both modes.
@@ -256,12 +257,19 @@ struct ReaderWindowView: View {
                 backendBanner
             }
         }
+        // 拖放悬停态（design/prototype/welcome.html .dropmask）：只在空文档
+        // 窗口上遮罩——落在有文档的窗口上是为后续文档开新窗口。
+        .overlay {
+            if dropTargeted && !reader.hasDocument {
+                dropOverlay
+            }
+        }
         .background(Theme.bg)
         .foregroundStyle(Theme.text)
         .dropDestination(for: URL.self) { urls, _ in
             dropOpened(urls)
             return true
-        }
+        } isTargeted: { dropTargeted = $0 }
         .alert(reader.alertText, isPresented: $reader.showAlert) {}
         .sheet(item: $reader.passwordPrompt) { prompt in
             PasswordSheet(reader: reader, wrong: prompt.wrong)
@@ -329,13 +337,17 @@ struct ReaderWindowView: View {
 
     /// One quiet line of document context under the title (Preview model):
     /// file kind and size on the left of the titlebar, never a second toolbar.
+    /// Unsaved page edits surface here too (prototype titlebar sub「有未保存修改」),
+    /// alongside the native edited dot and the PendingEditBar.
     private var readerSubtitle: String {
         if reader.epubActive, let epub = reader.epub {
             return L10n.t("ui.viewer.epub-subtitle",
                           "\(epub.currentPage)", "\(max(epub.chapters, 1))")
         }
         if let tab = reader.pdf {
-            return L10n.t("ui.viewer.pdf-info", "\(tab.pageCount)")
+            let base = L10n.t("ui.viewer.pdf-info", "\(tab.pageCount)")
+            return reader.pdfEditsPending
+                ? base + " · " + L10n.t("ui.pdf.unsaved-suffix") : base
         }
         return ""
     }
@@ -355,6 +367,27 @@ struct ReaderWindowView: View {
         }
     }
 
+    /// 拖放悬停遮罩（prototype .dropmask）：accent 软底 + 虚线框 + 主文案。
+    private var dropOverlay: some View {
+        ZStack {
+            Theme.accentSoft
+            RoundedRectangle(cornerRadius: Theme.Radius.large, style: .continuous)
+                .strokeBorder(Theme.accent,
+                              style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                .padding(20)
+            Text(L10n.t("ui.welcome.drop-open"))
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Theme.accent)
+                .padding(.horizontal, 64)
+                .padding(.vertical, 36)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.Radius.large, style: .continuous)
+                        .fill(Theme.panel))
+        }
+        .ignoresSafeArea()
+        .accessibilityIdentifier("booklight.welcome.drop-overlay")
+    }
+
     private var backendBanner: some View {
         Text(app.status)
             .font(.footnote)
@@ -370,7 +403,14 @@ struct ReaderWindowView: View {
             EpubViewport(tab: epub)
                 .ignoresSafeArea()
         } else if let tab = reader.pdf {
-            CenteredDocument(tab: tab)
+            VStack(spacing: 0) {
+                // 页级修改只存在于内存（design/DESIGN.md：另存提示必须出现，
+                // 永不静默覆写原件）——持久横幅，另存或放弃二选一。
+                if reader.pdfEditsPending {
+                    PendingEditBar(reader: reader)
+                }
+                CenteredDocument(tab: tab)
+            }
         }
     }
 
@@ -695,6 +735,51 @@ struct WatermarkSheet: View {
                 text = draft.text
                 size = draft.size
                 opacityPercent = draft.opacityPercent
+            }
+        }
+    }
+}
+
+// MARK: - pending PDF edits bar (design/prototype/pdf.html PendingEditBar)
+
+/// Persistent banner while in-memory page edits are unsaved: save a copy or
+/// discard (discarding rebuilds from the untouched original, after confirm —
+/// the in-memory edits cannot be recovered).
+struct PendingEditBar: View {
+    @ObservedObject var reader: ReaderModel
+    @State private var confirmDiscard = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.danger)
+            Text(L10n.t("ui.pdf.pending-title"))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.danger)
+            Spacer(minLength: 8)
+            Button(L10n.t("ui.pdf.save-as")) {
+                reader.exportEditedPdf()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .accessibilityIdentifier("booklight.pdf.pending-save")
+            Button(L10n.t("ui.pdf.discard")) {
+                confirmDiscard = true
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .foregroundStyle(Theme.danger)
+            .accessibilityIdentifier("booklight.pdf.pending-discard")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(Theme.danger.opacity(0.10))
+        .accessibilityIdentifier("booklight.pdf.pending-bar")
+        .alert(L10n.t("ui.pdf.discard-confirm"), isPresented: $confirmDiscard) {
+            Button(L10n.t("ui.password.cancel"), role: .cancel) {}
+            Button(L10n.t("ui.pdf.discard"), role: .destructive) {
+                reader.discardPdfEdits()
             }
         }
     }

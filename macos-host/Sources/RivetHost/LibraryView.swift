@@ -87,6 +87,12 @@ struct FileWelcomeView: View {
             .labelStyle(.titleAndIcon)
             .padding(.bottom, 6)
 
+            // Prototype features line (welcome.html .features).
+            Text(L10n.t("ui.welcome.feature1"))
+                .font(.system(size: 12.5))
+                .foregroundStyle(Theme.textDim)
+                .tracking(0.3)
+
             Text(L10n.t("ui.welcome.privacy"))
                 .font(.footnote)
                 .foregroundStyle(Theme.textFaint)

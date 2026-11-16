@@ -349,6 +349,30 @@ final class ReaderModel: ObservableObject {
         tab.pdfView.scaleFactor = scale
     }
 
+    /// PendingEditBar 出口（design/prototype/pdf.html「放弃更改」）：丢掉内存
+    /// 里的页级修改，从原文件重建文档。原始文件从未被改写，重载失败时保留
+    /// 内存修改并给出真实错误。
+    func discardPdfEdits() {
+        guard let tab = pdf else { return }
+        guard let doc = InvertedPDFDocument(url: URL(fileURLWithPath: tab.path)),
+              !doc.isLocked else {
+            alert(L10n.t("ui.pages.edit-failed", tab.path))
+            return
+        }
+        let page = tab.currentPage
+        let scale = tab.pdfView.scaleFactor
+        let mode = tab.pdfView.displayMode
+        tab.pdfView.document = doc
+        tab.pageCount = doc.pageCount
+        applyStoredAnnotations(tab)
+        rebuildOutline(tab)
+        tab.refreshBookmarkFlag()
+        tab.pdfView.displayMode = mode
+        tab.goToPage(page)
+        tab.pdfView.scaleFactor = scale
+        pdfEditsPending = false
+    }
+
     /// Called when the window closes: flush pending persistence, stop live
     /// streams, tear the web view down.
     func closeDocument() {
@@ -872,6 +896,35 @@ final class ReaderModel: ObservableObject {
         epub.queueAnnotationSave()
     }
 
+    /// 划词浮条动作（design/prototype/reading.html .selbar）。The bar is
+    /// inert chrome; every action lands here so business stays host-side.
+    func handleEpubSelectionAction(_ action: String) {
+        switch action {
+        case "hl-yellow", "hl-blue", "hl-green":
+            addEpubAnnotation(color: String(action.dropFirst(3)), kind: "highlight")
+            epub?.pendingSelection = nil
+        case "underline":
+            addEpubAnnotation(color: "", kind: "underline")
+            epub?.pendingSelection = nil
+        case "strike":
+            addEpubAnnotation(color: "", kind: "strike")
+            epub?.pendingSelection = nil
+        case "copy":
+            if let text = epub?.pendingSelection?.text {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+            }
+        case "ai":
+            // Open the inspector on the selection scope, as the prototype's
+            // ✦ AI 助手 act does.
+            aiVisible = true
+            aiTab = .chat
+            chatScope = 1
+        default:
+            break
+        }
+    }
+
     /// EPUB digest export (same RPC; page ordinal = chapter).
     func exportEpubAnnotations() {
         guard let epub = epub else { return }
@@ -1301,6 +1354,32 @@ final class ReaderModel: ObservableObject {
 
     // translate ----------------------------------------------------------------
 
+    // AiCiteChip（design/DESIGN.md 不变式 4「引用可点回原文」）：发送时把
+    // 摘句的来源位置钉在卡片上，点 chip 回跳原文位置。
+
+    /// 页码/章序号 → 位置标签 + 回跳（EPUB 按章，PDF 按页）。
+    private func citeFor(pageOrdinal: Int) -> (loc: String, jump: () -> Void) {
+        if epubActive {
+            return (L10n.t("ui.epub.chapter-n", "\(pageOrdinal)"),
+                    { [weak self] in self?.epub?.goToChapter(pageOrdinal) })
+        }
+        return (L10n.t("ui.notes.page", "\(pageOrdinal)"),
+                { [weak self] in self?.pdf?.goToPage(pageOrdinal) })
+    }
+
+    /// 选区优先进选区原位，否则进当前页/章；无文档则不钉。
+    private func captureSourceCite() -> (loc: String, jump: () -> Void)? {
+        if let epub = epub {
+            return citeFor(pageOrdinal: epub.pendingSelection?.chapter ?? epub.currentPage)
+        }
+        if let tab = pdf, let doc = tab.document {
+            let page = tab.pdfView.currentSelection?.pages.first
+                .map { doc.index(for: $0) + 1 } ?? tab.currentPage
+            return citeFor(pageOrdinal: page)
+        }
+        return nil
+    }
+
     func translateSelection() {
         guard let text = selectionText() else {
             prependNotice(L10n.t("ui.need.selection"), to: \.translateCards)
@@ -1314,12 +1393,15 @@ final class ReaderModel: ObservableObject {
         guard ensureProvider(for: \.translateCards) else { return }
         let lang = languageName(app.settings.target_language)
         let target = app.settings.target_language
+        let cite = captureSourceCite()
         confirmAISend(action: .translate, scope: .selection, content: text) { [weak self] in
-            self?.startCardStream(
-                card: StreamCard(
-                    title: L10n.t("ui.menu.translate"), meta: "→ \(lang)",
-                    sourceText: text),
-                list: \.translateCards) { api in
+            guard let self else { return }
+            let card = StreamCard(
+                title: L10n.t("ui.menu.translate"), meta: "→ \(lang)",
+                sourceText: text)
+            card.sourceLoc = cite?.loc ?? ""
+            card.sourceJump = cite?.jump
+            self.startCardStream(card: card, list: \.translateCards) { api in
                 try await api.translate_text(text: text, target: target)
             }
         }
@@ -1338,10 +1420,13 @@ final class ReaderModel: ObservableObject {
         let target = app.settings.target_language
         let title = epubActive ? L10n.t("ui.epub.translate-title", "\(source.page)")
                                : L10n.t("ui.translate.page-title", "\(source.page)")
+        let cite = citeFor(pageOrdinal: source.page)
         confirmAISend(action: .translate, scope: scope, content: payload) { [weak self] in
-            self?.startCardStream(
-                card: StreamCard(title: title, meta: "→ \(lang)", sourceText: source.text),
-                list: \.translateCards) { api in
+            guard let self else { return }
+            let card = StreamCard(title: title, meta: "→ \(lang)", sourceText: source.text)
+            card.sourceLoc = cite.loc
+            card.sourceJump = cite.jump
+            self.startCardStream(card: card, list: \.translateCards) { api in
                 try await api.translate_text(text: payload, target: target)
             }
         }
@@ -1352,14 +1437,19 @@ final class ReaderModel: ObservableObject {
     private func summarize(title: String, meta: String, text: String,
                            mode: RivetTypes.SummarizeMode,
                            scope: RivetTypes.AISendScope,
+                           cite: (loc: String, jump: () -> Void)? = nil,
                            list: ReferenceWritableKeyPath<ReaderModel, [StreamCard]>) {
         guard let app else { return }
         guard ensureProvider(for: list) else { return }
         let lang = languageName(app.settings.target_language)
         confirmAISend(action: .summarize, scope: scope, content: text) { [weak self] in
-            self?.startCardStream(
-                card: StreamCard(title: title, meta: meta.isEmpty ? lang : "\(lang) · \(meta)", sourceText: text),
-                list: list) { api in
+            guard let self else { return }
+            let card = StreamCard(
+                title: title, meta: meta.isEmpty ? lang : "\(lang) · \(meta)",
+                sourceText: text)
+            card.sourceLoc = cite?.loc ?? ""
+            card.sourceJump = cite?.jump
+            self.startCardStream(card: card, list: list) { api in
                 try await api.summarize_text(text: text, mode: mode)
             }
         }
@@ -1374,7 +1464,8 @@ final class ReaderModel: ObservableObject {
             title: epubActive ? L10n.t("ui.epub.summarize-title", "\(source.page)")
                                   : L10n.t("ui.summarize.page-title", "\(source.page)"), meta: "",
             text: source.text, mode: .page,
-            scope: epubActive ? .chapter : .page, list: \.summarizeCards)
+            scope: epubActive ? .chapter : .page,
+            cite: citeFor(pageOrdinal: source.page), list: \.summarizeCards)
     }
 
     func summarizeSelection() {
@@ -1383,7 +1474,8 @@ final class ReaderModel: ObservableObject {
             return
         }
         summarize(title: L10n.t("ui.summarize.selection"), meta: "", text: text,
-                  mode: .selection, scope: .selection, list: \.summarizeCards)
+                  mode: .selection, scope: .selection,
+                  cite: captureSourceCite(), list: \.summarizeCards)
     }
 
     func summarizeDoc() {
@@ -1399,17 +1491,18 @@ final class ReaderModel: ObservableObject {
 
     // chat ---------------------------------------------------------------------
 
-    private func chatContext() -> (text: String, label: String)? {
+    private func chatContext() -> (text: String, label: String, quote: String?)? {
         switch chatScope {
         case 1:
             guard let text = selectionText() else { return nil }
-            return (text, "选区")
+            return (text, "选区", text)
         case 2:
             guard let tab = pdf, let source = docText(tab), !source.text.isEmpty else { return nil }
-            return (source.text, "全文前 \(source.pages) 页")
+            // Whole-document context has no single source location — no chip.
+            return (source.text, "全文前 \(source.pages) 页", nil)
         default:
             guard let page = currentPageText() else { return nil }
-            return ("第 \(page.page) 页：\n\(page.text)", "第 \(page.page) 页")
+            return ("第 \(page.page) 页：\n\(page.text)", "第 \(page.page) 页", page.text)
         }
     }
 
@@ -1440,13 +1533,20 @@ final class ReaderModel: ObservableObject {
         case 2: .document
         default: epubActive ? .chapter : .page
         }
+        // Freeze the source location at send time — the user may scroll away
+        // while the answer streams (AiCiteChip, invariant 4).
+        let cite = captureSourceCite()
         confirmAISend(
             action: .chat, scope: previewScope, content: context.text,
             history: history, message: question
         ) { [weak self] in
             guard let self, let api = self.app?.api else { return }
             self.chatBubbles.append(ChatBubble.user(question))
-            let card = StreamCard(title: "chat", meta: languageName(app.settings.target_language))
+            let card = StreamCard(
+                title: "chat", meta: languageName(app.settings.target_language),
+                sourceText: context.quote ?? "")
+            card.sourceLoc = context.quote == nil ? "" : (cite?.loc ?? "")
+            card.sourceJump = context.quote == nil ? nil : cite?.jump
             self.chatBubbles.append(ChatBubble(isUser: false, text: "", dimmed: false, card: card))
             self.chatLive = card
             self.chatPendingQuestion = question
