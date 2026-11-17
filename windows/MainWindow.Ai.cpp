@@ -298,8 +298,7 @@ void MainWindow::AppendCardUi(muxc::StackPanel const& list,
       muxc::ColumnDefinition quote_col;
       // Quote column flexes; the location pill hugs its content (ai.html
       // .cite layout: quote left, loc right, nowrap).
-      quote_col.Width(
-          mux::GridLengthHelper::FromValue(1.0, mux::GridUnitType::Star));
+      quote_col.Width(mux::GridLength{1.0, mux::GridUnitType::Star});
       muxc::ColumnDefinition loc_col;
       loc_col.Width(mux::GridLengthHelper::Auto());
       chip_grid.ColumnDefinitions().Append(quote_col);
