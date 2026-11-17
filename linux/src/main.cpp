@@ -241,6 +241,8 @@ int epub_find_total();
 void epub_find_clear();
 void update_main_stack();
 void refresh_recents_menu();
+void epub_annotate_ui(char const* color, char const* kind);
+void reveal_ai_sidebar();
 
 template <typename Fn>
 void with_api(std::string const& notice, Fn&& run) {
