@@ -577,7 +577,7 @@ GtkWidget* AiPanel::make_card_row(StreamCard* card) {
   gtk_box_append(GTK_BOX(header), card->spinner);
   gtk_spinner_start(GTK_SPINNER(card->spinner));
   card->stop_button = GTK_BUTTON(small_button(Tr("ui.card.stop").c_str()));
-  gtk_box_append(GTK_BOX(header), card->stop_button);
+  gtk_box_append(GTK_BOX(header), GTK_WIDGET(card->stop_button));
   auto* copy = small_button(Tr("ui.card.copy").c_str());
   gtk_box_append(GTK_BOX(header), copy);
   gtk_box_append(GTK_BOX(box), header);
