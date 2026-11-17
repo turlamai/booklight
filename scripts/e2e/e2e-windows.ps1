@@ -115,6 +115,52 @@ function Invoke-NamedControlInner {
     return $false
 }
 
+function Find-NamedElement {
+    # Returns the first element whose Name contains the fragment (shallowest
+    # in DFS order), or $null — lets journeys scope button presses to a
+    # specific subtree (the modal dialog) instead of the whole window, where
+    # the persistent PendingEditBar now carries same-named buttons.
+    param($Root, [string]$Fragment)
+    try {
+        $nodes = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+            [System.Windows.Automation.Condition]::TrueCondition)
+        for ($index = 0; $index -lt $nodes.Count; $index++) {
+            try {
+                if ($nodes[$index].Current.Name -like "*$Fragment*") {
+                    return $nodes[$index]
+                }
+            } catch { continue }
+        }
+    } catch { }
+    return $null
+}
+
+function Find-DialogRoot {
+    # Locate the modal by its body text, then climb to the dialog's root
+    # element: the body is a leaf TextBlock and the buttons live in its
+    # ancestors' subtree, not beneath it. The dialog root carries the
+    # dialog title as its Name.
+    param($Window, [string[]]$BodyFragments, [string[]]$TitleFragments)
+    $body = $null
+    foreach ($fragment in $BodyFragments) {
+        $body = Find-NamedElement $Window $fragment
+        if ($null -ne $body) { break }
+    }
+    if ($null -eq $body) { return $null }
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    $node = $body
+    for ($depth = 0; $depth -lt 12; $depth++) {
+        try { $node = $walker.GetParent($node) } catch { return $null }
+        if ($null -eq $node) { return $null }
+        if ($node -eq [System.Windows.Automation.AutomationElement]::RootElement) { return $null }
+        try { $name = $node.Current.Name } catch { continue }
+        foreach ($title in $TitleFragments) {
+            if ($name -like "*$title*") { return $node }
+        }
+    }
+    return $null
+}
+
 function Get-IconPixelDigest {
     param($Icon)
     $bitmap = $Icon.ToBitmap()
@@ -556,22 +602,35 @@ try {
         [void](Wait-Until 'pending edits marker in the tab header' {
             Contains-Text $window "$([char]0x2022)"
         })
+        # The PendingEditBar shows ui.pdf.pending-title persistently while
+        # edits are pending, so dialog presence/dismissal anchors to the
+        # dialog BODY text — only the modal carries it — and the Cancel/
+        # Discard presses stay scoped inside the dialog's subtree, away
+        # from the banner's same-named buttons.
         $pattern = $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern)
         ([System.Windows.Automation.WindowPattern]$pattern).Close()
         [void](Wait-Until 'unsaved PDF edits dialog' {
-            (Contains-Text $window 'Unsaved PDF edits') -or (Contains-Text $window 'PDF 修改尚未保存')
+            (Contains-Text $window 'unsaved page changes') -or (Contains-Text $window '尚未保存的页面修改')
         })
-        [void](Wait-Until 'cancel button' { Invoke-NamedControl $window @('Cancel','取消') })
+        [void](Wait-Until 'cancel button' {
+            $dialog = Find-DialogRoot $window @('unsaved page changes','尚未保存的页面修改') @('Unsaved PDF edits','PDF 修改尚未保存')
+            if (-not $dialog) { return $false }
+            Invoke-NamedControl $dialog @('Cancel','取消')
+        })
         [void](Wait-Until 'dialog dismissed after cancel' {
-            -not ((Contains-Text $window 'Unsaved PDF edits') -or (Contains-Text $window 'PDF 修改尚未保存'))
+            -not ((Contains-Text $window 'unsaved page changes') -or (Contains-Text $window '尚未保存的页面修改'))
         })
         [void](Wait-Until 'document still open after cancel' { Contains-Text $window 'sample-guard' })
         $pattern = $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern)
         ([System.Windows.Automation.WindowPattern]$pattern).Close()
         [void](Wait-Until 'unsaved PDF edits dialog again' {
-            (Contains-Text $window 'Unsaved PDF edits') -or (Contains-Text $window 'PDF 修改尚未保存')
+            (Contains-Text $window 'unsaved page changes') -or (Contains-Text $window '尚未保存的页面修改')
         })
-        [void](Wait-Until 'discard button' { Invoke-NamedControl $window @('Discard Changes','放弃更改') })
+        [void](Wait-Until 'discard button' {
+            $dialog = Find-DialogRoot $window @('unsaved page changes','尚未保存的页面修改') @('Unsaved PDF edits','PDF 修改尚未保存')
+            if (-not $dialog) { return $false }
+            Invoke-NamedControl $dialog @('Discard Changes','放弃更改')
+        })
         [void](Wait-Until 'process exit after discarding the only document' {
             $process.Refresh(); if ($process.HasExited) { return $true }; return $false
         } 30)

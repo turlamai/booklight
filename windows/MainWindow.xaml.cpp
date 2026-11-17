@@ -1508,6 +1508,7 @@ void MainWindow::TrackCurrentPage(PdfTab& tab) {
 }
 
 void MainWindow::UpdatePageBar() {
+  UpdatePendingEditBar();
   if (page_ops_hint_) {
     page_ops_hint_.Text(
         active_pdf_ && !epub_active_
@@ -1523,8 +1524,14 @@ void MainWindow::UpdatePageBar() {
     return;
   }
   PageTotal().Text(L" / " + std::to_wstring(tab->page_count));
-  PageInfo().Text(pdfgist::Trf("ui.viewer.pdf-info",
-                               std::to_wstring(tab->page_count)));
+  // Unsaved page edits surface in the status line too (prototype titlebar
+  // sub「有未保存修改」), alongside the tab header dot.
+  std::wstring info = pdfgist::Trf("ui.viewer.pdf-info",
+                                   std::to_wstring(tab->page_count));
+  if (tab->pdf_edits_pending) {
+    info += L" · " + pdfgist::Tr("ui.pdf.unsaved-suffix");
+  }
+  PageInfo().Text(info);
   int const percent =
       static_cast<int>(std::lround(EffectiveScale(*tab) * 100.0));
   ScaleLabel().Text(std::to_wstring(percent) + L"%");
@@ -1532,6 +1539,114 @@ void MainWindow::UpdatePageBar() {
   if (PageInput().Text() != expected) {
     PageInput().Text(expected);
   }
+}
+
+// PendingEditBar (design/prototype/pdf.html): persistent banner while
+// in-memory page edits are unsaved — save a copy or discard. Driven from
+// UpdatePageBar, which every pending-state change already routes through.
+void MainWindow::UpdatePendingEditBar() {
+  auto const bar = PendingEditBar();
+  bool const show = active_pdf_ && !epub_active_ &&
+                    active_pdf_->pdf_edits_pending;
+  bar.Message(pdfgist::Tr("ui.pdf.pending-title"));
+  PendingSaveText().Text(pdfgist::Tr("ui.pdf.save-as"));
+  PendingDiscardText().Text(pdfgist::Tr("ui.pdf.discard"));
+  bool const changed = bar.IsOpen() != show;
+  bar.IsOpen(show);
+  if (!changed) return;
+  // Keep the tab header dot in step with the banner (ReloadTabDocument set
+  // it; save-as/discard clear it here — previously only the flag flipped).
+  for (auto const& tab : tabs_) {
+    if (auto label = tab->tab_item.Header().try_as<muxc::TextBlock>()) {
+      std::wstring const text =
+          tab->pdf_edits_pending ? tab->title + L" •" : tab->title;
+      if (label.Text() != text) label.Text(text);
+    }
+  }
+}
+
+// PendingEditBar 出口「放弃更改」：丢掉内存里的页级修改，从原文件重建文档。
+// 原始文件从未被改写；重载失败时保留内存修改并给出真实错误。
+void MainWindow::DiscardPdfEdits(std::shared_ptr<PdfTab> tab) {
+  if (!tab) return;
+  ShowDialog(
+      pdfgist::Tr("ui.pdf.pending-title"),
+      pdfgist::Tr("ui.pdf.discard-confirm"),
+      pdfgist::Tr("ui.pdf.discard"),
+      pdfgist::Tr("ui.password.cancel"),
+      [weak = get_weak(), tab] {
+        if (auto window = weak.get()) window->DiscardPdfEditsNow(tab);
+      });
+}
+
+void MainWindow::DiscardPdfEditsNow(std::shared_ptr<PdfTab> tab) {
+  if (!tab) return;
+  auto const path = tab->path;
+  auto const bytes = std::make_shared<std::vector<std::uint8_t>>();
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+  std::thread([weak, dispatcher, tab, path, bytes]() mutable {
+    PdfOpenError error = pdfgist::PdfOpenError::None;
+    std::shared_ptr<pdfgist::PdfDocument> doc;
+    try {
+      std::ifstream file(path, std::ios::binary);
+      if (file) {
+        bytes->assign(std::istreambuf_iterator<char>(file),
+                      std::istreambuf_iterator<char>());
+      }
+      doc = pdfgist::PdfDocument::OpenFromBytes(*bytes, "", &error);
+    } catch (...) {
+      error = pdfgist::PdfOpenError::Invalid;
+    }
+    dispatcher.TryEnqueue([weak, tab, doc, error]() mutable {
+      auto window = weak.get();
+      bool const alive = window &&
+                         std::find(window->tabs_.begin(), window->tabs_.end(),
+                                   tab) != window->tabs_.end();
+      if (!alive || !doc) {
+        if (window) {
+          window->Alert(pdfgist::Trf("ui.pages.edit-failed", tab->path));
+        }
+        return;
+      }
+      int const page = tab->current_page;
+      tab->doc = std::move(doc);
+      tab->pdf_edits_pending = false;
+      tab->page_count = tab->doc->PageCount();
+      tab->current_page = std::clamp(page, 1, std::max(1, tab->page_count));
+      window->ClearSelection(*tab);
+      tab->find_rects.clear();
+      window->find_hits_.clear();
+      tab->layout_viewport_w = -1;
+      window->LayoutTab(*tab);
+      window->RequestVisibleRenders(*tab);
+      window->ScrollToPage(*tab, tab->current_page);
+      window->UpdatePageBar();
+      window->RefreshLeftPanel();
+    });
+  }).detach();
+}
+
+void MainWindow::PendingSave_Click(
+    winrt::Windows::Foundation::IInspectable const&,
+    mux::RoutedEventArgs const&) {
+  if (epub_active_ || !active_pdf_ || !active_pdf_->pdf_edits_pending) return;
+  auto tab = active_pdf_;
+  SaveEditedPdf(tab, [weak = get_weak(), tab](bool saved) {
+    if (!saved) return;
+    if (auto window = weak.get()) {
+      bool const alive = std::find(window->tabs_.begin(), window->tabs_.end(),
+                                   tab) != window->tabs_.end();
+      if (alive) window->UpdatePageBar();
+    }
+  });
+}
+
+void MainWindow::PendingDiscard_Click(
+    winrt::Windows::Foundation::IInspectable const&,
+    mux::RoutedEventArgs const&) {
+  if (epub_active_ || !active_pdf_ || !active_pdf_->pdf_edits_pending) return;
+  DiscardPdfEdits(active_pdf_);
 }
 
 // ---- zoom / page bar -----------------------------------------------------------------

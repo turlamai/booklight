@@ -17,6 +17,10 @@ namespace wut = winrt::Windows::UI::Text;
 
 using Microsoft::UI::Xaml::Visibility;
 
+// The brand terracotta, mirrored from MainWindow.xaml.cpp's file-local
+// AccentColor() (anonymous namespace there — not linkable across files).
+wu::Color chip_accent_color() { return wu::Color{0xFF, 0xB4, 0x53, 0x09}; }
+
 // ---- sidebar chrome ------------------------------------------------------------------
 
 void MainWindow::BuildAiSidebar() {
@@ -278,18 +282,83 @@ void MainWindow::AppendCardUi(muxc::StackPanel const& list,
     stack.Children().Append(header);
   }
 
-  // source excerpt (3 lines, dimmed)
+  // source excerpt: a jumpable cite chip when the location is pinned
+  // (design/prototype/ai.html .cite), else the plain dimmed excerpt.
   if (!card->source.empty()) {
-    muxc::TextBlock source;
-    source.Text(card->source);
-    source.FontSize(11);
-    source.Opacity(0.55);
-    source.MaxLines(3);
-    source.TextTrimming(
-        mux::TextTrimming::CharacterEllipsis);
-    source.TextWrapping(mux::TextWrapping::Wrap);
-    source.Padding({6, 4, 6, 4});
-    stack.Children().Append(source);
+    if (card->source_jump) {
+      auto chip = muxc::Button();
+      chip.Padding({10, 6, 10, 6});
+      chip.CornerRadius({6, 6, 6, 6});
+      chip.BorderThickness({1, 1, 1, 1});
+      chip.BorderBrush(ThemeBorderBrush());
+      chip.Background(ThemePanelAltBrush());
+      chip.HorizontalAlignment(mux::HorizontalAlignment::Stretch);
+      chip.HorizontalContentAlignment(mux::HorizontalAlignment::Stretch);
+      auto chip_grid = muxc::Grid();
+      muxc::ColumnDefinition quote_col;
+      // Quote column flexes; the location pill hugs its content (ai.html
+      // .cite layout: quote left, loc right, nowrap).
+      quote_col.Width(mux::GridLength{1.0, mux::GridUnitType::Star});
+      muxc::ColumnDefinition loc_col;
+      loc_col.Width(mux::GridLengthHelper::Auto());
+      chip_grid.ColumnDefinitions().Append(quote_col);
+      chip_grid.ColumnDefinitions().Append(loc_col);
+      muxc::TextBlock quote;
+      quote.Text(card->source);
+      quote.FontSize(11);
+      quote.Opacity(0.6);
+      quote.MaxLines(2);
+      quote.TextAlignment(mux::TextAlignment::Left);
+      quote.TextTrimming(mux::TextTrimming::CharacterEllipsis);
+      quote.TextWrapping(mux::TextWrapping::Wrap);
+      quote.VerticalAlignment(mux::VerticalAlignment::Top);
+      muxc::StackPanel loc;
+      loc.Orientation(muxc::Orientation::Horizontal);
+      loc.Spacing(2);
+      loc.Margin({8, 0, 0, 0});
+      loc.VerticalAlignment(mux::VerticalAlignment::Top);
+      muxc::TextBlock loc_text;
+      loc_text.Text(card->source_loc);
+      loc_text.FontSize(11);
+      loc_text.FontWeight(wut::FontWeights::SemiBold());
+      loc_text.Foreground(ThemeBrush(chip_accent_color()));
+      loc.Children().Append(loc_text);
+      muxc::FontIcon arrow;
+      arrow.FontFamily(winrt::Microsoft::UI::Xaml::Media::FontFamily(
+          L"Segoe Fluent Icons"));
+      arrow.FontSize(9);
+      arrow.Glyph(L"\uE72A");  // up-right arrow
+      arrow.Foreground(ThemeBrush(chip_accent_color()));
+      loc.Children().Append(arrow);
+      muxc::Grid loc_host;
+      loc_host.Children().Append(loc);
+      winrt::Microsoft::UI::Xaml::Controls::Grid::SetColumn(quote, 0);
+      winrt::Microsoft::UI::Xaml::Controls::Grid::SetColumn(loc_host, 1);
+      chip_grid.Children().Append(quote);
+      chip_grid.Children().Append(loc_host);
+      chip.Content(chip_grid);
+      StreamCardUi* const card_ptr = card.get();
+      auto const jump_weak = get_weak();
+      chip.Click([jump_weak, card_ptr](
+                     winrt::Windows::Foundation::IInspectable const&,
+                     mux::RoutedEventArgs const&) {
+        if (auto window = jump_weak.get()) {
+          if (card_ptr->source_jump) card_ptr->source_jump();
+        }
+      });
+      stack.Children().Append(chip);
+    } else {
+      muxc::TextBlock source;
+      source.Text(card->source);
+      source.FontSize(11);
+      source.Opacity(0.55);
+      source.MaxLines(3);
+      source.TextTrimming(
+          mux::TextTrimming::CharacterEllipsis);
+      source.TextWrapping(mux::TextWrapping::Wrap);
+      source.Padding({6, 4, 6, 4});
+      stack.Children().Append(source);
+    }
   }
 
   // status line: thinking / notices / errors
@@ -627,6 +696,43 @@ bool MainWindow::EnsureProviderConfigured(
   return ok;
 }
 
+// ---- AiCiteChip (invariant 4: citations jump back to the source) ----------
+
+// 页码/章序号 → 位置标签（EPUB 按章，PDF 按页）。
+std::wstring MainWindow::CiteLoc(int ordinal) {
+  return epub_active_ && epub_
+             ? pdfgist::Trf("ui.epub.chapter-n", std::to_wstring(ordinal))
+             : pdfgist::Trf("ui.notes.page", std::to_wstring(ordinal));
+}
+
+// 回跳闭包：弱窗口捕获，避免闭包钉住整个 MainWindow。
+std::function<void()> MainWindow::CiteJump(int ordinal) {
+  auto const weak = get_weak();
+  bool const epub = epub_active_ && epub_ != nullptr;
+  return [weak, epub, ordinal]() {
+    if (auto window = weak.get()) {
+      if (epub) {
+        if (auto book = window->epub_) window->GoToChapter(*book, ordinal);
+      } else if (window->active_pdf_) {
+        window->ScrollToPage(*window->active_pdf_, ordinal);
+      }
+    }
+  };
+}
+
+// 选区优先进选区原位，否则进当前页/章；无文档则 0（不钉 chip）。
+int MainWindow::SelectionSourceOrdinal() const {
+  if (epub_active_ && epub_) {
+    if (epub_->selection_chapter >= 1) return epub_->selection_chapter;
+    return epub_->current_chapter;
+  }
+  if (active_pdf_) {
+    if (active_pdf_->selection_page >= 1) return active_pdf_->selection_page;
+    return active_pdf_->current_page;
+  }
+  return 0;
+}
+
 void MainWindow::ConfirmAISend(
     rivet_app::AISendAction action, rivet_app::AISendScope scope,
     std::string const& content,
@@ -735,6 +841,8 @@ void MainWindow::LaunchTranslateCurrentPage() {
                                   std::to_wstring(page));
           card->meta = L"→ " + lang;
           card->source = text;
+          card->source_loc = confirmed->CiteLoc(page);
+          card->source_jump = confirmed->CiteJump(page);
           confirmed->StartCardStream(
               card, confirmed->translate_cards_,
               [backend, payload_utf8, target]() {
@@ -763,15 +871,23 @@ void MainWindow::LaunchTranslateSelectionText(std::wstring const& text) {
   auto const target = settings_.target_language;
   auto const backend = backend_;
   auto const weak = get_weak();
+  // Freeze the source location at send time — the user may scroll away
+  // while the answer streams (AiCiteChip, invariant 4).
+  int const cite_ordinal = SelectionSourceOrdinal();
   ConfirmAISend(
       rivet_app::AISendAction::translate, rivet_app::AISendScope::selection,
-      payload, {}, "", [weak, backend, payload, target, text, lang] {
+      payload, {}, "", [weak, backend, payload, target, text, lang,
+                        cite_ordinal] {
         auto window = weak.get();
         if (!window) return;
         auto card = std::make_shared<StreamCardUi>();
         card->title = pdfgist::Tr("ui.menu.translate");
         card->meta = L"→ " + lang;
         card->source = text;
+        if (cite_ordinal >= 1) {
+          card->source_loc = window->CiteLoc(cite_ordinal);
+          card->source_jump = window->CiteJump(cite_ordinal);
+        }
         window->StartCardStream(
             card, window->translate_cards_, [backend, payload, target]() {
               rivet_app::API api(*backend);
@@ -817,6 +933,8 @@ void MainWindow::LaunchSummarizePage() {
                                   std::to_wstring(page));
           card->meta = lang;
           card->source = text;
+          card->source_loc = confirmed->CiteLoc(page);
+          card->source_jump = confirmed->CiteJump(page);
           confirmed->StartCardStream(
               card, confirmed->summarize_cards_, [backend, payload]() {
                 rivet_app::API api(*backend);
@@ -841,16 +959,21 @@ void MainWindow::LaunchSummarizeSelection() {
   auto const payload = to_utf8(text);
   auto const backend = backend_;
   auto const weak = get_weak();
+  int const cite_ordinal = SelectionSourceOrdinal();
   ConfirmAISend(
       rivet_app::AISendAction::summarize,
       rivet_app::AISendScope::selection, payload, {}, "",
-      [weak, backend, payload, text, lang] {
+      [weak, backend, payload, text, lang, cite_ordinal] {
         auto window = weak.get();
         if (!window) return;
         auto card = std::make_shared<StreamCardUi>();
         card->title = pdfgist::Tr("ui.summarize.selection");
         card->meta = lang;
         card->source = text;
+        if (cite_ordinal >= 1) {
+          card->source_loc = window->CiteLoc(cite_ordinal);
+          card->source_jump = window->CiteJump(cite_ordinal);
+        }
         window->StartCardStream(
             card, window->summarize_cards_, [backend, payload]() {
               rivet_app::API api(*backend);
@@ -928,9 +1051,15 @@ void MainWindow::SendChat(std::wstring const& raw_question) {
     if (!window) return;
     std::wstring context;
     std::wstring label;
+    // AiCiteChip: the plain excerpt quote + its pinned source location.
+    // Whole-document context has no single source location — no chip.
+    std::wstring quote;
+    int cite_ordinal = 0;
     if (scope == 1) {
       context = text;
       label = L"选区";
+      quote = text;
+      cite_ordinal = window->SelectionSourceOrdinal();
       if (context.empty()) {
         window->AppendNoticeBubble(pdfgist::Tr("ui.chat.need-selection"));
         return;
@@ -945,6 +1074,8 @@ void MainWindow::SendChat(std::wstring const& raw_question) {
     } else {
       context = text;
       label = L"第 " + std::to_wstring(pages) + L" 页";
+      quote = text;
+      cite_ordinal = pages;
       if (context.empty()) {
         window->AppendNoticeBubble(pdfgist::Tr("ui.need.document"));
         return;
@@ -957,7 +1088,8 @@ void MainWindow::SendChat(std::wstring const& raw_question) {
             : scope == 2 ? rivet_app::AISendScope::document
                          : epub_scope ? rivet_app::AISendScope::chapter
                                       : rivet_app::AISendScope::page;
-    window->DispatchChat(question, context, label, preview_scope);
+    window->DispatchChat(question, context, label, preview_scope, quote,
+                         cite_ordinal);
   };
 
   if (scope == 1) {
@@ -973,7 +1105,8 @@ void MainWindow::SendChat(std::wstring const& raw_question) {
 void MainWindow::DispatchChat(std::wstring const& question,
                               std::wstring const& context_text,
                               std::wstring const& context_label,
-                              rivet_app::AISendScope preview_scope) {
+                              rivet_app::AISendScope preview_scope,
+                              std::wstring const& quote, int cite_ordinal) {
   auto const history = chat_history_;
   auto const context = to_utf8(context_text);
   auto const label = to_utf8(context_label);
@@ -982,7 +1115,8 @@ void MainWindow::DispatchChat(std::wstring const& question,
   auto const weak = get_weak();
   ConfirmAISend(
       rivet_app::AISendAction::chat, preview_scope, context, history, message,
-      [weak, backend, history, context, label, message, question]() mutable {
+      [weak, backend, history, context, label, message, question, quote,
+       cite_ordinal]() mutable {
         auto window = weak.get();
         if (!window) return;
         ChatBubble user_bubble;
@@ -993,6 +1127,13 @@ void MainWindow::DispatchChat(std::wstring const& question,
         auto card = std::make_shared<StreamCardUi>();
         card->title = L"chat";
         card->meta = window->LanguageName(window->settings_.target_language);
+        if (!quote.empty()) {
+          card->source = quote;
+          if (cite_ordinal >= 1) {
+            card->source_loc = window->CiteLoc(cite_ordinal);
+            card->source_jump = window->CiteJump(cite_ordinal);
+          }
+        }
         ChatBubble assistant;
         assistant.user = false;
         assistant.card = card;

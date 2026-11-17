@@ -168,6 +168,11 @@ struct StreamCardUi {
   std::wstring title;
   std::wstring meta;
   std::wstring source;
+  // 摘句 chip (design/DESIGN.md invariant 4 "citations jump back"): the
+  // excerpt's source location pinned at send time; empty when no single
+  // source (whole-document scope) — the chip then stays a plain excerpt.
+  std::wstring source_loc;
+  std::function<void()> source_jump;
   std::wstring content;
   std::wstring reasoning;
   enum class Phase { Streaming, Done, Empty, Error, Notice };
@@ -265,6 +270,10 @@ struct MainWindow : MainWindowT<MainWindow> {
                        winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void FitWidth_Click(winrt::Windows::Foundation::IInspectable const&,
                       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void PendingSave_Click(winrt::Windows::Foundation::IInspectable const&,
+                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void PendingDiscard_Click(winrt::Windows::Foundation::IInspectable const&,
+                            winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void ExportAnnotations();
   void UndoDeleteAnnotation();
   void UndoDeleteEpubAnnotation();
@@ -346,6 +355,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   void ScrollToPage(PdfTab& tab, int page);
   void TrackCurrentPage(PdfTab& tab);
   void UpdatePageBar();
+  // PendingEditBar (design/prototype/pdf.html): persistent banner while
+  // in-memory page edits are unsaved — save a copy or discard.
+  void UpdatePendingEditBar();
+  void DiscardPdfEdits(std::shared_ptr<PdfTab> tab);
+  void DiscardPdfEditsNow(std::shared_ptr<PdfTab> tab);
 
   // selection overlays
   void ClearCellOverlays(PdfTab::Cell& cell);
@@ -434,7 +448,8 @@ struct MainWindow : MainWindowT<MainWindow> {
   void DispatchChat(std::wstring const& question,
                     std::wstring const& context_text,
                     std::wstring const& context_label,
-                    rivet_app::AISendScope preview_scope);
+                    rivet_app::AISendScope preview_scope,
+                    std::wstring const& quote, int cite_ordinal);
   void FinishStream(std::int64_t request_id,
                     std::optional<std::wstring> const& error);
   void FinalizeChat(StreamCardUi& card);
@@ -442,6 +457,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   void AppendChatBubble(ChatBubble bubble);
   void AppendNoticeBubble(std::wstring const& text);
   void RefreshChatScopeButtons();
+  // AiCiteChip (invariant 4): pin the excerpt's source location at send time;
+  // clicking the chip jumps back to the captured page/chapter.
+  std::wstring CiteLoc(int ordinal);
+  std::function<void()> CiteJump(int ordinal);
+  // The selection's origin page/chapter, falling back to the current page.
+  int SelectionSourceOrdinal() const;
 
   // theme-aware brushes for code-built cards (MainWindow.Settings.cpp)
   winrt::Microsoft::UI::Xaml::Media::SolidColorBrush ThemeBrush(winrt::Windows::UI::Color color);
@@ -483,6 +504,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   void OnEpubWebMessage(
       EpubBook& book,
       winrt::Microsoft::Web::WebView2::Core::CoreWebView2WebMessageReceivedEventArgs const& args);
+  void HandleEpubSelectionAction(EpubBook& book, std::wstring const& action);
   std::wstring BuildEpubHtml(
       EpubBook const& book,
       std::vector<std::pair<int, std::wstring>> const& sections);
