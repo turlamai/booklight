@@ -576,32 +576,34 @@ try {
         [void](Wait-Until 'pending edits marker in the tab header' {
             Contains-Text $window "$([char]0x2022)"
         })
+        # The PendingEditBar shows ui.pdf.pending-title persistently while
+        # edits are pending, so dialog presence/dismissal anchors to the
+        # dialog BODY text — only the modal carries it — and the Cancel/
+        # Discard presses stay scoped inside the dialog's subtree, away
+        # from the banner's same-named buttons.
         $pattern = $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern)
         ([System.Windows.Automation.WindowPattern]$pattern).Close()
         [void](Wait-Until 'unsaved PDF edits dialog' {
-            (Contains-Text $window 'Unsaved PDF edits') -or (Contains-Text $window 'PDF 修改尚未保存')
+            (Contains-Text $window 'unsaved page changes') -or (Contains-Text $window '尚未保存的页面修改')
         })
-        # The persistent PendingEditBar carries same-named save/discard
-        # buttons; press inside the modal dialog's subtree, not the first
-        # name match in the whole window.
         [void](Wait-Until 'cancel button' {
-            $dialog = Find-NamedElement $window 'Unsaved PDF edits'
-            if (-not $dialog) { $dialog = Find-NamedElement $window 'PDF 修改尚未保存' }
+            $dialog = Find-NamedElement $window 'unsaved page changes'
+            if (-not $dialog) { $dialog = Find-NamedElement $window '尚未保存的页面修改' }
             if (-not $dialog) { return $false }
             Invoke-NamedControl $dialog @('Cancel','取消')
         })
         [void](Wait-Until 'dialog dismissed after cancel' {
-            -not ((Contains-Text $window 'Unsaved PDF edits') -or (Contains-Text $window 'PDF 修改尚未保存'))
+            -not ((Contains-Text $window 'unsaved page changes') -or (Contains-Text $window '尚未保存的页面修改'))
         })
         [void](Wait-Until 'document still open after cancel' { Contains-Text $window 'sample-guard' })
         $pattern = $window.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern)
         ([System.Windows.Automation.WindowPattern]$pattern).Close()
         [void](Wait-Until 'unsaved PDF edits dialog again' {
-            (Contains-Text $window 'Unsaved PDF edits') -or (Contains-Text $window 'PDF 修改尚未保存')
+            (Contains-Text $window 'unsaved page changes') -or (Contains-Text $window '尚未保存的页面修改')
         })
         [void](Wait-Until 'discard button' {
-            $dialog = Find-NamedElement $window 'Unsaved PDF edits'
-            if (-not $dialog) { $dialog = Find-NamedElement $window 'PDF 修改尚未保存' }
+            $dialog = Find-NamedElement $window 'unsaved page changes'
+            if (-not $dialog) { $dialog = Find-NamedElement $window '尚未保存的页面修改' }
             if (-not $dialog) { return $false }
             Invoke-NamedControl $dialog @('Discard Changes','放弃更改')
         })
