@@ -17,6 +17,7 @@
 #include <thread>
 
 #include "host.hpp"
+#include "i18n.h"
 
 namespace pdfgist {
 
@@ -70,23 +71,57 @@ std::string js_string(std::string const& s) {
 }
 
 // v1 READING_CSS typography + theme; the marks helpers power search.
+// Typography is the design contract (design/DESIGN.md invariant 2 +
+// design/prototype/reading.html): ~608px measure, 1.9 line height,
+// justified serif body. --rline/--rsel/--uacc follow the reading theme,
+// which is orthogonal to the window theme. The selection bar is UI chrome,
+// so it uses the UI font stack and the reading-theme surface pair.
 char const* kReadingCss = R"CSS(
 :root { --fs: 1; }
-:root[data-theme="light"] { --fg: #292524; --bg: #F5F2ED; }
-:root[data-theme="dark"] { --fg: #D6D3D1; --bg: #171412; }
+:root[data-theme="light"] { --fg: #292524; --bg: #F5F2ED;
+  --rline: rgba(0,0,0,.08); --rsel: rgba(196,98,62,.16); --uacc: #C4623E;
+  --bar-bg: #FFFDF9; --bar-hover: #F2EEE7; --bar-line: rgba(0,0,0,.08); --bar-ink: #292524; }
+:root[data-theme="sepia"] { --fg: #57534E; --bg: #EFE6D5;
+  --rline: rgba(0,0,0,.10); --rsel: rgba(196,98,62,.16); --uacc: #C4623E;
+  --bar-bg: #FFFDF9; --bar-hover: #F2EEE7; --bar-line: rgba(0,0,0,.10); --bar-ink: #292524; }
+:root[data-theme="dark"] { --fg: #D6D3D1; --bg: #171412;
+  --rline: rgba(255,255,255,.10); --rsel: rgba(232,146,106,.20); --uacc: #E8926A;
+  --bar-bg: #2A2521; --bar-hover: #322C27; --bar-line: rgba(255,255,255,.08); --bar-ink: #D6D3D1; }
 html { background: var(--bg); }
-body { margin: 0; padding: 0 0 40vh; color: var(--fg);
+body { margin: 0; padding: 0 0 72px; color: var(--fg);
   font-family: Georgia, "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif;
   font-size: calc(16px * var(--fs)); line-height: 1.9; }
 p { margin: 0 0 1em; text-align: justify; }
 h1, h2, h3, h4 { line-height: 1.35; margin: 1.4em 0 0.6em; }
 img, svg { max-width: 100%; height: auto; }
-blockquote { margin: 1em 0; padding-left: 1em; border-left: 3px solid #8884; }
+blockquote { margin: 1em 0; padding-left: 1em; font-size: 15px;
+  line-height: 1.8; border-left: 3px solid var(--rline); opacity: .88; }
 a { color: inherit; pointer-events: none; }
-.epub-book-title { padding: 18vh 8vw 10vh; text-align: center; }
+::selection { background: var(--rsel); }
+.epub-book-title { max-width: 608px; box-sizing: border-box; margin: 0 auto;
+  padding: 16vh 24px 8vh; text-align: center; }
 .book-title-text { font-size: 2em; font-weight: 700; }
-.epub-chapter { padding: 0 8vw; }
-mark.epub-hit { background: #FFD500; color: inherit; }
+.epub-chapter { max-width: 608px; box-sizing: border-box; margin: 0 auto;
+  padding: 0 24px; }
+mark.epub-hit { background: rgba(255,213,0,.9); color: inherit; }
+/* Selection bar (design/prototype/reading.html .selbar): direct
+   manipulation; UI chrome never borrows the page's serif. */
+.selbar { position: absolute; display: none; align-items: center; gap: 4px;
+  padding: 5px 7px; border-radius: 8px; background: var(--bar-bg);
+  border: 1px solid var(--bar-line); box-shadow: 0 4px 14px rgba(23,20,18,.16);
+  z-index: 5; font-family: system-ui, "Segoe UI", "Noto Sans CJK SC",
+    "Noto Sans SC", sans-serif; }
+.selbar.on { display: flex; }
+.selbar .sw { width: 17px; height: 17px; border-radius: 50%;
+  border: 1px solid var(--bar-line); cursor: pointer; padding: 0; }
+.selbar .sw-y { background: rgba(255,213,0,.9); }
+.selbar .sw-b { background: rgba(86,156,255,.85); }
+.selbar .sw-g { background: rgba(76,195,131,.85); }
+.selbar .act { font-size: 11.5px; color: var(--bar-ink); padding: 3px 7px;
+  border-radius: 5px; cursor: pointer; white-space: nowrap; }
+.selbar .act:hover { background: var(--bar-hover); }
+.selbar .sep { width: 1px; height: 16px; background: var(--bar-line); }
+.selbar .ai { color: var(--uacc); font-weight: 600; }
 )CSS";
 
 char const* kBridgeScript = R"JS(
@@ -147,7 +182,44 @@ window.addEventListener('mouseup', () => {
   window.webkit.messageHandlers.bridge.postMessage(
     JSON.stringify({ kind: 'selection', text: text.slice(0, 800),
                      chapter: chapter, start: start, end: end }));
+  placeSelBar(range);
 });
+
+// Selection bar (design/prototype/reading.html .selbar): floats above the
+// selection; every action posts back to the host. This script runs in
+// <head>, so the bar element is wired on DOMContentLoaded — a top-level
+// null lookup here would abort the rest of the script.
+var selbar = null;
+function hideSelBar() { if (selbar) selbar.classList.remove('on'); }
+function placeSelBar(range) {
+  if (!selbar) return;
+  var rect = range.getBoundingClientRect();
+  selbar.classList.add('on');
+  var bw = selbar.offsetWidth, bh = selbar.offsetHeight;
+  var left = rect.left + window.scrollX + rect.width / 2 - bw / 2;
+  left = Math.max(8, Math.min(left,
+    document.documentElement.clientWidth - bw - 8));
+  var top = rect.top + window.scrollY - bh - 10;
+  if (top < window.scrollY) top = rect.bottom + window.scrollY + 10;
+  selbar.style.left = left + 'px';
+  selbar.style.top = top + 'px';
+}
+document.addEventListener('DOMContentLoaded', () => {
+  selbar = document.getElementById('selbar');
+  if (!selbar) return;
+  selbar.addEventListener('mousedown', e => e.stopPropagation());
+  selbar.addEventListener('click', e => {
+    var t = e.target.closest('[data-a]');
+    if (!t) return;
+    window.webkit.messageHandlers.bridge.postMessage(
+      JSON.stringify({ kind: 'sel-action', action: t.dataset.a }));
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    hideSelBar();
+  });
+});
+window.addEventListener('mousedown', hideSelBar);
+window.addEventListener('scroll', hideSelBar);
 
 function epubTextNodeMap(root) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -159,10 +231,12 @@ function epubTextNodeMap(root) {
 function epubMarkColor(color) {
   return { yellow: '#FFD500', green: '#4CC383', blue: '#569CFF' }[color] || '#FFD500';
 }
+// Annotation ink follows the prototype (reading.html): highlighter swatches
+// at the locked alphas, underline/strike drawn in the reading-theme accent.
 function epubStyleFor(kind, color) {
-  if (kind === 'underline') return 'text-decoration: underline; text-decoration-color:' + epubMarkColor(color) + ';';
-  if (kind === 'strike') return 'text-decoration: line-through; text-decoration-color:' + epubMarkColor(color) + ';';
-  const alpha = { yellow: '0.45', green: '0.35', blue: '0.28' }[color] || '0.4';
+  if (kind === 'underline') return 'text-decoration: underline; text-decoration-color: var(--uacc); text-underline-offset: 4px; text-decoration-thickness: 2px;';
+  if (kind === 'strike') return 'text-decoration: line-through; text-decoration-color: var(--uacc); text-decoration-thickness: 2px;';
+  const alpha = { yellow: '0.9', green: '0.85', blue: '0.85' }[color] || '0.9';
   const v = parseInt(epubMarkColor(color).slice(1), 16);
   return 'background: rgba(' + ((v >> 16) & 255) + ',' + ((v >> 8) & 255) + ',' + (v & 255) + ',' + alpha + ');';
 }
@@ -277,6 +351,14 @@ struct EpubTab::Impl {
         self->tab->current_chapter_ = chapter;
         if (self->tab->on_chapter_changed) {
           self->tab->on_chapter_changed(chapter);
+        }
+      }
+    } else if (kind == "sel-action") {
+      if (json_object_has_member(obj, "action")) {
+        std::string const action =
+            json_object_get_string_member(obj, "action");
+        if (self->tab->on_selection_action) {
+          self->tab->on_selection_action(action);
         }
       }
     }
@@ -414,6 +496,26 @@ void EpubTab::load() {
       html += kBridgeScript;
       html += "</script></head><body>";
       for (auto const& section : sections) html += section;
+      // Selection bar labels come from the i18n table (invariant 5); the
+      // bar is inert chrome — every action routes to the host.
+      html += std::string("<div class=\"selbar\" id=\"selbar\">") +
+              "<button class=\"sw sw-y\" data-a=\"hl-yellow\" title=\"" +
+              escape_html(Tr("ui.menu.highlight-yellow")) + "\"></button>" +
+              "<button class=\"sw sw-b\" data-a=\"hl-blue\" title=\"" +
+              escape_html(Tr("ui.menu.highlight-blue")) + "\"></button>" +
+              "<button class=\"sw sw-g\" data-a=\"hl-green\" title=\"" +
+              escape_html(Tr("ui.menu.highlight-green")) + "\"></button>" +
+              "<span class=\"sep\"></span>" +
+              "<span class=\"act\" data-a=\"underline\">" +
+              escape_html(Tr("ui.menu.underline")) + "</span>" +
+              "<span class=\"act\" data-a=\"strike\">" +
+              escape_html(Tr("ui.menu.strike")) + "</span>" +
+              "<span class=\"sep\"></span>" +
+              "<span class=\"act\" data-a=\"copy\">" +
+              escape_html(Tr("ui.card.copy")) + "</span>" +
+              "<span class=\"act ai\" data-a=\"ai\">\u2726 " +
+              escape_html(Tr("ui.toolbar.ai")) + "</span>" +
+              "</div>";
       html += "</body></html>";
       webkit_web_view_load_html(WEBKIT_WEB_VIEW(webview_), html.c_str(),
                                 nullptr);
@@ -453,8 +555,13 @@ void EpubTab::apply_font_scale(double scale) {
 }
 
 void EpubTab::apply_theme(std::string const& theme) {
+  // The page theme axis is light | sepia | dark (design/DESIGN.md 阅读主题);
+  // anything else falls back to light.
+  std::string const resolved = theme == "dark"   ? "dark"
+                               : theme == "sepia" ? "sepia"
+                                                  : "light";
   impl->evaluate("document.documentElement.setAttribute('data-theme', " +
-                 js_string(theme == "dark" ? "dark" : "light") + ")");
+                 js_string(resolved) + ")");
 }
 
 void EpubTab::highlight_hit(int chapter, int ordinal,

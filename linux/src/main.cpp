@@ -126,6 +126,11 @@ struct Host {
   GtkLabel* zoom_label{nullptr};
   GtkLabel* title_label{nullptr};
   GtkLabel* subtitle_label{nullptr};
+  // PendingEditBar (design/prototype/pdf.html): persistent banner while
+  // in-memory page edits are unsaved — save a copy or discard.
+  GtkRevealer* pending_edit_revealer{nullptr};
+  GtkButton* pending_save_button{nullptr};
+  GtkButton* pending_discard_button{nullptr};
   GtkButton* header_open{nullptr};
   GtkWidget* header_edit_menu{nullptr};
   GtkWidget* header_toc_menu{nullptr};
@@ -236,6 +241,8 @@ int epub_find_total();
 void epub_find_clear();
 void update_main_stack();
 void refresh_recents_menu();
+void epub_annotate_ui(char const* color, char const* kind);
+void reveal_ai_sidebar();
 
 template <typename Fn>
 void with_api(std::string const& notice, Fn&& run) {
@@ -376,11 +383,34 @@ void save_reading_font_scale(double scale) {
 // status / title
 // ---------------------------------------------------------------------------
 
+// PendingEditBar visibility + labels, driven from refresh_header_title
+// (every pending-state change already routes through it). The「有未保存修改」
+// subtitle mirrors the prototype titlebar sub alongside the header dot.
+void update_pending_edit_bar() {
+  if (g_host.pending_edit_revealer == nullptr) return;
+  bool const show = [] {
+    if (g_host.epub_active() || g_host.shelf_visible) return false;
+    PdfTab* tab = g_host.active_pdf();
+    return tab != nullptr && tab->pdf_edits_pending;
+  }();
+  gtk_revealer_set_reveal_child(g_host.pending_edit_revealer, show);
+  if (!show) return;
+  if (g_host.pending_save_button != nullptr) {
+    gtk_button_set_label(g_host.pending_save_button,
+                         Tr("ui.pdf.save-as").c_str());
+  }
+  if (g_host.pending_discard_button != nullptr) {
+    gtk_button_set_label(g_host.pending_discard_button,
+                         Tr("ui.pdf.discard").c_str());
+  }
+}
+
 void refresh_header_title() {
   // The empty-window welcome is not a bookshelf or collection scope.
   if (g_host.shelf_visible) {
     gtk_label_set_text(g_host.title_label, "Booklight");
     gtk_label_set_text(g_host.subtitle_label, "");
+    update_pending_edit_bar();
     return;
   }
   PdfTab* tab = g_host.active_pdf();
@@ -394,6 +424,7 @@ void refresh_header_title() {
                            .c_str());
     gtk_widget_set_visible(g_host.header_toc_menu,
                            !g_host.epub->toc().empty());
+    update_pending_edit_bar();
     return;
   }
   gtk_widget_set_visible(g_host.header_toc_menu, FALSE);
@@ -403,14 +434,17 @@ void refresh_header_title() {
       title += " •";  // differs from the original PDF until explicit export
     }
     gtk_label_set_text(g_host.title_label, title.c_str());
-    gtk_label_set_text(g_host.subtitle_label,
-                       (std::to_string(tab->current_page()) + " / " +
-                        std::to_string(tab->document()->page_count()))
-                           .c_str());
+    std::string subtitle = std::to_string(tab->current_page()) + " / " +
+                           std::to_string(tab->document()->page_count());
+    if (tab->pdf_edits_pending) {
+      subtitle += " · " + Tr("ui.pdf.unsaved-suffix");
+    }
+    gtk_label_set_text(g_host.subtitle_label, subtitle.c_str());
   } else {
     gtk_label_set_text(g_host.title_label, "Booklight");
     gtk_label_set_text(g_host.subtitle_label, "");
   }
+  update_pending_edit_bar();
 }
 
 void refresh_status() {
@@ -950,6 +984,35 @@ void open_epub_path(std::string const& path, int resume_chapter = 1) {
       populate_notes();
     }
   };
+  // Selection-bar actions (design/prototype/reading.html .selbar): the bar
+  // is inert chrome, every action lands here so business stays host-side.
+  raw->on_selection_action = [](std::string const& action) {
+    auto* epub = g_host.epub;
+    if (epub == nullptr) return;
+    if (action == "hl-yellow" || action == "hl-blue" || action == "hl-green") {
+      epub_annotate_ui(action.substr(3).c_str(), "highlight");
+      return;
+    }
+    if (action == "underline" || action == "strike") {
+      epub_annotate_ui("", action.c_str());
+      return;
+    }
+    if (action == "copy") {
+      std::string const text = epub->pending_selection().text;
+      if (!text.empty()) {
+        GdkClipboard* const clipboard =
+            gdk_display_get_clipboard(gdk_display_get_default());
+        gdk_clipboard_set_text(clipboard, text.c_str());
+      }
+      return;
+    }
+    if (action == "ai") {
+      // Open the inspector on the selection scope, as the prototype's AI
+      // act does.
+      reveal_ai_sidebar();
+      if (g_host.ai_panel != nullptr) g_host.ai_panel->set_chat_scope(1);
+    }
+  };
   raw->on_load_finished = [raw](std::string const&) {
     build_epub_toc_menu();
     // Populate the native TOC for the still-open book even if GTK has not yet
@@ -961,7 +1024,7 @@ void open_epub_path(std::string const& path, int resume_chapter = 1) {
     refresh_status();
     refresh_header_title();
     if (raw == g_host.epub) {
-      raw->apply_theme(theme_is_dark() ? "dark" : "light");
+      raw->apply_theme(reading_surface());
       // Annotation recovery is part of EpubTab's serial load worker, so all
       // blocking requests use one embedded-channel sequence.
       populate_notes();
@@ -4130,6 +4193,37 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_revealer_set_child(g_host.find_revealer, find_row);
   gtk_box_append(GTK_BOX(root), find_revealer);
 
+  // PendingEditBar (design/prototype/pdf.html): page edits exist only in
+  // memory until an explicit Save As — the banner never silently closes.
+  auto* pending_revealer = gtk_revealer_new();
+  g_host.pending_edit_revealer = GTK_REVEALER(pending_revealer);
+  gtk_revealer_set_transition_type(g_host.pending_edit_revealer,
+                                   GTK_REVEALER_TRANSITION_TYPE_SLIDE_DOWN);
+  auto* pending_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_margin_top(pending_row, 6);
+  gtk_widget_set_margin_bottom(pending_row, 2);
+  gtk_widget_set_margin_start(pending_row, 8);
+  gtk_widget_set_margin_end(pending_row, 8);
+  auto* pending_text = gtk_label_new(Tr("ui.pdf.pending-title").c_str());
+  gtk_label_set_wrap(GTK_LABEL(pending_text), TRUE);
+  gtk_label_set_xalign(GTK_LABEL(pending_text), 0.0f);
+  gtk_widget_add_css_class(pending_text, "caption");
+  gtk_widget_set_hexpand(pending_text, TRUE);
+  gtk_box_append(GTK_BOX(pending_row), pending_text);
+  auto* pending_save = gtk_button_new_with_label(Tr("ui.pdf.save-as").c_str());
+  g_host.pending_save_button = GTK_BUTTON(pending_save);
+  gtk_widget_add_css_class(pending_save, "flat");
+  gtk_widget_add_css_class(pending_save, "caption");
+  gtk_box_append(GTK_BOX(pending_row), pending_save);
+  auto* pending_discard =
+      gtk_button_new_with_label(Tr("ui.pdf.discard").c_str());
+  g_host.pending_discard_button = GTK_BUTTON(pending_discard);
+  gtk_widget_add_css_class(pending_discard, "flat");
+  gtk_widget_add_css_class(pending_discard, "caption");
+  gtk_box_append(GTK_BOX(pending_row), pending_discard);
+  gtk_revealer_set_child(g_host.pending_edit_revealer, pending_row);
+  gtk_box_append(GTK_BOX(root), pending_revealer);
+
   hook(find_entry, "search-changed",
                    +[](GtkSearchEntry*, gpointer) {
                      run_find_now();
@@ -4154,6 +4248,86 @@ void on_activate(GtkApplication* app, gpointer) {
   hook(find_close, "clicked",
                    +[](GtkButton*, gpointer) { close_find(); },
                    nullptr);
+
+  // PendingEditBar exits (Save As / Discard). Discard rebuilds the tab from
+  // the untouched original after a confirm — the in-memory edits cannot be
+  // recovered, and the original file was never modified.
+  hook(
+      g_host.pending_save_button, "clicked",
+      +[](GtkButton*, gpointer) {
+        save_edited_pdf_for_tab(g_host.active_pdf_only(), {});
+      },
+      nullptr);
+  hook(
+      g_host.pending_discard_button, "clicked",
+      +[](GtkButton*, gpointer) {
+        auto* tab = g_host.active_pdf_only();
+        if (tab == nullptr || !tab->pdf_edits_pending) return;
+        auto* dialog = gtk_dialog_new_with_buttons(
+            Tr("ui.pdf.pending-title").c_str(), g_host.window,
+            GTK_DIALOG_MODAL, Tr("ui.password.cancel").c_str(),
+            GTK_RESPONSE_CANCEL, Tr("ui.pdf.discard").c_str(),
+            GTK_RESPONSE_ACCEPT, nullptr);
+        auto* area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+        auto* message = gtk_label_new(Tr("ui.pdf.discard-confirm").c_str());
+        gtk_label_set_wrap(GTK_LABEL(message), TRUE);
+        gtk_widget_set_margin_top(message, 16);
+        gtk_widget_set_margin_bottom(message, 16);
+        gtk_widget_set_margin_start(message, 16);
+        gtk_widget_set_margin_end(message, 16);
+        gtk_box_append(GTK_BOX(area), message);
+        struct DiscardRequest {
+          PdfTab* tab;
+        };
+        auto* request = new DiscardRequest{tab};
+        hook(
+            dialog, "response",
+            +[](GtkDialog* dialog, gint response, gpointer user_data) {
+              auto* request = static_cast<DiscardRequest*>(user_data);
+              PdfTab* const tab = request->tab;
+              gtk_window_destroy(GTK_WINDOW(dialog));
+              if (response != GTK_RESPONSE_ACCEPT) return;
+              if (!pdf_tab_still_open(tab) || !tab->pdf_edits_pending) return;
+              auto bytes = std::make_shared<rivet::Bytes>();
+              gchar* raw = nullptr;
+              gsize length = 0;
+              GError* error = nullptr;
+              if (!g_file_get_contents(tab->path().c_str(), &raw, &length,
+                                       &error)) {
+                std::string const message =
+                    error != nullptr ? error->message : "read failed";
+                if (error != nullptr) g_error_free(error);
+                host_alert(Trf("ui.pages.edit-failed", message));
+                return;
+              }
+              auto const* first =
+                  reinterpret_cast<std::uint8_t const*>(raw);
+              bytes->assign(first, first + length);
+              g_free(raw);
+              auto doc = PdfDocument::open_memory(*bytes, nullptr);
+              if (doc == nullptr) {
+                host_alert(Trf("ui.pages.edit-failed", tab->path()));
+                return;
+              }
+              int const page = tab->current_page();
+              tab->reload_document(std::move(doc));
+              // reload_document resets pending state from memory_bytes;
+              // an untouched original reload lands here as clean.
+              build_outline_for(tab);
+              populate_thumbs();
+              refresh_forms_pane();
+              tab->go_to_page(std::clamp(page, 1,
+                                         tab->document()->page_count()));
+              refresh_status();
+              refresh_header_title();
+              update_pending_edit_bar();
+            },
+            request,
+            +[](gpointer p, GClosure*) { delete static_cast<DiscardRequest*>(p); },
+            static_cast<GConnectFlags>(0));
+        gtk_window_present(GTK_WINDOW(dialog));
+      },
+      nullptr);
 
   // main stack: shelf | reader (the launch surface IS the shelf)
   auto* main_stack = gtk_stack_new();
@@ -4402,6 +4576,31 @@ void on_activate(GtkApplication* app, gpointer) {
   g_host.panel_ctx.page_text = current_page_text;
   g_host.panel_ctx.doc_text = doc_text;
   g_host.panel_ctx.epub_active = [] { return g_host.epub_active(); };
+  // AiCiteChip: the selection's origin page/chapter + the jump back to it
+  // (invariant 4). Selection falls back to the current page/chapter so a
+  // scope switch before confirming still pins a sane location.
+  g_host.panel_ctx.selection_ordinal = [] {
+    if (g_host.epub_active()) {
+      if (g_host.epub == nullptr) return 0;
+      auto const& selection = g_host.epub->pending_selection();
+      return selection.chapter >= 1 ? selection.chapter
+                                    : g_host.epub->current_page();
+    }
+    PdfTab* tab = g_host.active_pdf();
+    if (tab == nullptr) return 0;
+    int const page = tab->selection_page();
+    return page >= 1 ? page : tab->current_page();
+  };
+  g_host.panel_ctx.jump_to_ordinal = [](int ordinal) {
+    if (ordinal < 1) return;
+    if (g_host.epub_active()) {
+      if (g_host.epub != nullptr) g_host.epub->go_to_chapter(ordinal);
+      return;
+    }
+    if (PdfTab* tab = g_host.active_pdf(); tab != nullptr) {
+      tab->go_to_page(ordinal);
+    }
+  };
   g_host.ai_panel = std::make_unique<AiPanel>(&g_host.panel_ctx);
   g_host.panel_ctx.open_settings_window = [](GtkWidget* content) {
     if (g_host.settings_window != nullptr) {
@@ -4450,6 +4649,7 @@ void on_activate(GtkApplication* app, gpointer) {
   g_host.ai_panel->on_reading_theme_changed = [](std::string const& theme) {
     using rivet_app::ReadingTheme;
     save_reading_prefs(theme == "paper"   ? ReadingTheme::paper
+                       : theme == "sepia" ? ReadingTheme::sepia
                        : theme == "night" ? ReadingTheme::night
                                           : ReadingTheme::system);
   };

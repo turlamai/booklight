@@ -38,6 +38,12 @@ struct PanelContext {
   std::function<bool()> epub_active;                      // page means chapter
   std::function<void(GtkWidget*)> open_settings_window;   // host-owned dialog
   std::string ui_language{"system"};                      // host pref mirror
+
+  // AiCiteChip (invariant 4 "citations jump back"): the selection's origin
+  // page/chapter (falling back to the current one; 0 without a document)
+  // and the jump back to it.
+  std::function<int()> selection_ordinal;
+  std::function<void(int)> jump_to_ordinal;
 };
 
 // One AI stream (a card in the Translate/Summarize lists or an assistant
@@ -53,6 +59,11 @@ struct StreamCard {
   std::string title;
   std::string meta;
   std::string source_text;
+  // 摘句 chip (design/DESIGN.md invariant 4 "citations jump back"): the
+  // excerpt's source location pinned at send time; empty when no single
+  // source (whole-document scope) — the chip then stays a plain excerpt.
+  std::string source_loc;
+  std::function<void()> source_jump;
   std::string reasoning;
   std::string content;
   Phase phase{Phase::streaming};
@@ -64,6 +75,9 @@ struct StreamCard {
   GtkLabel* content_label{nullptr};
   GtkButton* stop_button{nullptr};
   GtkWidget* spinner{nullptr};
+  GtkWidget* source_chip{nullptr};
+  GtkLabel* source_quote{nullptr};
+  GtkLabel* source_loc_label{nullptr};
 };
 
 class AiPanel {
@@ -79,6 +93,9 @@ class AiPanel {
 
   void open_settings_tab();
   void sync_settings();  // refresh fields from ctx->settings
+  // Chat context scope: 0 page / 1 selection / 2 doc (the selection-bar AI
+  // act opens the inspector here).
+  void set_chat_scope(int scope);
 
   // Appearance selector is host-side (theme lives in host.conf, like the
   // macOS host's UserDefaults).
@@ -110,6 +127,10 @@ class AiPanel {
   static std::string describe_error(std::exception_ptr error);
   std::string language_name(rivet_app::TargetLanguage code) const;
   bool ensure_provider(GtkListBox* notice_list);
+  // AiCiteChip: pin the excerpt's source location at send time; the chip
+  // jumps back to it. Whole-document scope has no single source — 0/empty.
+  int cite_ordinal() const;
+  void set_cite(StreamCard* card, int ordinal);
   void confirm_ai_send(
       rivet_app::AISendAction action, rivet_app::AISendScope scope,
       std::string const& content,

@@ -437,9 +437,12 @@ GtkWidget* AiPanel::make_settings_tab() {
                  section_label(Tr("ui.reading.theme").c_str()));
   auto* reading_model = gtk_string_list_new(nullptr);
   // std::string copies: own the labels instead of borrowing .c_str()
-  // from destroyed temporaries.
+  // from destroyed temporaries. The page theme axis is system | paper |
+  // sepia | night (design/DESIGN.md 阅读主题 — same options as the other
+  // hosts).
   std::string const reading_labels[] = {Tr("ui.reading.theme.system"),
                                         Tr("ui.reading.theme.paper"),
+                                        Tr("ui.reading.theme.sepia"),
                                         Tr("ui.reading.theme.night")};
   for (auto const& label : reading_labels) {
     gtk_string_list_append(GTK_STRING_LIST(reading_model), label.c_str());
@@ -454,7 +457,8 @@ GtkWidget* AiPanel::make_settings_tab() {
         if (panel->syncing_settings_ || !panel->on_reading_theme_changed) return;
         switch (gtk_drop_down_get_selected(panel->reading_theme_dropdown_)) {
           case 1: panel->on_reading_theme_changed("paper"); break;
-          case 2: panel->on_reading_theme_changed("night"); break;
+          case 2: panel->on_reading_theme_changed("sepia"); break;
+          case 3: panel->on_reading_theme_changed("night"); break;
           default: panel->on_reading_theme_changed("system"); break;
         }
       },
@@ -478,6 +482,13 @@ void AiPanel::open_settings_tab() {
   sync_settings();
   if (ctx_ != nullptr && ctx_->open_settings_window) {
     ctx_->open_settings_window(settings_tab_);
+  }
+}
+
+void AiPanel::set_chat_scope(int scope) {
+  if (chat_scope_ != nullptr) {
+    gtk_drop_down_set_selected(chat_scope_,
+                               static_cast<guint>(std::clamp(scope, 0, 2)));
   }
 }
 
@@ -536,7 +547,9 @@ void AiPanel::sync_settings() {
         reading_theme_dropdown_,
         s.reading_theme == rivet_app::ReadingTheme::paper
             ? 1
-            : s.reading_theme == rivet_app::ReadingTheme::night ? 2 : 0);
+            : s.reading_theme == rivet_app::ReadingTheme::sepia
+                ? 2
+                : s.reading_theme == rivet_app::ReadingTheme::night ? 3 : 0);
   }
   gtk_entry_buffer_set_text(gtk_entry_get_buffer(api_key_), "", -1);
   gtk_entry_set_placeholder_text(
@@ -568,6 +581,33 @@ GtkWidget* AiPanel::make_card_row(StreamCard* card) {
   auto* copy = small_button(Tr("ui.card.copy").c_str());
   gtk_box_append(GTK_BOX(header), copy);
   gtk_box_append(GTK_BOX(box), header);
+
+  // AiCiteChip (design/prototype/ai.html .cite): quote + source location,
+  // hidden until the card pins a jumpable source (refresh_card).
+  {
+    auto* chip = gtk_button_new();
+    gtk_widget_add_css_class(chip, "flat");
+    gtk_widget_set_halign(chip, GTK_ALIGN_FILL);
+    auto* chip_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    auto* quote = gtk_label_new(nullptr);
+    card->source_quote = GTK_LABEL(quote);
+    gtk_label_set_xalign(GTK_LABEL(quote), 0.0f);
+    gtk_label_set_ellipsize(GTK_LABEL(quote), PANGO_ELLIPSIZE_END);
+    gtk_label_set_lines(GTK_LABEL(quote), 2);
+    gtk_label_set_wrap(GTK_LABEL(quote), TRUE);
+    gtk_widget_add_css_class(quote, "caption");
+    gtk_widget_set_hexpand(quote, TRUE);
+    gtk_box_append(GTK_BOX(chip_box), quote);
+    auto* loc = gtk_label_new(nullptr);
+    card->source_loc_label = GTK_LABEL(loc);
+    gtk_label_set_xalign(GTK_LABEL(loc), 1.0f);
+    gtk_widget_add_css_class(loc, "caption");
+    gtk_box_append(GTK_BOX(chip_box), loc);
+    gtk_widget_set_visible(chip, FALSE);
+    gtk_button_set_child(GTK_BUTTON(chip), chip_box);
+    card->source_chip = chip;
+    gtk_box_append(GTK_BOX(box), chip);
+  }
   gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), box);
   card->row = row;
 
@@ -595,6 +635,12 @@ StreamCard* AiPanel::new_card(GtkListBox* list, std::string const& title,
   card->owner = this;
   card->row = make_card_row(card.get());
   StreamCard* raw = card.get();
+  hook(GTK_BUTTON(raw->source_chip), "clicked",
+       +[](GtkButton*, gpointer user_data) {
+         auto* target = static_cast<StreamCard*>(user_data);
+         if (target->source_jump) target->source_jump();
+       },
+       raw);
   cards_.push_back(std::move(card));
   refresh_card(raw);
   if (chat) {
@@ -606,6 +652,16 @@ StreamCard* AiPanel::new_card(GtkListBox* list, std::string const& title,
 }
 
 void AiPanel::refresh_card(StreamCard* card) {
+  // AiCiteChip: visible only when the excerpt carries a jumpable source.
+  if (card->source_chip != nullptr) {
+    bool const chip = card->source_jump != nullptr &&
+                      !card->source_text.empty();
+    gtk_widget_set_visible(card->source_chip, chip);
+    if (chip) {
+      gtk_label_set_text(card->source_quote, card->source_text.c_str());
+      gtk_label_set_text(card->source_loc_label, card->source_loc.c_str());
+    }
+  }
   std::string title_markup;
   if (!card->title.empty()) {
     title_markup = "<b>" + escape_markup(card->title) + "</b>";
@@ -883,17 +939,39 @@ void AiPanel::do_translate_selection() {
   do_translate_text(text);
 }
 
+// ---- AiCiteChip (invariant 4: citations jump back to the source) ----------
+
+// 选区优先进选区原位，否则进当前页/章；无文档则 0（不钉 chip）。
+int AiPanel::cite_ordinal() const {
+  return ctx_->selection_ordinal ? ctx_->selection_ordinal() : 0;
+}
+
+// 位置标签 + 回跳钉到卡片上（EPUB 按章，PDF 按页）。
+void AiPanel::set_cite(StreamCard* card, int ordinal) {
+  if (card == nullptr || ordinal < 1) return;
+  card->source_loc = ctx_->epub_active && ctx_->epub_active()
+                         ? Trf("ui.epub.chapter-n", std::to_string(ordinal))
+                         : Trf("ui.notes.page", std::to_string(ordinal));
+  if (ctx_->jump_to_ordinal) {
+    card->source_jump = [this, ordinal] { ctx_->jump_to_ordinal(ordinal); };
+  }
+}
+
 // Notes-pane excerpt translation (mac translateSelectionText).
 void AiPanel::do_translate_text(std::string const& text) {
   if (!ensure_provider(translate_list_)) return;
   auto const lang = language_name(ctx_->settings.target_language);
   auto const target = ctx_->settings.target_language;
+  // Freeze the source location at send time — the user may scroll away
+  // while the answer streams (AiCiteChip, invariant 4).
+  int const ordinal = cite_ordinal();
   confirm_ai_send(
       rivet_app::AISendAction::translate, rivet_app::AISendScope::selection,
-      text, {}, "", [this, text, lang, target] {
+      text, {}, "", [this, text, lang, target, ordinal] {
         auto* card = new_card(translate_list_, Tr("ui.menu.translate"),
                               "→ " + lang, false);
         card->source_text = text;
+        set_cite(card, ordinal);
         (void)ctx_->api->translate_text_async(
             text, target,
             [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
@@ -928,6 +1006,7 @@ void AiPanel::do_translate_page() {
             Trf("ui.translate.page-title", std::to_string(source.page)),
             "→ " + lang, false);
         card->source_text = source.text;
+        set_cite(card, source.page);
         (void)ctx_->api->translate_text_async(
             payload, target,
             [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
@@ -955,6 +1034,7 @@ void AiPanel::do_summarize_page() {
             Trf("ui.summarize.page-title", std::to_string(source.page)), lang,
             false);
         card->source_text = source.text;
+        set_cite(card, source.page);
         (void)ctx_->api->summarize_text_async(
             source.text, rivet_app::SummarizeMode::page,
             [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
@@ -971,13 +1051,15 @@ void AiPanel::do_summarize_selection() {
   }
   if (!ensure_provider(summarize_list_)) return;
   auto const lang = language_name(ctx_->settings.target_language);
+  int const ordinal = cite_ordinal();
   confirm_ai_send(
       rivet_app::AISendAction::summarize,
       rivet_app::AISendScope::selection, text, {}, "",
-      [this, text, lang] {
+      [this, text, lang, ordinal] {
         auto* card = new_card(summarize_list_, Tr("ui.summarize.selection"),
                               lang, false);
         card->source_text = text;
+        set_cite(card, ordinal);
         (void)ctx_->api->summarize_text_async(
             text, rivet_app::SummarizeMode::selection,
             [this, card](rivet_app::Result<rivet_app::StreamStart> result) {
@@ -1039,6 +1121,10 @@ void AiPanel::do_send_chat() {
 
   std::string context_text;
   std::string context_label;
+  // AiCiteChip: the plain excerpt quote + its pinned source location.
+  // Whole-document context has no single source location — no chip.
+  std::string quote;
+  int cite_ordinal_value = 0;
   bool have_context = false;
   // The context labels + "第 N 页：" wrapper below are backend-facing (the
   // windows host sends the same hardcoded Chinese strings; the domain prompt
@@ -1046,6 +1132,8 @@ void AiPanel::do_send_chat() {
   if (scope == 1) {
     context_text = trim(ctx_->selection_text());
     context_label = "选区";
+    quote = context_text;
+    cite_ordinal_value = cite_ordinal();
     have_context = context_text.size() > 1;
   } else if (scope == 2) {
     auto const source = ctx_->doc_text();
@@ -1060,6 +1148,8 @@ void AiPanel::do_send_chat() {
       context_text =
           "第 " + std::to_string(page->page) + " 页：\n" + page->text;
       context_label = "第 " + std::to_string(page->page) + " 页";
+      quote = page->text;
+      cite_ordinal_value = page->page;
       have_context = true;
     }
   }
@@ -1094,7 +1184,7 @@ void AiPanel::do_send_chat() {
   confirm_ai_send(
       rivet_app::AISendAction::chat, preview_scope, context_text, history,
       question,
-      [this, question, context_text, context_label,
+      [this, question, context_text, context_label, quote, cite_ordinal_value,
        history = std::move(history)]() mutable {
         // The user bubble appears only after confirmation; cancelling leaves
         // both the conversation and the typed question untouched.
@@ -1114,6 +1204,10 @@ void AiPanel::do_send_chat() {
         auto* card = new_card(
             nullptr, "chat", language_name(ctx_->settings.target_language),
             true);
+        if (!quote.empty()) {
+          card->source_text = quote;
+          set_cite(card, cite_ordinal_value);
+        }
         chat_live_ = card;
         chat_pending_question_ = question;
         chat_busy_ = true;
