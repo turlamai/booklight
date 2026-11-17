@@ -90,6 +90,11 @@ class EpubTab {
   std::function<void(int chapter)> on_chapter_changed;      // 1-based
   std::function<void(std::string const&)> on_load_finished;
   std::function<void(std::string const&)> on_load_failed;
+  // Selection-bar action relayed from the page (design/prototype/
+  // reading.html .selbar): "hl-yellow" | "hl-blue" | "hl-green" |
+  // "underline" | "strike" | "copy" | "ai". The bar is inert chrome —
+  // business lives host-side.
+  std::function<void(std::string const&)> on_selection_action;
 
  private:
   struct Impl;

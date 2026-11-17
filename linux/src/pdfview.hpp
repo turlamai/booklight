@@ -171,6 +171,9 @@ class PdfTab {
   bool pdf_edits_pending{false};
 
   std::string selection_text();
+  // The selection's first page (1-based), or 0 without a usable selection —
+  // the AiCiteChip source for selection-scoped sends.
+  int selection_page() const;
   void clear_selection();
   std::string page_text(int page);  // 1-based, "" when empty
 

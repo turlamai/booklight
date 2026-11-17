@@ -689,6 +689,11 @@ void PdfTab::restore_page(int page) {
 
 // ------------------------------------------------------------- content ----
 
+int PdfTab::selection_page() const {
+  if (impl->sel.empty()) return 0;
+  return std::min(impl->sel.start_page, impl->sel.end_page) + 1;
+}
+
 std::string PdfTab::selection_text() {
   if (impl->sel.empty()) return {};
   int const lo = std::min(impl->sel.start_page, impl->sel.end_page);
