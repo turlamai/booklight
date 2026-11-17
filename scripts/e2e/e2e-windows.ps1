@@ -135,6 +135,32 @@ function Find-NamedElement {
     return $null
 }
 
+function Find-DialogRoot {
+    # Locate the modal by its body text, then climb to the dialog's root
+    # element: the body is a leaf TextBlock and the buttons live in its
+    # ancestors' subtree, not beneath it. The dialog root carries the
+    # dialog title as its Name.
+    param($Window, [string[]]$BodyFragments, [string[]]$TitleFragments)
+    $body = $null
+    foreach ($fragment in $BodyFragments) {
+        $body = Find-NamedElement $Window $fragment
+        if ($null -ne $body) { break }
+    }
+    if ($null -eq $body) { return $null }
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    $node = $body
+    for ($depth = 0; $depth -lt 12; $depth++) {
+        try { $node = $walker.GetParent($node) } catch { return $null }
+        if ($null -eq $node) { return $null }
+        if ($node -eq [System.Windows.Automation.AutomationElement]::RootElement) { return $null }
+        try { $name = $node.Current.Name } catch { continue }
+        foreach ($title in $TitleFragments) {
+            if ($name -like "*$title*") { return $node }
+        }
+    }
+    return $null
+}
+
 function Get-IconPixelDigest {
     param($Icon)
     $bitmap = $Icon.ToBitmap()
@@ -587,8 +613,7 @@ try {
             (Contains-Text $window 'unsaved page changes') -or (Contains-Text $window '尚未保存的页面修改')
         })
         [void](Wait-Until 'cancel button' {
-            $dialog = Find-NamedElement $window 'unsaved page changes'
-            if (-not $dialog) { $dialog = Find-NamedElement $window '尚未保存的页面修改' }
+            $dialog = Find-DialogRoot $window @('unsaved page changes','尚未保存的页面修改') @('Unsaved PDF edits','PDF 修改尚未保存')
             if (-not $dialog) { return $false }
             Invoke-NamedControl $dialog @('Cancel','取消')
         })
@@ -602,8 +627,7 @@ try {
             (Contains-Text $window 'unsaved page changes') -or (Contains-Text $window '尚未保存的页面修改')
         })
         [void](Wait-Until 'discard button' {
-            $dialog = Find-NamedElement $window 'unsaved page changes'
-            if (-not $dialog) { $dialog = Find-NamedElement $window '尚未保存的页面修改' }
+            $dialog = Find-DialogRoot $window @('unsaved page changes','尚未保存的页面修改') @('Unsaved PDF edits','PDF 修改尚未保存')
             if (-not $dialog) { return $false }
             Invoke-NamedControl $dialog @('Discard Changes','放弃更改')
         })
