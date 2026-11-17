@@ -373,7 +373,7 @@ void MainWindow::OnEpubWebMessage(
 // inert chrome, every action lands here so business stays host-side.
 void MainWindow::HandleEpubSelectionAction(
     EpubBook& book, std::wstring const& action) {
-  auto clear_pending_selection = [&book]() {
+  auto clear_pending_selection = [this, &book]() {
     book.selection_text.clear();
     book.selection_chapter = 0;
     book.selection_start = 0;

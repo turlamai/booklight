@@ -17,6 +17,10 @@ namespace wut = winrt::Windows::UI::Text;
 
 using Microsoft::UI::Xaml::Visibility;
 
+// The brand terracotta, mirrored from MainWindow.xaml.cpp's file-local
+// AccentColor() (anonymous namespace there — not linkable across files).
+wu::Color chip_accent_color() { return wu::Color{0xFF, 0xB4, 0x53, 0x09}; }
+
 // ---- sidebar chrome ------------------------------------------------------------------
 
 void MainWindow::BuildAiSidebar() {
@@ -295,9 +299,9 @@ void MainWindow::AppendCardUi(muxc::StackPanel const& list,
       // Quote column flexes; the location pill hugs its content (ai.html
       // .cite layout: quote left, loc right, nowrap).
       quote_col.Width(
-          mux::GridLengthHelper::FromValueAndUnit(1.0, mux::GridUnitType::Star));
+          mux::GridLengthHelper::FromValue(1.0, mux::GridUnitType::Star));
       muxc::ColumnDefinition loc_col;
-      loc_col.Width(mux::GridLengthHelper::GetAuto());
+      loc_col.Width(mux::GridLengthHelper::Auto());
       chip_grid.ColumnDefinitions().Append(quote_col);
       chip_grid.ColumnDefinitions().Append(loc_col);
       muxc::TextBlock quote;
@@ -318,14 +322,14 @@ void MainWindow::AppendCardUi(muxc::StackPanel const& list,
       loc_text.Text(card->source_loc);
       loc_text.FontSize(11);
       loc_text.FontWeight(wut::FontWeights::SemiBold());
-      loc_text.Foreground(ThemeBrush(AccentColor()));
+      loc_text.Foreground(ThemeBrush(chip_accent_color()));
       loc.Children().Append(loc_text);
       muxc::FontIcon arrow;
       arrow.FontFamily(winrt::Microsoft::UI::Xaml::Media::FontFamily(
           L"Segoe Fluent Icons"));
       arrow.FontSize(9);
       arrow.Glyph(L"\uE72A");  // up-right arrow
-      arrow.Foreground(ThemeBrush(AccentColor()));
+      arrow.Foreground(ThemeBrush(chip_accent_color()));
       loc.Children().Append(arrow);
       muxc::Grid loc_host;
       loc_host.Children().Append(loc);
