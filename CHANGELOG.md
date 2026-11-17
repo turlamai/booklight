@@ -5,6 +5,8 @@ All notable changes to Booklight are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-18
+
 ### Changed
 
 - The updater now runs on `rivet/distribution`'s managed `make-updater` state
@@ -18,6 +20,16 @@ All notable changes to Booklight are documented here. Format follows
   architectures) instead of downloading a sibling `.AppImage` and trusting
   its detached `.sha256` sidecar. The sidecar is still published for manual
   verification, but updates no longer depend on it.
+- Reader surfaces align with the design prototype on all three platforms
+  (issue #56): EPUB body typography locks the contract measure (~608 px,
+  justified, 1.9 line height) with the theme-aware cite-block rule,
+  selection wash and prototype highlighter alphas; a floating selection
+  bar offers three-color highlight / underline / strike / copy / AI over
+  the selection with every action routed to the host; AI answer cards pin
+  the excerpt's source page/chapter at send time and a tap on the cite
+  chip jumps back to the source; unsaved PDF page edits show a persistent
+  banner with Save As / Discard exits next to the native edited marker;
+  the welcome surface gains a drag-hover state and the features line.
 
 ### Fixed
 
@@ -34,6 +46,14 @@ All notable changes to Booklight are documented here. Format follows
   followed. Packaged acceptance on all three hosts now switches the preset
   and asserts Base URL/Model follow, including after the pane reloads or
   re-syncs stored settings.
+- The sepia reading theme no longer silently falls back to an unstyled
+  page on Windows and Linux: the reading-surface resolution already
+  produced "sepia", but the page CSS and (on Linux) the settings selector
+  never carried it.
+- The macOS accessibility drivers no longer overflow the stack on cyclic
+  accessibility trees; the Linux and Windows close-guard journeys anchor
+  dialog detection to the modal itself so the persistent pending-edits
+  banner cannot be mistaken for the dialog.
 
 ## [0.10.0] - 2026-11-09
 
