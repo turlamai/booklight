@@ -95,6 +95,12 @@ def find_menu_item(root, names):
     return next((node for node in walk(root)
                  if role(node) == "menu item" and name(node) in names), None)
 
+def find_dialog(app):
+    # The GtkDialog container itself — the PendingEditBar banner shows the
+    # same pending-title string persistently while edits are pending, so
+    # presence of the title text can no longer mean "dialog is up".
+    return next((node for node in walk(app) if role(node) == "dialog"), None)
+
 def main():
     parser = argparse.ArgumentParser(); parser.add_argument("--output", type=Path, required=True); args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True)
     application = None
@@ -120,15 +126,15 @@ def main():
         wait_for("pending edits marker in the title", lambda: contains_safe(window, "•"))
         close_button = wait_for("title bar close button", lambda: find_button(window, ("Close",)))
         press(close_button)
-        wait_for("unsaved PDF edits dialog", lambda: contains(application, "Unsaved PDF edits") or contains(application, "PDF 修改尚未保存"))
-        cancel = wait_for("cancel button", lambda: find_button(application, ("Cancel", "取消")))
+        dialog = wait_for("unsaved PDF edits dialog", lambda: find_dialog(application))
+        cancel = wait_for("cancel button", lambda: find_button(dialog, ("Cancel", "取消")))
         press(cancel)
-        wait_for("dialog dismissed after cancel", lambda: not (contains(application, "Unsaved PDF edits") or contains(application, "PDF 修改尚未保存")))
+        wait_for("dialog dismissed after cancel", lambda: find_dialog(application) is None)
         wait_for("document still open after cancel", lambda: contains(window, "Page 1 / 2") or contains(window, "第 1 / 2 页"))
         close_again = wait_for("title bar close button", lambda: find_button(window, ("Close",)))
         press(close_again)
-        wait_for("unsaved PDF edits dialog again", lambda: contains(application, "Unsaved PDF edits") or contains(application, "PDF 修改尚未保存"))
-        discard = wait_for("discard button", lambda: find_button(application, ("Discard Changes", "放弃更改")))
+        dialog = wait_for("unsaved PDF edits dialog again", lambda: find_dialog(application))
+        discard = wait_for("discard button", lambda: find_button(dialog, ("Discard Changes", "放弃更改")))
         press(discard)
         wait_for("document closed after discard", lambda: not contains_safe(window, "Page 1 / 2") and not contains_safe(window, "第 1 / 2 页"))
         (args.output / "close-guard.json").write_text(json.dumps({"platform": "linux", "actions": ["launch:sample-guard.pdf", "activate:page-rotate", "press:Close", "assert:Unsaved PDF edits", "press:Cancel", "press:Close", "press:Discard Changes"], "assertions": ["packaged GTK4 opens the synthetic PDF", "native rotate marks in-memory page edits", "window close raises the unsaved-edits dialog", "Cancel keeps the document open", "Discard closes the document without writing the original"]}, ensure_ascii=False, indent=2), encoding="utf-8")
