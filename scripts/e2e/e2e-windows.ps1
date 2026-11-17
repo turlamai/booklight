@@ -115,6 +115,26 @@ function Invoke-NamedControlInner {
     return $false
 }
 
+function Find-NamedElement {
+    # Returns the first element whose Name contains the fragment (shallowest
+    # in DFS order), or $null — lets journeys scope button presses to a
+    # specific subtree (the modal dialog) instead of the whole window, where
+    # the persistent PendingEditBar now carries same-named buttons.
+    param($Root, [string]$Fragment)
+    try {
+        $nodes = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+            [System.Windows.Automation.Condition]::TrueCondition)
+        for ($index = 0; $index -lt $nodes.Count; $index++) {
+            try {
+                if ($nodes[$index].Current.Name -like "*$Fragment*") {
+                    return $nodes[$index]
+                }
+            } catch { continue }
+        }
+    } catch { }
+    return $null
+}
+
 function Get-IconPixelDigest {
     param($Icon)
     $bitmap = $Icon.ToBitmap()
@@ -561,7 +581,15 @@ try {
         [void](Wait-Until 'unsaved PDF edits dialog' {
             (Contains-Text $window 'Unsaved PDF edits') -or (Contains-Text $window 'PDF 修改尚未保存')
         })
-        [void](Wait-Until 'cancel button' { Invoke-NamedControl $window @('Cancel','取消') })
+        # The persistent PendingEditBar carries same-named save/discard
+        # buttons; press inside the modal dialog's subtree, not the first
+        # name match in the whole window.
+        [void](Wait-Until 'cancel button' {
+            $dialog = Find-NamedElement $window 'Unsaved PDF edits'
+            if (-not $dialog) { $dialog = Find-NamedElement $window 'PDF 修改尚未保存' }
+            if (-not $dialog) { return $false }
+            Invoke-NamedControl $dialog @('Cancel','取消')
+        })
         [void](Wait-Until 'dialog dismissed after cancel' {
             -not ((Contains-Text $window 'Unsaved PDF edits') -or (Contains-Text $window 'PDF 修改尚未保存'))
         })
@@ -571,7 +599,12 @@ try {
         [void](Wait-Until 'unsaved PDF edits dialog again' {
             (Contains-Text $window 'Unsaved PDF edits') -or (Contains-Text $window 'PDF 修改尚未保存')
         })
-        [void](Wait-Until 'discard button' { Invoke-NamedControl $window @('Discard Changes','放弃更改') })
+        [void](Wait-Until 'discard button' {
+            $dialog = Find-NamedElement $window 'Unsaved PDF edits'
+            if (-not $dialog) { $dialog = Find-NamedElement $window 'PDF 修改尚未保存' }
+            if (-not $dialog) { return $false }
+            Invoke-NamedControl $dialog @('Discard Changes','放弃更改')
+        })
         [void](Wait-Until 'process exit after discarding the only document' {
             $process.Refresh(); if ($process.HasExited) { return $true }; return $false
         } 30)
