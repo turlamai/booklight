@@ -8,6 +8,7 @@
 
 #include "pch.h"
 #include "MainWindow.xaml.h"
+#include "I18n.h"
 #if __has_include("MainWindow.g.cpp")
 #include "MainWindow.g.cpp"
 #endif
@@ -18,8 +19,11 @@
 
 namespace mux = winrt::Microsoft::UI::Xaml;
 namespace muxc = winrt::Microsoft::UI::Xaml::Controls;
+namespace media = winrt::Microsoft::UI::Xaml::Media;
 namespace wu = winrt::Windows::UI;
-using namespace winrt::RivetHost;
+namespace wut = winrt::Windows::UI::Text;
+// implementation only — opening winrt::RivetHost too makes MainWindow
+// ambiguous (the projected type lives there).
 using namespace winrt::RivetHost::implementation;
 
 namespace {
@@ -172,7 +176,7 @@ void MainWindow::BuildResearchScopeList(
         auto row = muxc::Button();
         row.Padding({4, 4, 4, 4});
         row.HorizontalContentAlignment(mux::HorizontalAlignment::Stretch);
-        row.Background(muxc::SolidColorBrush());
+        row.Background(media::SolidColorBrush());
         auto stack = muxc::StackPanel();
         stack.Orientation(muxc::Orientation::Horizontal);
         stack.Spacing(8);
@@ -489,7 +493,7 @@ muxc::Button MainWindow::research_card_button(
     auto button = muxc::Button();
     button.Padding({9, 3, 9, 3});
     button.Background(emphasized ? ThemeBrush(wu::Color{0x1F, 0xC4, 0x62, 0x3E})
-                                 : muxc::SolidColorBrush());
+                                 : media::SolidColorBrush());
     muxc::TextBlock label;
     label.Text(pdfgist::Tr(to_utf8(key).c_str()));
     label.FontSize(11);
