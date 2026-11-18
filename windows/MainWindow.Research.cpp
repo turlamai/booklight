@@ -61,6 +61,10 @@ constexpr int kExcerptBefore = 40;
 constexpr int kExcerptAfter = 80;
 constexpr int kRecentsDeckLimit = 8;
 
+// The brand terracotta, mirrored from MainWindow.xaml.cpp's file-local
+// research_accent_color() (anonymous namespace there — not linkable across files).
+wu::Color research_accent_color() { return wu::Color{0xFF, 0xB4, 0x53, 0x09}; }
+
 std::wstring fold_text(std::wstring text) {
     for (auto& c : text) c = static_cast<wchar_t>(::towlower(c));
     return text;
@@ -186,7 +190,7 @@ void MainWindow::BuildResearchScopeList(
         mark.Text(target.is_open ? L"\u2713" : L"\uFF0B");  // ✓ / ＋
         mark.FontSize(11);
         mark.FontWeight(wut::FontWeights::SemiBold());
-        mark.Foreground(ThemeBrush(target.is_open ? AccentColor()
+        mark.Foreground(ThemeBrush(target.is_open ? research_accent_color()
                                                   : wu::Color{0xFF, 0x8A, 0x84, 0x7C}));
         stack.Children().Append(mark);
         muxc::TextBlock label;
@@ -240,10 +244,9 @@ void MainWindow::ResearchSearch_Click(
 }
 
 void MainWindow::RunResearchSearch() {
-    std::wstring const needle =
-        ResearchQuery().Text().size() > 200
-            ? ResearchQuery().Text().substr(0, 200)
-            : ResearchQuery().Text();
+    std::wstring const needle = [text = std::wstring(ResearchQuery().Text())] {
+        return text.size() > 200 ? text.substr(0, 200) : text;
+    }();
     auto const folded_needle = fold_text(needle);
     research_hits_.clear();
     ResearchResults().Children().Clear();
@@ -278,7 +281,9 @@ void MainWindow::RunResearchSearch() {
         };
         std::vector<ResearchHitUi> hits;
         for (auto const& target : scope) {
-            auto const units = ResearchTextUnits(target);
+            auto const window = weak.get();
+        if (!window) return;
+        auto const units = window->ResearchTextUnits(target);
             int per_doc = 0;
             for (auto const& [page, text] : units) {
                 if (per_doc >= kPerDocumentCap || hits.size() >= kTotalCap) break;
@@ -431,7 +436,7 @@ muxc::Border MainWindow::BuildResearchCard(ResearchHitUi const& hit) {
             muxd::Run run;
             run.Text(text);
             if (highlight) {
-                run.Foreground(ThemeBrush(AccentColor()));
+                run.Foreground(ThemeBrush(research_accent_color()));
                 run.FontWeight(wut::FontWeights::SemiBold());
             }
             paragraph.Inlines().Append(run);
@@ -462,7 +467,7 @@ muxc::Border MainWindow::BuildResearchCard(ResearchHitUi const& hit) {
     chip_text.Text(hit.title + L" · " + location);
     chip_text.FontSize(11);
     chip_text.FontWeight(wut::FontWeights::SemiBold());
-    chip_text.Foreground(ThemeBrush(AccentColor()));
+    chip_text.Foreground(ThemeBrush(research_accent_color()));
     chip.Content(chip_text);
     ResearchHitUi const snapshot = hit;
     chip.Click([weak, snapshot](
@@ -502,7 +507,7 @@ muxc::Button MainWindow::research_card_button(
     label.Text(pdfgist::Tr(to_utf8(key).c_str()));
     label.FontSize(11);
     if (emphasized) label.FontWeight(wut::FontWeights::SemiBold());
-    label.Foreground(ThemeBrush(emphasized ? AccentColor()
+    label.Foreground(ThemeBrush(emphasized ? research_accent_color()
                                            : wu::Color{0xFF, 0x6F, 0x68, 0x60}));
     button.Content(label);
     button.Click([action](winrt::Windows::Foundation::IInspectable const&,
@@ -691,7 +696,7 @@ void MainWindow::ToggleResearchPin(ResearchHitUi const& hit) {
                                }),
                 annotations.end());
             tab->anno_dirty = true;
-            QueueAnnotationSave(tab.get());
+            SaveDocDataNow(tab);
         } else if (epub_ && epub_->path == hit.path) {
             auto& annotations = epub_->doc_data.annotations;
             annotations.erase(
@@ -703,7 +708,7 @@ void MainWindow::ToggleResearchPin(ResearchHitUi const& hit) {
                                }),
                 annotations.end());
             epub_->anno_dirty = true;
-            QueueAnnotationSave();
+            SaveEpubDocDataNow();
         }
         RefreshResearchDeck();
         return;
@@ -723,7 +728,7 @@ void MainWindow::PinResearchHit(ResearchHitUi const& hit) {
     if (auto const tab = pdf_tab_by_path(hit.path); tab) {
         tab->doc_data.annotations.push_back(annotation);
         tab->anno_dirty = true;
-        QueueAnnotationSave(tab.get());
+        SaveDocDataNow(tab);
         RefreshResearchDeck();
         return;
     }
@@ -772,7 +777,7 @@ void MainWindow::UnpinResearchCite(ResearchCiteUi const& cite) {
                                          }),
                           annotations.end());
         tab->anno_dirty = true;
-        QueueAnnotationSave(tab.get());
+        SaveDocDataNow(tab);
         RefreshResearchDeck();
         return;
     }
@@ -785,7 +790,7 @@ void MainWindow::UnpinResearchCite(ResearchCiteUi const& cite) {
                            }),
             epub_->doc_data.annotations.end());
         epub_->anno_dirty = true;
-        QueueAnnotationSave();
+        SaveEpubDocDataNow();
         RefreshResearchDeck();
         return;
     }
@@ -794,7 +799,7 @@ void MainWindow::UnpinResearchCite(ResearchCiteUi const& cite) {
     auto const weak = get_weak();
     auto const sidecar = settings_.annotation_sidecar;
     auto const path_utf8 = to_utf8(cite.path);
-    auto const anno_id = to_utf8(cite.anno_id);
+    auto const anno_id = cite.anno_id;
     std::thread([weak, dispatcher, backend, sidecar, path_utf8, anno_id]() mutable {
         auto const window = weak.get();
         if (!window) return;
