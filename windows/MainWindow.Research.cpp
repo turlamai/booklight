@@ -19,9 +19,11 @@
 
 namespace mux = winrt::Microsoft::UI::Xaml;
 namespace muxc = winrt::Microsoft::UI::Xaml::Controls;
+namespace muxd = winrt::Microsoft::UI::Xaml::Documents;
 namespace media = winrt::Microsoft::UI::Xaml::Media;
 namespace wu = winrt::Windows::UI;
 namespace wut = winrt::Windows::UI::Text;
+using Microsoft::UI::Xaml::Visibility;
 // implementation only — opening winrt::RivetHost too makes MainWindow
 // ambiguous (the projected type lives there).
 using namespace winrt::RivetHost::implementation;
@@ -422,9 +424,9 @@ muxc::Border MainWindow::BuildResearchCard(ResearchHitUi const& hit) {
     if (hit.match_start <= hit.excerpt.size() &&
         hit.match_start + hit.match_len <= hit.excerpt.size()) {
         muxc::RichTextBlock rich;
-        muxc::Paragraph paragraph;
+        muxd::Paragraph paragraph;
         auto add_run = [&](std::wstring const& text, bool highlight) {
-            muxc::Run run;
+            muxd::Run run;
             run.Text(text);
             if (highlight) {
                 run.Background(ThemeBrush(
