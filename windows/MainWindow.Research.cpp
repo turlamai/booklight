@@ -23,7 +23,7 @@ namespace muxd = winrt::Microsoft::UI::Xaml::Documents;
 namespace media = winrt::Microsoft::UI::Xaml::Media;
 namespace wu = winrt::Windows::UI;
 namespace wut = winrt::Windows::UI::Text;
-using Microsoft::UI::Xaml::Visibility;
+using winrt::Microsoft::UI::Xaml::Visibility;
 // implementation only — opening winrt::RivetHost too makes MainWindow
 // ambiguous (the projected type lives there).
 using namespace winrt::RivetHost::implementation;
@@ -425,12 +425,14 @@ muxc::Border MainWindow::BuildResearchCard(ResearchHitUi const& hit) {
         hit.match_start + hit.match_len <= hit.excerpt.size()) {
         muxc::RichTextBlock rich;
         muxd::Paragraph paragraph;
+        // Documents::Run carries no background in WinUI 3 — the highlight
+        // is the accent-colored semibold text (prototype's <mark> weight).
         auto add_run = [&](std::wstring const& text, bool highlight) {
             muxd::Run run;
             run.Text(text);
             if (highlight) {
-                run.Background(ThemeBrush(
-                    wu::Color{0x33, 0xE8, 0x92, 0x6A}));  // accent-soft
+                run.Foreground(ThemeBrush(AccentColor()));
+                run.FontWeight(wut::FontWeights::SemiBold());
             }
             paragraph.Inlines().Append(run);
         };
