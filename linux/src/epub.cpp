@@ -637,7 +637,13 @@ void EpubTab::restore_annotation(StoredAnnotation const& annotation,
 void EpubTab::set_doc_data(DocData data) {
   doc_data_ = std::move(data);
   if (!loaded_) return;
-  auto const bytes = pdfgist::encode_doc_data(doc_data_);
+  // Citation-deck entries carry no ink — deck records, never page marks.
+  DocData visible;
+  visible.bookmarks = doc_data_.bookmarks;
+  std::copy_if(doc_data_.annotations.begin(), doc_data_.annotations.end(),
+               std::back_inserter(visible.annotations),
+               [](StoredAnnotation const& a) { return a.kind != "cite"; });
+  auto const bytes = pdfgist::encode_doc_data(visible);
   std::string const json(bytes.begin(), bytes.end());
   impl->evaluate("const d = JSON.parse(" + json_string_literal(json) +
                  "); applyEpubAnnotations(d.annotations);");
