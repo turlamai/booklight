@@ -92,7 +92,7 @@ raco rivet acceptance --json # 当前平台的打包产品验收
 - **P0**：批注保存/重试/恢复、PDF 轻编辑与明确导出，错误时不覆写原件。对只读文件和不存在路径给出真实错误。
 - **P1**：AI 发送范围可预览/取消，密钥安全、无隐式网络上传。
 - **P1**：所有平台真实打包验收；测试和文档与 file-first 设计一致。
-- **不做**：书库/收藏集/封面管理、阅读时长/目标/连读统计、独立研究工作台 Pro 与商业收费墙。
+- **不做**：书库/收藏集/封面管理、阅读时长/目标/连读统计、商业收费墙与任何 license/checkout/telemetry。研究工作台按 [PRICING.md 2026-11-18 owner 决策](PRICING.md#decision-2026-11-18-research-workbench-ships-as-a-free-feature-owner-decision-issue-57) 作为**无 gating 的免费功能**实现（issue #56/#57）；付费形态仍被否决，另需新 owner 决策。
 - 旧 `library-*` RPC 只为生成客户端临时兼容，不能写数据；新的 schema 迁移应在三端客户端同步完成并经正式验收后移除。旧 `library.json` 与用户文件不可自动删除。
 - [Issue #20](https://github.com/turlamai/booklight/issues/20) 继续承载批注与 AI 的保存/隐私质量问题；此 PR 的方向与旧“书架保留”决策冲突时，以 2026-10-29 文件优先决策为准。
 

@@ -2,6 +2,12 @@
 
 **English** · [简体中文](PRICING.zh-CN.md)
 
+## Decision 2026-11-18: research workbench ships as a free feature (owner decision, issue #57)
+
+The cross-book research workbench (design contract `design/DESIGN.md`, prototype `design/prototype/research.html`) ships **as a regular free feature with no gating**: no paywall, no entitlement check, no "Pro" badge and no `ui.research.pro` surface. The owner decision for this revision: "先完成功能，付费后期再接入" — features first, any paid packaging is deferred. A future paid edition still requires a fresh owner decision plus the 2026-10-29 bar (clear user result, privacy validation, real platform acceptance, honest payment/refund terms); this decision authorizes the feature, **not** any licensing, checkout or telemetry.
+
+This partially revises the 2026-10-29 decision: the research **workbench as a gated Pro tier** stays rejected; the workbench as an ungated feature is now approved and tracked on issue #56.
+
 ## Decision 2026-10-29: file-first reader and editor
 
 Booklight is being rebuilt as a focused PDF/EPUB reader and light PDF editor. Its core scope is opening files in place, native reading, reliable annotations and explicit PDF export. **No paid Booklight edition, Pro research workbench, price, license activation, checkout or trial is approved for implementation or sale.** The previous `2026-10-v2` proposal for a cross-book research Pro tier (including its ¥128 / US$19 target) is superseded, not an active roadmap.

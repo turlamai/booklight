@@ -48,6 +48,8 @@ Central and sidecar stores use the existing JSON form:
 }
 ```
 
+`kind` values are `highlight`, `underline`, `strike` — and `cite` for the research workbench's citation deck: a cite entry carries the quoted `excerpt`, the source `page` (page number, or chapter ordinal for EPUBs), an optional `note`, and empty `rects`/`color`. Cites live in the same per-document store and flow through the same save, recovery and export paths as every other annotation.
+
 New settings default to sidecar storage, but previously saved `annotation_sidecar` settings remain authoritative. Legacy `<document>.pdfgist.json` sidecars stay readable. Sidecars are additional annotation files, **not copies of the PDF or EPUB**. If a source directory is read-only, writing a sidecar can fail; Booklight must show the unsaved state instead of silently redirecting into another store.
 
 An annotation save stages a recovery journal before replacing the primary via atomic write. Successful saves clear the journal. Failed writes retain the draft for retry/export; reopening selects the pending recovery draft if newer than the primary. A later external change to the primary takes precedence. The original document bytes do not change when writing sidecar annotations.
