@@ -259,15 +259,6 @@ void epub_annotate_ui(char const* color, char const* kind);
 void reveal_ai_sidebar();
 void show_research();
 void refresh_research_deck();
-void research_run();
-void research_refresh_scope();
-void research_refresh_deck();
-void research_render_results(std::vector<ResearchHitUi> hits, int document_count,
-                             double seconds);
-void research_toggle_pin(std::string const& path, std::string const& title,
-                         std::string const& kind, int page,
-                         std::string const& excerpt);
-void build_research_view(GtkWidget* main_stack);
 
 // ---- research workbench state (design/prototype/research.html) ----------
 struct ResearchTargetUi {
@@ -298,6 +289,15 @@ struct ResearchCiteUi {
 std::vector<ResearchTargetUi> research_targets;
 std::vector<ResearchHitUi> research_hits;
 std::vector<ResearchCiteUi> research_cites;
+void research_run();
+void research_refresh_scope();
+void research_refresh_deck();
+void research_render_results(std::vector<ResearchHitUi> hits, int document_count,
+                             double seconds);
+void research_toggle_pin(std::string const& path, std::string const& title,
+                         std::string const& kind, int page,
+                         std::string const& excerpt);
+void build_research_view(GtkWidget* main_stack);
 
 template <typename Fn>
 void with_api(std::string const& notice, Fn&& run) {
@@ -3775,7 +3775,7 @@ void install_actions(GtkApplication* app) {
       }, nullptr);
   add("research", +[](GSimpleAction*, GVariant*, gpointer) {
     show_research();
-  });
+  }, nullptr);
   add("toggle-ai", +[](GSimpleAction*, GVariant*, gpointer) {
         toggle_ai_sidebar();
       }, nullptr);
@@ -4160,7 +4160,7 @@ std::vector<std::pair<int, std::string>> research_text_units(
         }
         return units;
     }
-    auto const doc = PdfDocument::open_file(target.path, nullptr);
+    auto const doc = PdfDocument::open_file(target.path, "");
     if (doc == nullptr) return units;
     for (int page = 1; page <= doc->page_count(); ++page) {
         auto const tp = doc->text_page(page - 1);
@@ -4246,7 +4246,7 @@ void research_run() {
             double const seconds = std::chrono::duration<double>(
                                        std::chrono::steady_clock::now() - started)
                                        .count();
-            render_research_results(std::move(hits), count, seconds);
+            research_render_results(std::move(hits), count, seconds);
         });
     }).detach();
     (void)alive;
@@ -4329,24 +4329,24 @@ void research_render_results(std::vector<ResearchHitUi> hits, int document_count
             auto* hit_copy = new ResearchHitUi(hit);
             g_object_set_data_full(G_OBJECT(chip), "hit", hit_copy,
                                    [](gpointer p) { delete static_cast<ResearchHitUi*>(p); });
-            g_signal_connect_data(
+            hook(
                 chip, "clicked",
                 +[](GtkButton*, gpointer p) {
                     auto* hit = static_cast<ResearchHitUi*>(p);
                     research_jump_to(hit->path, hit->kind, hit->page);
                 },
-                hit_copy, nullptr, static_cast<GConnectFlags>(0));
+                hit_copy);
             gtk_box_append(GTK_BOX(row), chip);
             auto* jump = gtk_button_new_with_label(Tr("ui.research.jump").c_str());
             gtk_widget_add_css_class(jump, "flat");
             gtk_widget_add_css_class(jump, "caption");
-            g_signal_connect_data(
+            hook(
                 jump, "clicked",
                 +[](GtkButton*, gpointer p) {
                     auto* hit = static_cast<ResearchHitUi*>(p);
                     research_jump_to(hit->path, hit->kind, hit->page);
                 },
-                hit_copy, nullptr, static_cast<GConnectFlags>(0));
+                hit_copy);
             gtk_box_append(GTK_BOX(row), jump);
             bool const pinned = std::any_of(
                 research_cites.begin(), research_cites.end(),
@@ -4359,14 +4359,14 @@ void research_render_results(std::vector<ResearchHitUi> hits, int document_count
             gtk_widget_add_css_class(pin, "flat");
             gtk_widget_add_css_class(pin, "caption");
             if (pinned) gtk_widget_add_css_class(pin, "accent");
-            g_signal_connect_data(
+            hook(
                 pin, "clicked",
                 +[](GtkButton*, gpointer p) {
                     auto* hit = static_cast<ResearchHitUi*>(p);
                     research_toggle_pin(hit->path, hit->title, hit->kind,
                                         hit->page, hit->excerpt);
                 },
-                hit_copy, nullptr, static_cast<GConnectFlags>(0));
+                hit_copy);
             gtk_box_append(GTK_BOX(row), pin);
             gtk_box_append(GTK_BOX(card), row);
             gtk_box_append(GTK_BOX(g_host.research_results), card);
@@ -4422,7 +4422,7 @@ void research_refresh_scope() {
             auto* target_copy = new ResearchTargetUi(target);
             g_object_set_data_full(G_OBJECT(row), "target", target_copy,
                                    [](gpointer p) { delete static_cast<ResearchTargetUi*>(p); });
-            g_signal_connect_data(
+            hook(
                 row, "clicked",
                 +[](GtkButton*, gpointer p) {
                     auto* target = static_cast<ResearchTargetUi*>(p);
@@ -4433,7 +4433,7 @@ void research_refresh_scope() {
                     }
                     research_refresh_scope();
                 },
-                target_copy, nullptr, static_cast<GConnectFlags>(0));
+                target_copy);
             gtk_box_append(GTK_BOX(g_host.research_recents_list), row);
         }
     }
@@ -4480,13 +4480,13 @@ void research_render_deck(std::vector<ResearchCiteUi> cites) {
         auto* cite_copy = new ResearchCiteUi(cite);
         g_object_set_data_full(G_OBJECT(jump), "cite", cite_copy,
                                [](gpointer p) { delete static_cast<ResearchCiteUi*>(p); });
-        g_signal_connect_data(
-            jump, "clicked",
-            +[](GtkButton*, gpointer p) {
+        hook(
+                jump, "clicked",
+                +[](GtkButton*, gpointer p) {
                 auto* cite = static_cast<ResearchCiteUi*>(p);
                 research_jump_to(cite->path, cite->kind, cite->page);
             },
-            cite_copy, nullptr, static_cast<GConnectFlags>(0));
+                cite_copy);
         gtk_box_append(GTK_BOX(row), jump);
         gtk_box_append(GTK_BOX(card), row);
         if (!cite.note.empty()) {
