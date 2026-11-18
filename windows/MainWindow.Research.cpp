@@ -12,9 +12,6 @@
 // RichTextBlock runs: the consume interfaces for Paragraph/Run live in the
 // Documents projection, which pch.h does not pull in.
 #include <winrt/Microsoft.UI.Xaml.Documents.h>
-#if __has_include("MainWindow.g.cpp")
-#include "MainWindow.g.cpp"
-#endif
 
 #include <algorithm>
 #include <fstream>
