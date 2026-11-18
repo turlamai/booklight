@@ -131,6 +131,20 @@ struct Host {
   GtkRevealer* pending_edit_revealer{nullptr};
   GtkButton* pending_save_button{nullptr};
   GtkButton* pending_discard_button{nullptr};
+  // 研究工作台（design/prototype/research.html）：跨书检索 + 可溯源引用
+  // 集。免费功能，无 gating（PRICING.md 2026-11-18 owner 决策）。
+  bool research_visible{false};
+  GtkWidget* research_view{nullptr};
+  GtkWidget* research_opened_list{nullptr};
+  GtkWidget* research_recents_list{nullptr};
+  GtkWidget* research_results{nullptr};
+  GtkWidget* research_results_scroll{nullptr};
+  GtkWidget* research_deck_pane{nullptr};
+  GtkWidget* research_deck_list{nullptr};
+  GtkWidget* research_deck_count{nullptr};
+  GtkWidget* research_stats{nullptr};
+  GtkWidget* research_busy{nullptr};
+  GtkEntry* research_query{nullptr};
   GtkButton* header_open{nullptr};
   GtkWidget* header_edit_menu{nullptr};
   GtkWidget* header_toc_menu{nullptr};
@@ -243,6 +257,47 @@ void update_main_stack();
 void refresh_recents_menu();
 void epub_annotate_ui(char const* color, char const* kind);
 void reveal_ai_sidebar();
+void show_research();
+void refresh_research_deck();
+
+// ---- research workbench state (design/prototype/research.html) ----------
+struct ResearchTargetUi {
+    std::string path;
+    std::string title;
+    std::string kind;  // "pdf" | "epub"
+    bool is_open = false;
+    bool selected = false;
+};
+struct ResearchHitUi {
+    std::string path;
+    std::string title;
+    std::string kind;
+    int page = 0;  // 1-based page, chapter ordinal for EPUBs
+    std::string excerpt;
+    std::size_t match_start = 0;
+    std::size_t match_len = 0;
+};
+struct ResearchCiteUi {
+    std::string path;
+    std::string title;
+    std::string kind;
+    int page = 0;
+    std::string excerpt;
+    std::string note;
+    std::string anno_id;
+};
+std::vector<ResearchTargetUi> research_targets;
+std::vector<ResearchHitUi> research_hits;
+std::vector<ResearchCiteUi> research_cites;
+void research_run();
+void research_refresh_scope();
+void research_refresh_deck();
+void research_render_results(std::vector<ResearchHitUi> hits, int document_count,
+                             double seconds);
+void research_toggle_pin(std::string const& path, std::string const& title,
+                         std::string const& kind, int page,
+                         std::string const& excerpt);
+void build_research_view(GtkWidget* main_stack);
 
 template <typename Fn>
 void with_api(std::string const& notice, Fn&& run) {
@@ -3374,10 +3429,15 @@ constexpr int kLeftSidebarWidth = 232;
 constexpr int kAiSidebarWidth = 400;
 
 void update_main_stack() {
-  // welcome when no documents are open; reader for active documents
+  // research (workbench) when visible; welcome when no documents are open;
+  // reader for active documents
   if (g_host.main_stack == nullptr) return;
   gint const pages = gtk_notebook_get_n_pages(g_host.notebook);
   bool const reading = pages > 0;
+  if (g_host.research_visible) {
+    gtk_stack_set_visible_child_name(GTK_STACK(g_host.main_stack), "research");
+    return;
+  }
   gtk_stack_set_visible_child_name(GTK_STACK(g_host.main_stack),
                                    reading ? "reader" : "shelf");
   bool const shelf_active = !reading;
@@ -3713,6 +3773,9 @@ void install_actions(GtkApplication* app) {
   add("toggle-sidebar", +[](GSimpleAction*, GVariant*, gpointer) {
         toggle_left_sidebar();
       }, nullptr);
+  add("research", +[](GSimpleAction*, GVariant*, gpointer) {
+    show_research();
+  }, nullptr);
   add("toggle-ai", +[](GSimpleAction*, GVariant*, gpointer) {
         toggle_ai_sidebar();
       }, nullptr);
@@ -3846,6 +3909,7 @@ void install_accels(GtkApplication* app) {
   set("app.translate-selection", {"<Primary>t"});
   set("app.toggle-sidebar", {"<Primary><Shift>l"});
   set("app.toggle-ai", {"<Primary><Shift>a"});
+  set("app.research", {"<Primary><Alt>r"});
   set("app.check-updates", {"<Primary><Shift>u"});
   set("app.bookmark-toggle", {"<Primary>b"});
   set("app.print", {"<Primary>p"});
@@ -3918,6 +3982,7 @@ void build_primary_menu() {
   auto* doc = g_menu_new();
   g_menu_append(doc, Tr("ui.menu.bookmark").c_str(), "app.bookmark-toggle");
   g_menu_append(doc, Tr("ui.menu.print").c_str(), "app.print");
+  g_menu_append(doc, Tr("ui.menu.research").c_str(), "app.research");
   g_menu_append_section(menu, nullptr, G_MENU_MODEL(doc));
   g_object_unref(doc);
 
@@ -3963,6 +4028,760 @@ void build_primary_menu() {
   g_object_unref(menu);
 }
 
+
+// ---- research workbench (design/prototype/research.html) ------------------
+// Free feature, no gating (PRICING.md 2026-11-18 owner decision). Search
+// runs host-side over the text layers each surface already owns (PDFium
+// page text, the EPUB chapter cache, on-demand extraction for not-open
+// recents). Pinned citations are `kind: "cite"` entries in the same
+// per-document annotation store, so save, recovery and export need no new
+// storage.
+
+constexpr int kResearchPerDocCap = 20;
+constexpr int kResearchTotalCap = 50;
+constexpr int kResearchExcerptBefore = 40;
+constexpr int kResearchExcerptAfter = 80;
+constexpr int kResearchRecentsDeckLimit = 8;
+
+std::string research_trim(std::string const& s) {
+    std::size_t const first = s.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return {};
+    std::size_t const last = s.find_last_not_of(" \t\r\n");
+    return s.substr(first, last - first + 1);
+}
+
+std::string research_fold(std::string text) {
+    std::transform(text.begin(), text.end(), text.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return text;
+}
+
+std::string research_kind_of(std::string const& path) {
+    return path.size() >= 5 &&
+                   path.compare(path.size() - 5, 5, ".epub") == 0
+               ? "epub"
+               : "pdf";
+}
+
+bool research_excerpt_window(std::string const& text, std::size_t at,
+                             std::size_t needle_len, std::string& excerpt,
+                             std::size_t& match_start, std::size_t& match_len) {
+    std::size_t const start = at > static_cast<std::size_t>(kResearchExcerptBefore)
+                                  ? at - kResearchExcerptBefore
+                                  : 0;
+    std::size_t const end = std::min(text.size(), at + needle_len + kResearchExcerptAfter);
+    if (end <= start) return false;
+    excerpt = text.substr(start, end - start);
+    std::size_t const first = excerpt.find_first_not_of(" \t\r\n");
+    std::size_t const last = excerpt.find_last_not_of(" \t\r\n");
+    if (first == std::string::npos) return false;
+    excerpt = excerpt.substr(first, last - first + 1);
+    std::size_t const rel = at - start;
+    match_start = rel > first ? rel - first : 0;
+    match_len = std::min(needle_len, excerpt.size() - match_start);
+    return true;
+}
+
+void research_jump_to(std::string const& path, std::string const& kind, int page) {
+    // Open documents navigate in place; not-open ones open at the source
+    // position via the existing open path (no import, original file).
+    if (g_host.epub_active() && g_host.epub != nullptr &&
+        g_host.epub->path() == path) {
+        if (page >= 1) g_host.epub->go_to_chapter(page);
+        return;
+    }
+    for (auto& tab : g_host.tabs) {
+        if (tab->path() == path) {
+            gtk_notebook_set_current_page(g_host.notebook,
+                                          gtk_notebook_page_num(
+                                              g_host.notebook, tab->widget()));
+            if (page >= 1) tab->go_to_page(page);
+            return;
+        }
+    }
+    open_path(path, std::max(page, 1));
+    update_main_stack();
+}
+
+std::string research_citation_text(std::string const& excerpt,
+                                   std::string const& title,
+                                   std::string const& kind, int page) {
+    auto const location =
+        kind == "epub"
+            ? Trf("ui.epub.chapter-n", std::to_string(page))
+            : Trf("ui.notes.page", std::to_string(page));
+    return Trf("ui.research.cite-format", title, location, excerpt);
+}
+
+void research_copy_citation(std::string const& excerpt, std::string const& title,
+                            std::string const& kind, int page) {
+    GdkClipboard* const clipboard =
+        gdk_display_get_clipboard(gdk_display_get_default());
+    gdk_clipboard_set_text(clipboard,
+                           research_citation_text(excerpt, title, kind, page).c_str());
+}
+
+// (page-or-chapter, text) units for one target — open documents read their
+// existing layers; not-open recents extract on demand (PDFium open for
+// PDFs, the chapter-text RPC for EPUBs; never a reader window).
+std::vector<std::pair<int, std::string>> research_text_units(
+    ResearchTargetUi const& target) {
+    std::vector<std::pair<int, std::string>> units;
+    for (auto& tab : g_host.tabs) {
+        if (tab->path() == target.path) {
+            int const pages = std::max(tab->document()->page_count(), 1);
+            for (int page = 1; page <= pages; ++page) {
+                auto const text = tab->page_text(page);
+                if (!text.empty()) units.emplace_back(page, text);
+            }
+            return units;
+        }
+    }
+    if (g_host.epub_active() && g_host.epub != nullptr &&
+        g_host.epub->path() == target.path) {
+        int const chapters = std::max(g_host.epub->chapters(), 1);
+        for (int chapter = 1; chapter <= chapters; ++chapter) {
+            auto const text = g_host.epub->chapter_text(chapter);
+            if (!text.empty()) units.emplace_back(chapter, text);
+        }
+        return units;
+    }
+    if (target.kind == "epub") {
+        auto* api = g_host.api.get();
+        if (api == nullptr) return units;
+        try {
+            auto const view = api->epub_open(target.path).get();
+            int const count = static_cast<int>(std::max<std::int64_t>(view.chapters, 1));
+            for (int chapter = 1; chapter <= count; ++chapter) {
+                auto const text = api->epub_chapter_text(target.path, chapter).get();
+                if (!text.empty()) units.emplace_back(chapter, text);
+            }
+        } catch (...) {
+        }
+        return units;
+    }
+    auto const doc = PdfDocument::open_file(target.path, "", nullptr);
+    if (doc == nullptr) return units;
+    for (int page = 1; page <= doc->page_count(); ++page) {
+        auto const tp = doc->text_page(page - 1);
+        if (tp == nullptr) continue;
+        auto const text = tp->text();
+        if (!text.empty()) units.emplace_back(page, text);
+    }
+    return units;
+}
+
+void research_run() {
+    auto* entry = g_host.research_query;
+    std::string const needle = research_trim(
+        entry != nullptr
+            ? gtk_entry_buffer_get_text(gtk_entry_get_buffer(entry))
+            : "");
+    research_hits.clear();
+    if (g_host.research_results != nullptr) {
+        while (auto* child = gtk_widget_get_first_child(g_host.research_results)) {
+            gtk_box_remove(GTK_BOX(g_host.research_results), child);
+        }
+    }
+    if (g_host.research_stats != nullptr) gtk_label_set_text(GTK_LABEL(g_host.research_stats), "");
+    std::vector<ResearchTargetUi> scope;
+    for (auto const& target : research_targets) {
+        if (target.selected || (target.is_open && needle.empty())) {
+            if (!needle.empty() || target.is_open) scope.push_back(target);
+        }
+    }
+    if (needle.empty() || scope.empty()) {
+        // Empty-state card (no docs / cleared query).
+        if (g_host.research_results != nullptr) {
+            auto* label = gtk_label_new(
+                Tr(research_targets.empty() ? "ui.research.no-docs-hint"
+                                            : "ui.research.no-result-hint")
+                    .c_str());
+            gtk_label_set_wrap(GTK_LABEL(label), TRUE);
+            gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
+            gtk_widget_set_margin_top(label, 48);
+            gtk_box_append(GTK_BOX(g_host.research_results), label);
+        }
+        return;
+    }
+    if (g_host.research_busy != nullptr) {
+        gtk_widget_set_visible(g_host.research_busy, TRUE);
+    }
+    auto alive = std::make_shared<bool>(true);
+    std::thread([alive, scope, needle]() mutable {
+        auto const started = std::chrono::steady_clock::now();
+        std::vector<ResearchHitUi> hits;
+        auto const folded_needle = research_fold(needle);
+        for (auto const& target : scope) {
+            if (!*alive) return;
+            auto const units = research_text_units(target);
+            int per_doc = 0;
+            for (auto const& [page, text] : units) {
+                if (per_doc >= kResearchPerDocCap ||
+                    static_cast<int>(hits.size()) >= kResearchTotalCap) {
+                    break;
+                }
+                std::string const folded = research_fold(text);
+                std::size_t at = folded.find(folded_needle);
+                while (at != std::string::npos &&
+                       per_doc < kResearchPerDocCap &&
+                       static_cast<int>(hits.size()) < kResearchTotalCap) {
+                    std::string excerpt;
+                    std::size_t match_start = 0;
+                    std::size_t match_len = 0;
+                    if (research_excerpt_window(text, at, needle.size(), excerpt,
+                                                match_start, match_len)) {
+                        hits.push_back({target.path, target.title, target.kind,
+                                        page, excerpt, match_start, match_len});
+                        ++per_doc;
+                    }
+                    if (at + needle.size() >= folded.size()) break;
+                    at = folded.find(folded_needle, at + needle.size());
+                }
+            }
+        }
+        host::dispatch_ui([alive, hits = std::move(hits), count = scope.size(),
+                           started]() mutable {
+            if (!*alive) return;
+            double const seconds = std::chrono::duration<double>(
+                                       std::chrono::steady_clock::now() - started)
+                                       .count();
+            research_render_results(std::move(hits), count, seconds);
+        });
+    }).detach();
+    (void)alive;
+}
+
+void research_render_results(std::vector<ResearchHitUi> hits, int document_count,
+                             double seconds) {
+    research_hits = std::move(hits);
+    if (g_host.research_busy != nullptr) {
+        gtk_widget_set_visible(g_host.research_busy, FALSE);
+    }
+    if (g_host.research_results != nullptr) {
+        while (auto* child = gtk_widget_get_first_child(g_host.research_results)) {
+            gtk_box_remove(GTK_BOX(g_host.research_results), child);
+        }
+    }
+    if (g_host.research_stats != nullptr) {
+        char buffer[16];
+        std::snprintf(buffer, sizeof buffer, "%.1f", seconds);
+        gtk_label_set_text(
+            GTK_LABEL(g_host.research_stats),
+            Trf("ui.research.stats", std::to_string(document_count),
+                std::to_string(static_cast<int>(research_hits.size())), buffer)
+                .c_str());
+    }
+    if (research_hits.empty()) {
+        if (g_host.research_results != nullptr) {
+            auto* label = gtk_label_new(
+                Tr(research_targets.empty() ? "ui.research.no-docs"
+                                            : "ui.research.no-result-title")
+                    .c_str());
+            gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
+            gtk_widget_set_margin_top(label, 48);
+            gtk_box_append(GTK_BOX(g_host.research_results), label);
+            auto* hint = gtk_label_new(
+                Tr(research_targets.empty() ? "ui.research.no-docs-hint"
+                                            : "ui.research.no-result-hint")
+                    .c_str());
+            gtk_label_set_wrap(GTK_LABEL(hint), TRUE);
+            gtk_widget_set_halign(hint, GTK_ALIGN_CENTER);
+            gtk_box_append(GTK_BOX(g_host.research_results), hint);
+        }
+        return;
+    }
+    // Group by document (prototype .rdoc headers) and build cards.
+    std::vector<std::string> order;
+    std::map<std::string, std::vector<ResearchHitUi>> buckets;
+    for (auto const& hit : research_hits) {
+        if (!buckets.count(hit.path)) order.push_back(hit.path);
+        buckets[hit.path].push_back(hit);
+    }
+    for (auto const& path : order) {
+        auto const& group = buckets[path];
+        auto* header = gtk_label_new(
+            Trf("ui.research.hits", group.front().title,
+                std::to_string(static_cast<int>(group.size())))
+                .c_str());
+        gtk_widget_set_halign(header, GTK_ALIGN_START);
+        gtk_widget_add_css_class(header, "caption");
+        gtk_widget_add_css_class(header, "dim-label");
+        gtk_widget_set_margin_top(header, 10);
+        gtk_box_append(GTK_BOX(g_host.research_results), header);
+        for (auto const& hit : group) {
+            auto* card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+            gtk_widget_add_css_class(card, "card");
+            gtk_widget_set_margin_top(card, 2);
+            auto* excerpt = gtk_label_new(hit.excerpt.c_str());
+            gtk_label_set_wrap(GTK_LABEL(excerpt), TRUE);
+            gtk_label_set_xalign(GTK_LABEL(excerpt), 0.0f);
+            gtk_box_append(GTK_BOX(card), excerpt);
+            auto* row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+            auto const location =
+                hit.kind == "epub"
+                    ? Trf("ui.epub.chapter-n", std::to_string(hit.page))
+                    : Trf("ui.notes.page", std::to_string(hit.page));
+            auto* chip = gtk_button_new_with_label(
+                (hit.title + " · " + location).c_str());
+                gtk_widget_add_css_class(chip, "flat");
+                gtk_widget_add_css_class(chip, "caption");
+            auto* hit_copy = new ResearchHitUi(hit);
+            g_object_set_data_full(G_OBJECT(chip), "hit", hit_copy,
+                                   [](gpointer p) { delete static_cast<ResearchHitUi*>(p); });
+            hook(
+                chip, "clicked",
+                +[](GtkButton*, gpointer p) {
+                    auto* hit = static_cast<ResearchHitUi*>(p);
+                    research_jump_to(hit->path, hit->kind, hit->page);
+                },
+                hit_copy);
+            gtk_box_append(GTK_BOX(row), chip);
+            auto* jump = gtk_button_new_with_label(Tr("ui.research.jump").c_str());
+            gtk_widget_add_css_class(jump, "flat");
+            gtk_widget_add_css_class(jump, "caption");
+            hook(
+                jump, "clicked",
+                +[](GtkButton*, gpointer p) {
+                    auto* hit = static_cast<ResearchHitUi*>(p);
+                    research_jump_to(hit->path, hit->kind, hit->page);
+                },
+                hit_copy);
+            gtk_box_append(GTK_BOX(row), jump);
+            bool const pinned = std::any_of(
+                research_cites.begin(), research_cites.end(),
+                [&](ResearchCiteUi const& c) {
+                    return c.path == hit.path && c.page == hit.page &&
+                           c.excerpt == hit.excerpt;
+                });
+            auto* pin = gtk_button_new_with_label(
+                Tr(pinned ? "ui.research.pinned" : "ui.research.pin").c_str());
+            gtk_widget_add_css_class(pin, "flat");
+            gtk_widget_add_css_class(pin, "caption");
+            if (pinned) gtk_widget_add_css_class(pin, "accent");
+            hook(
+                pin, "clicked",
+                +[](GtkButton*, gpointer p) {
+                    auto* hit = static_cast<ResearchHitUi*>(p);
+                    research_toggle_pin(hit->path, hit->title, hit->kind,
+                                        hit->page, hit->excerpt);
+                },
+                hit_copy);
+            gtk_box_append(GTK_BOX(row), pin);
+            gtk_box_append(GTK_BOX(card), row);
+            gtk_box_append(GTK_BOX(g_host.research_results), card);
+        }
+    }
+}
+
+void research_refresh_scope() {
+    research_targets.clear();
+    for (auto& tab : g_host.tabs) {
+        research_targets.push_back(
+            {tab->path(), tab->title(), "pdf", true, true});
+    }
+    if (g_host.epub_active() && g_host.epub != nullptr) {
+        research_targets.push_back(
+            {g_host.epub->path(), g_host.epub->title(), "epub", true, true});
+    }
+    for (auto const& recent : g_host.recents) {
+        bool const open = std::any_of(
+            research_targets.begin(), research_targets.end(),
+            [&](ResearchTargetUi const& t) { return t.path == recent.path; });
+        if (!open) {
+            research_targets.push_back(
+                {recent.path, path_title(recent.path),
+                 research_kind_of(recent.path), false, false});
+        }
+    }
+    if (g_host.research_opened_list != nullptr) {
+        while (auto* child = gtk_widget_get_first_child(g_host.research_opened_list)) {
+            gtk_box_remove(GTK_BOX(g_host.research_opened_list), child);
+        }
+        for (auto const& target : research_targets) {
+            if (!target.is_open) continue;
+            auto* row = gtk_label_new((std::string("✓  ") + target.title).c_str());
+            gtk_label_set_xalign(GTK_LABEL(row), 0.0f);
+            gtk_widget_add_css_class(row, "caption");
+            gtk_widget_set_margin_start(row, 10);
+            gtk_box_append(GTK_BOX(g_host.research_opened_list), row);
+        }
+    }
+    if (g_host.research_recents_list != nullptr) {
+        while (auto* child = gtk_widget_get_first_child(g_host.research_recents_list)) {
+            gtk_box_remove(GTK_BOX(g_host.research_recents_list), child);
+        }
+        for (auto const& target : research_targets) {
+            if (target.is_open) continue;
+            auto* row = gtk_button_new_with_label(
+                (std::string(target.selected ? "✓  " : "＋  ") + target.title)
+                    .c_str());
+            gtk_widget_add_css_class(row, "flat");
+            gtk_widget_add_css_class(row, "caption");
+            gtk_label_set_xalign(GTK_LABEL(gtk_button_get_child(GTK_BUTTON(row))), 0.0f);
+            auto* target_copy = new ResearchTargetUi(target);
+            g_object_set_data_full(G_OBJECT(row), "target", target_copy,
+                                   [](gpointer p) { delete static_cast<ResearchTargetUi*>(p); });
+            hook(
+                row, "clicked",
+                +[](GtkButton*, gpointer p) {
+                    auto* target = static_cast<ResearchTargetUi*>(p);
+                    for (auto& t : research_targets) {
+                        if (t.path == target->path && !t.is_open) {
+                            t.selected = !t.selected;
+                        }
+                    }
+                    research_refresh_scope();
+                },
+                target_copy);
+            gtk_box_append(GTK_BOX(g_host.research_recents_list), row);
+        }
+    }
+}
+
+void research_render_deck(std::vector<ResearchCiteUi> cites) {
+    research_cites = std::move(cites);
+    if (g_host.research_deck_pane != nullptr) {
+        gtk_widget_set_visible(g_host.research_deck_pane,
+                               !research_cites.empty());
+    }
+    if (g_host.research_deck_count != nullptr) {
+        gtk_label_set_text(
+            GTK_LABEL(g_host.research_deck_count),
+            Trf("ui.research.deck-count",
+                std::to_string(static_cast<int>(research_cites.size())))
+                .c_str());
+    }
+    if (g_host.research_deck_list == nullptr) return;
+    while (auto* child = gtk_widget_get_first_child(g_host.research_deck_list)) {
+        gtk_box_remove(GTK_BOX(g_host.research_deck_list), child);
+    }
+    for (auto const& cite : research_cites) {
+        auto* card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+        gtk_widget_add_css_class(card, "card");
+        auto* quote = gtk_label_new(("「" + cite.excerpt + "」").c_str());
+        gtk_label_set_wrap(GTK_LABEL(quote), TRUE);
+        gtk_label_set_xalign(GTK_LABEL(quote), 0.0f);
+        gtk_box_append(GTK_BOX(card), quote);
+        auto const location =
+            cite.kind == "epub"
+                ? Trf("ui.epub.chapter-n", std::to_string(cite.page))
+                : Trf("ui.notes.page", std::to_string(cite.page));
+        auto* row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+        auto* source = gtk_label_new(("《" + cite.title + "》· " + location).c_str());
+        gtk_label_set_xalign(GTK_LABEL(source), 0.0f);
+        gtk_label_set_ellipsize(GTK_LABEL(source), PANGO_ELLIPSIZE_END);
+        gtk_widget_add_css_class(source, "caption");
+        gtk_widget_set_hexpand(source, TRUE);
+        gtk_box_append(GTK_BOX(row), source);
+        auto* jump = gtk_button_new_with_label(Tr("ui.research.jump-back").c_str());
+        gtk_widget_add_css_class(jump, "flat");
+        gtk_widget_add_css_class(jump, "caption");
+        auto* cite_copy = new ResearchCiteUi(cite);
+        g_object_set_data_full(G_OBJECT(jump), "cite", cite_copy,
+                               [](gpointer p) { delete static_cast<ResearchCiteUi*>(p); });
+        hook(
+                jump, "clicked",
+                +[](GtkButton*, gpointer p) {
+                auto* cite = static_cast<ResearchCiteUi*>(p);
+                research_jump_to(cite->path, cite->kind, cite->page);
+            },
+                cite_copy);
+        gtk_box_append(GTK_BOX(row), jump);
+        gtk_box_append(GTK_BOX(card), row);
+        if (!cite.note.empty()) {
+            auto* note = gtk_label_new(cite.note.c_str());
+            gtk_label_set_wrap(GTK_LABEL(note), TRUE);
+            gtk_label_set_xalign(GTK_LABEL(note), 0.0f);
+            gtk_widget_add_css_class(note, "caption");
+            gtk_widget_add_css_class(note, "dim-label");
+            gtk_box_append(GTK_BOX(card), note);
+        }
+        gtk_box_append(GTK_BOX(g_host.research_deck_list), card);
+    }
+}
+
+void research_refresh_deck() {
+    std::vector<ResearchCiteUi> cites;
+    for (auto& tab : g_host.tabs) {
+        for (auto const& annotation : tab->doc_data().annotations) {
+            if (annotation.kind != "cite") continue;
+            cites.push_back({tab->path(), tab->title(), "pdf", annotation.page,
+                             annotation.excerpt, annotation.note, annotation.id});
+        }
+    }
+    if (g_host.epub_active() && g_host.epub != nullptr) {
+        for (auto const& annotation : g_host.epub->doc_data().annotations) {
+            if (annotation.kind != "cite") continue;
+            cites.push_back({g_host.epub->path(), g_host.epub->title(), "epub",
+                             annotation.page, annotation.excerpt,
+                             annotation.note, annotation.id});
+        }
+    }
+    auto alive = std::make_shared<bool>(true);
+    auto api = g_host.api.get();
+    auto const sidecar = g_host.panel_ctx.settings.annotation_sidecar;
+    std::vector<rivet_app::RecentEntry> recents;
+    for (auto const& recent : g_host.recents) {
+        bool const open = std::any_of(
+            cites.begin(), cites.end(),
+            [&](ResearchCiteUi const& c) { return c.path == recent.path; });
+        if (!open) recents.push_back(recent);
+    }
+    std::thread([alive, api, sidecar, recents, cites]() mutable {
+        int read = 0;
+        for (auto const& recent : recents) {
+            if (!*alive || read >= kResearchRecentsDeckLimit ||
+                static_cast<int>(cites.size()) >= kResearchTotalCap) {
+                break;
+            }
+            ++read;
+            if (api == nullptr) break;
+            try {
+                auto const bytes = api->get_annotations(recent.path, sidecar).get();
+                auto const doc = pdfgist::parse_doc_data(bytes);
+                auto const title = path_title(recent.path);
+                auto const kind = research_kind_of(recent.path);
+                for (auto const& annotation : doc.annotations) {
+                    if (annotation.kind != "cite") continue;
+                    cites.push_back({recent.path, title, kind, annotation.page,
+                                     annotation.excerpt, annotation.note,
+                                     annotation.id});
+                }
+            } catch (...) {
+            }
+        }
+        host::dispatch_ui([alive, cites = std::move(cites)]() mutable {
+            if (!*alive) return;
+            research_render_deck(std::move(cites));
+        });
+    }).detach();
+}
+
+void research_toggle_pin(std::string const& path, std::string const& title,
+                         std::string const& kind, int page,
+                         std::string const& excerpt) {
+    // Unpin when an identical cite already exists.
+    auto existing = std::find_if(
+        research_cites.begin(), research_cites.end(),
+        [&](ResearchCiteUi const& c) {
+            return c.path == path && c.page == page && c.excerpt == excerpt;
+        });
+    StoredAnnotation annotation;
+    annotation.id = "c-" + std::to_string(static_cast<long long>(std::time(nullptr))) +
+                    "-" + std::to_string(std::rand() % 10000);
+    annotation.page = page;
+    annotation.excerpt = excerpt;
+    annotation.color = "";
+    annotation.kind = "cite";
+    annotation.created = static_cast<std::int64_t>(std::time(nullptr));
+    if (existing != research_cites.end()) {
+        annotation.id = existing->anno_id;
+    }
+    // Open documents mutate the live store (persisted through the
+    // on_annotations_changed hook); not-open ones rewrite via the RPC.
+    if (g_host.epub_active() && g_host.epub != nullptr &&
+        g_host.epub->path() == path) {
+        if (existing != research_cites.end()) {
+            g_host.epub->remove_annotation(annotation.id);
+        } else {
+            g_host.epub->add_annotation(annotation);
+        }
+        research_refresh_deck();
+        return;
+    }
+    for (auto& tab : g_host.tabs) {
+        if (tab->path() == path) {
+            auto data = tab->doc_data();
+            if (existing != research_cites.end()) {
+                data.annotations.erase(
+                    std::remove_if(data.annotations.begin(), data.annotations.end(),
+                                   [&](StoredAnnotation const& a) {
+                                       return a.id == annotation.id;
+                                   }),
+                    data.annotations.end());
+            } else {
+                data.annotations.push_back(annotation);
+            }
+            tab->set_doc_data(std::move(data));
+            research_refresh_deck();
+            return;
+        }
+    }
+    auto* api = g_host.api.get();
+    if (api == nullptr) return;
+    auto const sidecar = g_host.panel_ctx.settings.annotation_sidecar;
+    std::thread([api, sidecar, path, annotation, existing_at_end =
+                                               existing != research_cites.end()]() mutable {
+        try {
+            auto const bytes = api->get_annotations(path, sidecar).get();
+            auto doc = pdfgist::parse_doc_data(bytes);
+            if (existing_at_end) {
+                doc.annotations.erase(
+                    std::remove_if(doc.annotations.begin(), doc.annotations.end(),
+                                   [&](StoredAnnotation const& a) {
+                                       return a.id == annotation.id;
+                                   }),
+                    doc.annotations.end());
+            } else {
+                doc.annotations.push_back(annotation);
+            }
+            auto const encoded = pdfgist::encode_doc_data(doc);
+            (void)api->set_annotations(path, sidecar, encoded).get();
+        } catch (...) {
+        }
+        host::dispatch_ui([] { research_refresh_deck(); });
+    }).detach();
+}
+
+void show_research() {
+    research_refresh_scope();
+    research_refresh_deck();
+    research_run();
+    g_host.research_visible = true;
+    update_main_stack();
+    gtk_stack_set_visible_child_name(GTK_STACK(g_host.main_stack), "research");
+    if (g_host.title_label != nullptr) {
+        gtk_label_set_text(g_host.title_label, Tr("ui.research.title").c_str());
+    }
+    if (g_host.subtitle_label != nullptr) {
+        gtk_label_set_text(g_host.subtitle_label,
+                           Tr("ui.research.subtitle").c_str());
+    }
+}
+
+void build_research_view(GtkWidget* main_stack) {
+    auto* view = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    g_host.research_view = view;
+
+    // scope column (232)
+    auto* scope = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    gtk_widget_set_size_request(scope, 232, -1);
+    gtk_widget_set_margin_top(scope, 14);
+    auto* scope_title = gtk_label_new(Tr("ui.research.scope").c_str());
+    gtk_label_set_xalign(GTK_LABEL(scope_title), 0.0f);
+    gtk_widget_add_css_class(scope_title, "caption");
+    gtk_widget_add_css_class(scope_title, "dim-label");
+    gtk_widget_set_margin_start(scope_title, 16);
+    gtk_box_append(GTK_BOX(scope), scope_title);
+    auto* opened_title = gtk_label_new(nullptr);
+    gtk_label_set_xalign(GTK_LABEL(opened_title), 0.0f);
+    gtk_widget_set_margin_start(opened_title, 16);
+    gtk_box_append(GTK_BOX(scope), opened_title);
+    g_host.research_opened_list = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_box_append(GTK_BOX(scope), g_host.research_opened_list);
+    auto* recents_title = gtk_label_new(Tr("ui.research.recent-docs").c_str());
+    gtk_label_set_xalign(GTK_LABEL(recents_title), 0.0f);
+    gtk_widget_add_css_class(recents_title, "caption");
+    gtk_widget_add_css_class(recents_title, "dim-label");
+    gtk_widget_set_margin_start(recents_title, 16);
+    gtk_widget_set_margin_top(recents_title, 8);
+    gtk_box_append(GTK_BOX(scope), recents_title);
+    g_host.research_recents_list = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_box_append(GTK_BOX(scope), g_host.research_recents_list);
+    auto* scope_footer = gtk_label_new(Tr("ui.research.footer").c_str());
+    gtk_label_set_wrap(GTK_LABEL(scope_footer), TRUE);
+    gtk_label_set_xalign(GTK_LABEL(scope_footer), 0.0f);
+    gtk_widget_add_css_class(scope_footer, "caption");
+    gtk_widget_add_css_class(scope_footer, "dim-label");
+    gtk_widget_set_margin_start(scope_footer, 16);
+    gtk_widget_set_margin_end(scope_footer, 12);
+    gtk_widget_set_valign(scope_footer, GTK_ALIGN_END);
+    gtk_widget_set_vexpand(scope_footer, TRUE);
+    gtk_box_append(GTK_BOX(scope), scope_footer);
+    gtk_box_append(GTK_BOX(view), scope);
+
+    // main column
+    auto* main = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_hexpand(main, TRUE);
+    auto* head = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    gtk_widget_set_margin_top(head, 14);
+    gtk_widget_set_margin_bottom(head, 10);
+    gtk_widget_set_margin_start(head, 20);
+    gtk_widget_set_margin_end(head, 20);
+    auto* query = gtk_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(query),
+                                   Tr("ui.research.query-placeholder").c_str());
+    gtk_widget_set_hexpand(query, TRUE);
+    gtk_widget_set_halign(query, GTK_ALIGN_FILL);
+    g_host.research_query = GTK_ENTRY(query);
+    gtk_box_append(GTK_BOX(head), query);
+    hook(
+        query, "activate",
+        +[](GtkEntry*, gpointer) { research_run(); },
+        nullptr);
+    auto* search = gtk_button_new_with_label(Tr("ui.research.search").c_str());
+    gtk_widget_add_css_class(search, "suggested-action");
+    hook(
+        search, "clicked",
+        +[](GtkButton*, gpointer) { research_run(); },
+        nullptr);
+    gtk_box_append(GTK_BOX(head), search);
+    gtk_box_append(GTK_BOX(main), head);
+
+    g_host.research_busy = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_widget_set_visible(g_host.research_busy, FALSE);
+    gtk_widget_set_margin_start(g_host.research_busy, 20);
+    gtk_widget_set_margin_bottom(g_host.research_busy, 8);
+    auto* busy_spin = gtk_spinner_new();
+    gtk_spinner_start(GTK_SPINNER(busy_spin));
+    gtk_box_append(GTK_BOX(g_host.research_busy), busy_spin);
+    auto* busy_label = gtk_label_new(Tr("ui.research.searching").c_str());
+    gtk_widget_add_css_class(busy_label, "caption");
+    gtk_box_append(GTK_BOX(g_host.research_busy), busy_label);
+    gtk_box_append(GTK_BOX(main), g_host.research_busy);
+
+    auto* results_scroll = gtk_scrolled_window_new();
+    gtk_widget_set_vexpand(results_scroll, TRUE);
+    g_host.research_results = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_set_margin_start(g_host.research_results, 20);
+    gtk_widget_set_margin_end(g_host.research_results, 20);
+    gtk_widget_set_margin_bottom(g_host.research_results, 16);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(results_scroll),
+                                  g_host.research_results);
+    gtk_box_append(GTK_BOX(main), results_scroll);
+    gtk_box_append(GTK_BOX(view), main);
+
+    // citation deck column (288, hidden while empty)
+    auto* deck = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    g_host.research_deck_pane = deck;
+    gtk_widget_set_size_request(deck, 288, -1);
+    gtk_widget_set_visible(deck, FALSE);
+    auto* deck_head = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_widget_set_margin_top(deck_head, 12);
+    gtk_widget_set_margin_start(deck_head, 14);
+    gtk_widget_set_margin_end(deck_head, 14);
+    auto* deck_title = gtk_label_new(Tr("ui.research.deck").c_str());
+    gtk_label_set_xalign(GTK_LABEL(deck_title), 0.0f);
+    gtk_widget_add_css_class(deck_title, "heading");
+    gtk_widget_set_hexpand(deck_title, TRUE);
+    gtk_box_append(GTK_BOX(deck_head), deck_title);
+    g_host.research_deck_count = gtk_label_new(nullptr);
+    gtk_widget_add_css_class(g_host.research_deck_count, "caption");
+    gtk_box_append(GTK_BOX(deck_head), g_host.research_deck_count);
+    gtk_box_append(GTK_BOX(deck), deck_head);
+    auto* deck_footer = gtk_label_new(Tr("ui.research.deck-footer").c_str());
+    gtk_label_set_xalign(GTK_LABEL(deck_footer), 0.0f);
+    gtk_widget_add_css_class(deck_footer, "caption");
+    gtk_widget_add_css_class(deck_footer, "dim-label");
+    gtk_widget_set_margin_start(deck_footer, 14);
+    gtk_widget_set_margin_end(deck_footer, 14);
+    gtk_box_append(GTK_BOX(deck), deck_footer);
+    auto* deck_scroll = gtk_scrolled_window_new();
+    gtk_widget_set_vexpand(deck_scroll, TRUE);
+    g_host.research_deck_list = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_set_margin_top(g_host.research_deck_list, 4);
+    gtk_widget_set_margin_start(g_host.research_deck_list, 12);
+    gtk_widget_set_margin_end(g_host.research_deck_list, 12);
+    gtk_widget_set_margin_bottom(g_host.research_deck_list, 12);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(deck_scroll),
+                                  g_host.research_deck_list);
+    gtk_box_append(GTK_BOX(deck), deck_scroll);
+    gtk_box_append(GTK_BOX(view), deck);
+
+    gtk_stack_add_named(GTK_STACK(main_stack), view, "research");
+}
+
 void build_page_edit_menu(GtkMenuButton* button) {
   auto* menu = g_menu_new();
   auto* section = g_menu_new();
@@ -3978,6 +4797,7 @@ void build_page_edit_menu(GtkMenuButton* button) {
   g_object_unref(section2);
   // tools (mac Tools menu parity: watermark, then the two exports)
   auto* tools = g_menu_new();
+  g_menu_append(tools, Tr("ui.menu.research").c_str(), "app.research");
   g_menu_append(tools, Tr("ui.tools.watermark").c_str(), "app.tools-watermark");
   g_menu_append(tools, (Tr("ui.dialog.save") + " PDF…").c_str(),
                 "app.tools-save-pdf");
@@ -4670,6 +5490,9 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_paned_set_position(GTK_PANED(outer), kLeftSidebarWidth);
   gtk_box_append(GTK_BOX(reader), outer);
   gtk_stack_add_named(GTK_STACK(main_stack), reader, "reader");
+  // 研究工作台（design/prototype/research.html）：跨书检索 + 可溯源引用
+  // 集。免费功能，无 gating（PRICING.md 2026-11-18 owner 决策）。
+  build_research_view(main_stack);
 
   // status bar
   auto* status = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
