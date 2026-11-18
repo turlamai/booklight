@@ -121,6 +121,7 @@
     <ClCompile Include="App.xaml.cpp"><DependentUpon>App.xaml</DependentUpon></ClCompile>
     <ClCompile Include="MainWindow.xaml.cpp"><DependentUpon>MainWindow.xaml</DependentUpon></ClCompile>
     <ClCompile Include="MainWindow.Ai.cpp" />
+    <ClCompile Include="MainWindow.Research.cpp" />
     <ClCompile Include="MainWindow.Settings.cpp" />
     <ClCompile Include="MainWindow.Epub.cpp" />
     <ClCompile Include="MainWindow.Pages.cpp" />
