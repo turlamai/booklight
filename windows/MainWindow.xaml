@@ -245,7 +245,11 @@
                                     Click="ResearchSearch_Click" Style="{ThemeResource AccentButtonStyle}" />
                         </Grid>
                         <InfoBar Grid.Row="1" x:Name="ResearchBusyBar" IsOpen="False" IsClosable="False"
-                                 IsIndeterminate="True" Severity="Informational" Margin="20,0,20,8" />
+                                 Severity="Informational" Margin="20,0,20,8">
+                            <InfoBar.Content>
+                                <ProgressBar IsIndeterminate="True" Height="4" MinWidth="240" />
+                            </InfoBar.Content>
+                        </InfoBar>
                         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
                             <StackPanel x:Name="ResearchResults" Margin="20,4,20,16" Spacing="8" />
                         </ScrollViewer>
