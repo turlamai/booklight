@@ -200,10 +200,12 @@ final class EpubTab: ObservableObject, Identifiable {
     }
 
     /// (Re)inject every stored annotation into the page (no-op until the
-    /// page finished loading).
+    /// page finished loading). Citation-deck entries (kind "cite") carry no
+    /// ink — they are deck records, never page marks.
     func applyAnnotationsScript() {
         guard loaded else { return }
-        guard let data = try? JSONEncoder().encode(docData),
+        let visible = docData.annotations.filter { $0.kind != "cite" }
+        guard let data = try? JSONEncoder().encode(["annotations": visible]),
               let json = String(data: data, encoding: .utf8) else { return }
         webView.evaluateJavaScript(
             "const d = JSON.parse(\(Self.jsString(json))); applyEpubAnnotations(d.annotations);",
