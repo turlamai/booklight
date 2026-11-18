@@ -7,9 +7,9 @@
 - 行为边界与跨平台一致性以 `design/DESIGN.md` 的不变式与平台差异节为准。
 - 改界面先改原型再改实现（tlai-prototype-flow）；动共享层（design/、shared/）先 issue 声明，同 commit 落契约。
 
-## Authorization decision before implementation
+## Current owner decision — 2026-11-18 quality-first
 
-Decision `2026-10-auth-1`: Offline perpetual entitlement plus a bounded update/feature window; no activation lease or device cap. Read the complete [local authorization decision](PRICING.md#authorization-decision-for-implementation) and its Chinese counterpart before commercial, trial, update-eligibility or credential work. Record this decision revision and the source/policy SHAs actually read in the PR/handoff. Refresh at each bounded slice; existing agent conversations do not receive this change automatically. Follow the existing product contract and implementation issue; do not activate a payment gate merely because a plan exists.
+This is a **non-commercial development product**. The previous 2026-10 authorization, pricing, trial, Pro and Permit/Commerce rollout decisions are canceled. Do not implement or restore checkout, activation, subscription, paid feature gates, trial expiry or update-entitlement windows. Keep source licenses, release-signature verification, privacy protections and tested data migration intact. Focus only on real product functionality, native platform parity, recovery, clear bilingual READMEs and honest website status. Read the [current family policy](https://github.com/turlamai/turlamai.github.io/blob/master/PORTFOLIO.md) before every development slice.
 
 指引给 AI agent（及开发者）：如何理解、构建、运行、改动 Booklight。
 
@@ -92,7 +92,7 @@ raco rivet acceptance --json # 当前平台的打包产品验收
 - **P0**：批注保存/重试/恢复、PDF 轻编辑与明确导出，错误时不覆写原件。对只读文件和不存在路径给出真实错误。
 - **P1**：AI 发送范围可预览/取消，密钥安全、无隐式网络上传。
 - **P1**：所有平台真实打包验收；测试和文档与 file-first 设计一致。
-- **不做**：书库/收藏集/封面管理、阅读时长/目标/连读统计、商业收费墙与任何 license/checkout/telemetry。研究工作台按 [PRICING.md 2026-11-18 owner 决策](PRICING.md#decision-2026-11-18-research-workbench-ships-as-a-free-feature-owner-decision-issue-57) 作为**无 gating 的免费功能**实现（issue #56/#57）；付费形态仍被否决，另需新 owner 决策。
+- 研究工作台保持可用的非收费功能方向；以现有功能 Issue 与实际验收为准。
 - 旧 `library-*` RPC 只为生成客户端临时兼容，不能写数据；新的 schema 迁移应在三端客户端同步完成并经正式验收后移除。旧 `library.json` 与用户文件不可自动删除。
 - [Issue #20](https://github.com/turlamai/booklight/issues/20) 继续承载批注与 AI 的保存/隐私质量问题；此 PR 的方向与旧“书架保留”决策冲突时，以 2026-10-29 文件优先决策为准。
 
