@@ -4160,7 +4160,7 @@ std::vector<std::pair<int, std::string>> research_text_units(
         }
         return units;
     }
-    auto const doc = PdfDocument::open_file(target.path, "");
+    auto const doc = PdfDocument::open_file(target.path, "", nullptr);
     if (doc == nullptr) return units;
     for (int page = 1; page <= doc->page_count(); ++page) {
         auto const tp = doc->text_page(page - 1);
