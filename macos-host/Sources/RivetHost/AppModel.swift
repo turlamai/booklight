@@ -142,6 +142,14 @@ final class AppModel: ObservableObject {
         liveReaders.compactMap { $0.value }.first { $0.pdfEditsPending }
     }
 
+    /// Live readers for cross-window surfaces (the research workbench's
+    /// scope list and citation deck).
+    var openReaders: [ReaderModel] { liveReaders.compactMap { $0.value } }
+
+    func reader(atPath path: String) -> ReaderModel? {
+        openReaders.first { $0.documentPath == path }
+    }
+
     func flushAnnotationsBeforeTermination() async {
         let readers = liveReaders.compactMap { $0.value }
         for reader in readers {

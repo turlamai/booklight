@@ -101,6 +101,16 @@ struct PDFGistApp: App {
         .windowToolbarStyle(.unified)
         .commands { AppCommands(app: app) }
 
+        // 研究工作台（design/prototype/research.html）：单实例窗口，
+        // 跨书检索 + 可溯源引用集。免费功能，无 gating（PRICING.md
+        // 2026-11-18 owner 决策）。
+        Window(Text(verbatim: L10n.t("ui.research.title")), id: "research") {
+            ResearchWindowView()
+                .environmentObject(app)
+                .frame(minWidth: 980, minHeight: 600)
+        }
+        .windowToolbarStyle(.unified)
+
         Settings {
             SettingsSceneView()
                 .environmentObject(app)
@@ -112,6 +122,7 @@ struct PDFGistApp: App {
 /// Edit (find), View (display modes, zoom, bookmark), Go (pages).
 struct AppCommands: Commands {
     let app: AppModel
+    @Environment(\.openWindow) private var environmentOpenWindow
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
@@ -242,6 +253,11 @@ struct AppCommands: Commands {
             Button(L10n.t("ui.menu.fill-forms")) {
                 HostActions.showForms?()
             }
+            Divider()
+            Button(L10n.t("ui.menu.research")) {
+                environmentOpenWindow(id: "research")
+            }
+            .keyboardShortcut("r", modifiers: [.command, .option])
         }
     }
 

@@ -925,6 +925,51 @@ final class ReaderModel: ObservableObject {
         }
     }
 
+    // MARK: citation deck (research workbench)
+
+    /// Append a `cite` annotation — excerpt + source page/chapter, no ink —
+    /// to this document's store and queue the save. The deck lives in the
+    /// same per-document annotations as every other annotation kind.
+    @discardableResult
+    func addCitation(page: Int, excerpt: String) -> StoredAnnotation? {
+        let id = String(format: "c-%lld-%04d",
+                        Int(Date().timeIntervalSince1970),
+                        Int.random(in: 0..<10_000))
+        let annotation = StoredAnnotation(
+            id: id, page: page, rects: [], excerpt: excerpt, color: "",
+            kind: "cite", note: "", created: Int(Date().timeIntervalSince1970))
+        if let epub = epub {
+            epub.docData.annotations.append(annotation)
+            epub.queueAnnotationSave()
+        } else if let tab = pdf {
+            tab.docData.annotations.append(annotation)
+            queueAnnotationSave(tab)
+        } else {
+            return nil
+        }
+        return annotation
+    }
+
+    /// Remove a pinned citation without the reader's one-step undo banner
+    /// (the deck is the surface that manages these).
+    func removeCitation(id: String) {
+        if let epub = epub {
+            epub.docData.annotations.removeAll { $0.id == id }
+            epub.queueAnnotationSave()
+        } else if let tab = pdf {
+            tab.docData.annotations.removeAll { $0.id == id }
+            queueAnnotationSave(tab)
+        }
+    }
+
+    /// Citation-deck entries (kind "cite") in this document's store.
+    var citeAnnotations: [StoredAnnotation] {
+        if let epub = epub {
+            return epub.docData.annotations.filter { $0.kind == "cite" }
+        }
+        return pdf?.docData.annotations.filter { $0.kind == "cite" } ?? []
+    }
+
     /// EPUB digest export (same RPC; page ordinal = chapter).
     func exportEpubAnnotations() {
         guard let epub = epub else { return }
