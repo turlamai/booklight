@@ -6,6 +6,7 @@
 #include "PdfDocument.h"
 
 #include <array>
+#include <chrono>
 #include <functional>
 #include <map>
 #include <optional>
@@ -23,6 +24,34 @@ std::string to_utf8(std::wstring_view wide);
 struct PdfTab;
 struct EpubBook;
 struct StreamCardUi;
+
+// ---- research workbench (design/prototype/research.html) ------------------
+// Free feature, no gating (PRICING.md 2026-11-18 owner decision).
+struct ResearchTargetUi {
+    std::wstring path;
+    std::wstring title;
+    std::wstring kind;  // L"pdf" | L"epub"
+    bool is_open = false;
+    bool selected = false;
+};
+struct ResearchHitUi {
+    std::wstring path;
+    std::wstring title;
+    std::wstring kind;
+    int page = 0;  // 1-based page, chapter ordinal for EPUBs
+    std::wstring excerpt;
+    std::size_t match_start = 0;
+    std::size_t match_len = 0;
+};
+struct ResearchCiteUi {
+    std::wstring path;
+    std::wstring title;
+    std::wstring kind;
+    int page = 0;
+    std::wstring excerpt;
+    std::wstring note;
+    std::wstring anno_id;
+};
 
 // PdfDocument::FormField is a nested type; host code spells it FormField.
 using FormField = pdfgist::PdfDocument::FormField;
@@ -270,6 +299,12 @@ struct MainWindow : MainWindowT<MainWindow> {
                        winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void FitWidth_Click(winrt::Windows::Foundation::IInspectable const&,
                       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void ToolsResearch_Click(winrt::Windows::Foundation::IInspectable const&,
+                           winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void ResearchQuery_KeyDown(winrt::Windows::Foundation::IInspectable const&,
+                             winrt::Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const&);
+  void ResearchSearch_Click(winrt::Windows::Foundation::IInspectable const&,
+                            winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void PendingSave_Click(winrt::Windows::Foundation::IInspectable const&,
                          winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void PendingDiscard_Click(winrt::Windows::Foundation::IInspectable const&,
@@ -501,6 +536,41 @@ struct MainWindow : MainWindowT<MainWindow> {
   void NavigateToEpubController(
       std::shared_ptr<EpubBook> book,
       std::vector<std::pair<int, std::wstring>> const& sections);
+  // ---- research workbench (MainWindow.Research.cpp) ----
+  void ShowResearch();
+  void HideResearch();
+  void BuildResearchScope();
+  void BuildResearchScopeList(
+      winrt::Microsoft::UI::Xaml::Controls::StackPanel const& host, bool recents);
+  void ToggleResearchScope(std::wstring const& path);
+  void RunResearchSearch();
+  std::vector<std::pair<int, std::wstring>> ResearchTextUnits(
+      ResearchTargetUi const& target);
+  void RenderResearchResults(
+      std::vector<ResearchHitUi> hits, int document_count,
+      std::chrono::steady_clock::time_point started);
+  winrt::Microsoft::UI::Xaml::Controls::Border BuildResearchCard(
+      ResearchHitUi const& hit);
+  winrt::Microsoft::UI::Xaml::Controls::Button research_card_button(
+      std::wstring const& key, bool emphasized, std::function<void()> action);
+  bool any_research_scope() const;
+  void RenderResearchEmpty(bool searched);
+  void RefreshResearchDeck();
+  void RenderResearchDeck(std::vector<ResearchCiteUi> cites);
+  bool research_cite_pinned(ResearchHitUi const& hit) const;
+  void ToggleResearchPin(ResearchHitUi const& hit);
+  void PinResearchHit(ResearchHitUi const& hit);
+  void UnpinResearchCite(ResearchCiteUi const& cite);
+  void CopyResearchCitation(ResearchHitUi const& hit);
+  void CopyResearchCitation(ResearchCiteUi const& cite);
+  void CopyResearchCitation(std::wstring const& excerpt,
+                            std::wstring const& title,
+                            std::wstring const& kind, int page);
+  void JumpToResearchHit(ResearchHitUi const& hit);
+  void JumpToResearchSource(std::wstring const& path,
+                            std::wstring const& kind, int page);
+  std::shared_ptr<PdfTab> pdf_tab_by_path(std::wstring const& path);
+
   void OnEpubWebMessage(
       EpubBook& book,
       winrt::Microsoft::Web::WebView2::Core::CoreWebView2WebMessageReceivedEventArgs const& args);
@@ -588,6 +658,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   bool left_visible_ = false;
   int left_mode_ = 0;  // 0 thumbnails / 1 outline / 2 notes / 3 forms
   bool ai_visible_ = false;  // reading canvas first; user pref may override
+  // 研究工作台状态（design/prototype/research.html）。
+  bool research_visible_ = false;
+  std::vector<ResearchTargetUi> research_targets_;
+  std::vector<ResearchHitUi> research_hits_;
+  std::vector<ResearchCiteUi> research_cites_;
   int ai_pane_ = 0;
   std::string theme_ = "system";  // system | light | dark
 

@@ -887,6 +887,8 @@ void MainWindow::ApplyEpubAnnotations(EpubBook& book) {
   if (!book.web || !book.web.CoreWebView2()) return;
   for (auto const& annotation : book.doc_data.annotations) {
     if (!annotation.anchor) continue;
+    // Citation-deck entries carry no ink — deck records, never page marks.
+    if (annotation.kind == L"cite") continue;
     auto const js = L"applyEpubAnnotation(" + js_string(annotation.id) +
                     L"," + std::to_wstring(annotation.anchor->chapter) +
                     L"," + std::to_wstring(annotation.anchor->start) +

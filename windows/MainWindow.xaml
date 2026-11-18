@@ -72,6 +72,8 @@
                     <FontIcon FontFamily="Segoe Fluent Icons" FontSize="14" Glyph="&#xE90F;" />
                     <Button.Flyout>
                         <MenuFlyout Placement="Bottom">
+                            <MenuFlyoutItem x:Name="ToolsResearchItem" Click="ToolsResearch_Click" />
+                            <MenuFlyoutSeparator />
                             <MenuFlyoutItem x:Name="ToolsFillFormItem" Click="ToolsFillForm_Click" />
                             <MenuFlyoutSeparator />
                             <MenuFlyoutItem x:Name="ToolsWatermarkItem" Click="ToolsWatermark_Click" />
@@ -157,7 +159,7 @@
 
             <!-- center: tabs + welcome overlay + find bar -->
             <Grid Grid.Column="1" x:Name="CenterHost">
-                <Grid>
+                <Grid x:Name="CenterHostTabs">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -192,6 +194,92 @@
                         SelectionChanged="DocTabs_SelectionChanged"
                         TabCloseRequested="DocTabs_CloseRequested"
                         IsAddTabButtonVisible="False" />
+                </Grid>
+                <!-- 研究工作台（design/prototype/research.html）：跨书检索 +
+                     可溯源引用集。免费功能，无 gating（PRICING.md 2026-11-18
+                     owner 决策）。三列：scope | results | citation deck. -->
+                <Grid x:Name="ResearchView" Visibility="Collapsed" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="232" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid Grid.Column="0" RowSpacing="4" Margin="0,14,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" x:Name="ResearchScopeTitle" Margin="16,0,12,6"
+                                   FontSize="11" FontWeight="SemiBold" Opacity="0.7" />
+                        <TextBlock Grid.Row="1" x:Name="ResearchOpenedTitle" Margin="16,0,12,4" FontSize="12" />
+                        <StackPanel Grid.Row="2" x:Name="ResearchOpenedList" Margin="8,0,8,4" />
+                        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <TextBlock x:Name="ResearchRecentsTitle" Margin="16,8,12,4"
+                                           FontSize="11" FontWeight="SemiBold" Opacity="0.7" />
+                                <StackPanel x:Name="ResearchRecentsList" Margin="8,0,8,0" />
+                            </StackPanel>
+                        </ScrollViewer>
+                        <TextBlock Grid.Row="4" x:Name="ResearchScopeFooter" Margin="16,8,16,14"
+                                   FontSize="11" Opacity="0.55" TextWrapping="Wrap" />
+                    </Grid>
+                    <Grid Grid.Column="1" RowSpacing="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0" ColumnSpacing="10" Margin="20,14,20,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" x:Name="ResearchQuery" Height="36"
+                                     VerticalContentAlignment="Center" FontSize="14"
+                                     KeyDown="ResearchQuery_KeyDown" />
+                            <Button Grid.Column="1" x:Name="ResearchSearchButton" Height="36"
+                                    Click="ResearchSearch_Click" Style="{ThemeResource AccentButtonStyle}" />
+                        </Grid>
+                        <InfoBar Grid.Row="1" x:Name="ResearchBusyBar" IsOpen="False" IsClosable="False"
+                                 Severity="Informational" Margin="20,0,20,8">
+                            <InfoBar.Content>
+                                <ProgressBar IsIndeterminate="True" Height="4" MinWidth="240" />
+                            </InfoBar.Content>
+                        </InfoBar>
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="ResearchResults" Margin="20,4,20,16" Spacing="8" />
+                        </ScrollViewer>
+                        <Grid Grid.Row="3" ColumnSpacing="14" Margin="20,7,20,7"
+                              BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                            <TextBlock Grid.Column="0" x:Name="ResearchFooter" FontSize="11.5" Opacity="0.7"
+                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" x:Name="ResearchStats" FontSize="11.5" Opacity="0.7"
+                                       VerticalAlignment="Center" TextAlignment="Right" />
+                        </Grid>
+                    </Grid>
+                    <Grid Grid.Column="2" x:Name="ResearchDeckPane" Width="288"
+                          Visibility="Collapsed" BorderThickness="1,0,0,0"
+                          BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Margin="14,12,14,8">
+                            <Grid>
+                                <TextBlock x:Name="ResearchDeckTitle" FontSize="13" FontWeight="Bold" />
+                                <TextBlock x:Name="ResearchDeckCount" HorizontalAlignment="Right" FontSize="11"
+                                           FontWeight="SemiBold" Foreground="#B45309" />
+                            </Grid>
+                            <TextBlock x:Name="ResearchDeckFooter" FontSize="11" Opacity="0.55" Margin="0,4,0,0" />
+                        </StackPanel>
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="ResearchDeckList" Margin="12,0,12,12" Spacing="8" />
+                        </ScrollViewer>
+                    </Grid>
                 </Grid>
                 <!-- File-first welcome: no import, library or tracking. -->
                 <Grid x:Name="WelcomeView" Visibility="Visible">
