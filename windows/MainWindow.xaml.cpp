@@ -659,9 +659,19 @@ void MainWindow::Theme_Click(winrt::Windows::Foundation::IInspectable const&,
 }
 
 void MainWindow::UpdateChrome() {
-  // No file open: show an Open/Recent welcome instead of a catalog.
-  bool const empty = tabs_.empty() && epubs_.empty();
-  WelcomeView().Visibility(empty ? Visibility::Visible : Visibility::Collapsed);
+  // No file open: show an Open/Recent welcome instead of a catalog. The
+  // research workbench keeps the surface when visible.
+  bool const empty = tabs_.empty() && epubs_.empty() && !research_visible_;
+  WelcomeView().Visibility(empty && !research_visible_
+                               ? Visibility::Visible
+                               : WelcomeView().Visibility() ==
+                                       Visibility::Visible
+                                   ? Visibility::Visible
+                                   : Visibility::Collapsed);
+  if (research_visible_) {
+    ResearchView().Visibility(Visibility::Visible);
+    CenterHostTabs().Visibility(Visibility::Collapsed);
+  }
   auto const reader_vis = empty ? Visibility::Collapsed : Visibility::Visible;
   LeftToggle().Visibility(reader_vis);
   RecentsButton().Visibility(reader_vis);
