@@ -4,7 +4,9 @@
 ;; v1 files keep working (drop-in migration):
 ;;   - path key = FNV-1a 64-bit of the absolute PDF path, 16 lowercase hex
 ;;     chars, file <config-dir>/annotations/<key>.json
-;;   - sidecar mode: <pdf-path>.pdfgist.json next to the PDF (cloud-drive sync)
+;;   - sidecar mode: <pdf-path>.booklight.json next to the PDF (cloud-drive
+;;     sync); the legacy <pdf-path>.pdfgist.json name stays readable so
+;;     pre-booklight sidecars migrate transparently
 ;;   - file shape {"annotations":[...],"bookmarks":[...]}; 0.8.x bare arrays
 ;;     load as annotations with empty bookmarks
 ;;   - serde #[serde(default)] defaults are re-applied on load, matching the

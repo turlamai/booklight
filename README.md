@@ -19,6 +19,7 @@ Open PDF / EPUB through File > Open, drag-and-drop, or the system file associati
 - **Annotate**: highlights, notes and bookmarks with explicit save and failure/recovery behavior.
 - **Edit PDFs lightly**: rotate, remove, insert, extract or merge pages, fill forms and export; no silent replacement of the original.
 - **Optional AI**: translate, summarize or chat about selected document content with your own provider. AI requests may send that content to the chosen provider.
+- **Research across documents**: search open and recent files locally, jump to the source passage and pin traceable citations to a deck.
 
 ## Files remain yours
 
@@ -62,9 +63,10 @@ consumes the Ed25519-signed `update-manifest.json` feed (key id
 `booklight-2026-11`; Sigstore provenance: `gh attestation verify <file>
 -R turlamai/booklight`).
 
-macOS builds carry an ad-hoc signature only, not a notarized one. On
-first launch, right-click the app and choose Open to clear the
-Gatekeeper prompt.
+macOS release builds are Developer ID-signed and notarized by the release
+pipeline (a tag release fails closed without signing credentials). Local
+development builds are ad-hoc signed: right-click the app and choose Open
+on first launch to clear the Gatekeeper prompt.
 
 ## License
 

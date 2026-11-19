@@ -24,7 +24,7 @@ function requires(path, pattern, message) {
 function forbids(path, pattern, message) {
   if (pattern.test(text(path))) failures.push(path + ": forbidden " + message);
 }
-requires("macos-host/Sources/RivetHost/LibraryView.swift", /struct FileWelcomeView:\s*View/, "native open welcome");
+requires("macos-host/Sources/RivetHost/FileWelcomeView.swift", /struct FileWelcomeView:\s*View/, "native open welcome");
 requires("macos-host/Sources/RivetHost/ContentView.swift", /FileWelcomeView\(\)/, "welcome as empty-document state");
 forbids("macos-host/Sources/RivetHost/AppModel.swift", /\b(startReadingClock|loadLibrary|importBooks|rescanShelf)\s*\(/, "library import or reading-time service");
 requires("windows/MainWindow.xaml", /x:Name="WelcomeView"/, "file-open welcome");

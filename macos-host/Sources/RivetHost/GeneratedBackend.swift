@@ -7,7 +7,7 @@ public enum RivetGeneratedConfig {
     public static let moduleName = "backend"
     public static let entryName = "start"
     public static let displayName = "Booklight"
-    public static let version = "0.11.0"
+    public static let version = "0.12.0"
     public static let build: Int64 = 1
     public static let identifier = "site.jrtx.booklight"
     public static let releaseChannel = "stable"
@@ -111,29 +111,6 @@ public enum RivetTypes {
             self.title = title
             self.chapters = chapters
             self.toc = toc
-        }
-    }
-
-    public struct LibraryEntry: Sendable {
-        public let path: String
-        public let title: String
-        public let author: String
-        public let kind: String
-        public let pages: Int64
-        public let added_at_ms: Int64
-        public let cover: String
-        public let collections: [String]
-        public let status: String
-        public init(path: String, title: String, author: String, kind: String, pages: Int64, added_at_ms: Int64, cover: String, collections: [String], status: String) {
-            self.path = path
-            self.title = title
-            self.author = author
-            self.kind = kind
-            self.pages = pages
-            self.added_at_ms = added_at_ms
-            self.cover = cover
-            self.collections = collections
-            self.status = status
         }
     }
 
@@ -267,8 +244,6 @@ private func encode__List_Int64_(_ v: [Int64]) -> RivetValue { .list(v.map(encod
 private func encode_EpubTocItem(_ v: RivetTypes.EpubTocItem) -> RivetValue { .list([encode_String(v.title), encode_Int64(v.chapter), encode_Int64(v.level)]) }
 private func encode__List_EpubTocItem_(_ v: [RivetTypes.EpubTocItem]) -> RivetValue { .list(v.map(encode_EpubTocItem)) }
 private func encode_EpubView(_ v: RivetTypes.EpubView) -> RivetValue { .list([encode_String(v.title), encode_Int64(v.chapters), encode__List_EpubTocItem_(v.toc)]) }
-private func encode_LibraryEntry(_ v: RivetTypes.LibraryEntry) -> RivetValue { .list([encode_String(v.path), encode_String(v.title), encode_String(v.author), encode_String(v.kind), encode_Int64(v.pages), encode_Int64(v.added_at_ms), encode_String(v.cover), encode__List_String_(v.collections), encode_String(v.status)]) }
-private func encode__List_LibraryEntry_(_ v: [RivetTypes.LibraryEntry]) -> RivetValue { .list(v.map(encode_LibraryEntry)) }
 private func encode_RecentEntry(_ v: RivetTypes.RecentEntry) -> RivetValue { .list([encode_String(v.path), encode_Int64(v.page), encode_Int64(v.scroll_ratio_scaled), encode_Int64(v.last_read_ms)]) }
 private func encode__List_RecentEntry_(_ v: [RivetTypes.RecentEntry]) -> RivetValue { .list(v.map(encode_RecentEntry)) }
 private func encode_TargetLanguage(_ v: RivetTypes.TargetLanguage) -> RivetValue { .string(v.rawValue) }
@@ -303,8 +278,6 @@ private func decode__List_Int64_(_ v: RivetValue) throws -> [Int64] { guard case
 private func decode_EpubTocItem(_ v: RivetValue) throws -> RivetTypes.EpubTocItem { guard case .list(let xs) = v, xs.count == 3 else { throw RivetGeneratedError.typeMismatch("EpubTocItem") }; return RivetTypes.EpubTocItem(title: try decode_String(xs[0]), chapter: try decode_Int64(xs[1]), level: try decode_Int64(xs[2])) }
 private func decode__List_EpubTocItem_(_ v: RivetValue) throws -> [RivetTypes.EpubTocItem] { guard case .list(let xs) = v else { throw RivetGeneratedError.typeMismatch("(List EpubTocItem)") }; return try xs.map(decode_EpubTocItem) }
 private func decode_EpubView(_ v: RivetValue) throws -> RivetTypes.EpubView { guard case .list(let xs) = v, xs.count == 3 else { throw RivetGeneratedError.typeMismatch("EpubView") }; return RivetTypes.EpubView(title: try decode_String(xs[0]), chapters: try decode_Int64(xs[1]), toc: try decode__List_EpubTocItem_(xs[2])) }
-private func decode_LibraryEntry(_ v: RivetValue) throws -> RivetTypes.LibraryEntry { guard case .list(let xs) = v, xs.count == 9 else { throw RivetGeneratedError.typeMismatch("LibraryEntry") }; return RivetTypes.LibraryEntry(path: try decode_String(xs[0]), title: try decode_String(xs[1]), author: try decode_String(xs[2]), kind: try decode_String(xs[3]), pages: try decode_Int64(xs[4]), added_at_ms: try decode_Int64(xs[5]), cover: try decode_String(xs[6]), collections: try decode__List_String_(xs[7]), status: try decode_String(xs[8])) }
-private func decode__List_LibraryEntry_(_ v: RivetValue) throws -> [RivetTypes.LibraryEntry] { guard case .list(let xs) = v else { throw RivetGeneratedError.typeMismatch("(List LibraryEntry)") }; return try xs.map(decode_LibraryEntry) }
 private func decode_RecentEntry(_ v: RivetValue) throws -> RivetTypes.RecentEntry { guard case .list(let xs) = v, xs.count == 4 else { throw RivetGeneratedError.typeMismatch("RecentEntry") }; return RivetTypes.RecentEntry(path: try decode_String(xs[0]), page: try decode_Int64(xs[1]), scroll_ratio_scaled: try decode_Int64(xs[2]), last_read_ms: try decode_Int64(xs[3])) }
 private func decode__List_RecentEntry_(_ v: RivetValue) throws -> [RivetTypes.RecentEntry] { guard case .list(let xs) = v else { throw RivetGeneratedError.typeMismatch("(List RecentEntry)") }; return try xs.map(decode_RecentEntry) }
 private func decode_TargetLanguage(_ v: RivetValue) throws -> RivetTypes.TargetLanguage { guard case .string(let x) = v, let result = RivetTypes.TargetLanguage(rawValue: x) else { throw RivetGeneratedError.typeMismatch("TargetLanguage") }; return result }
@@ -435,10 +408,6 @@ public struct RivetAPI: Sendable {
         let rivetResult = try await client.call("get-annotations", arguments: [encode_String(pdf_path), encode_Bool(sidecar)])
         return try decode_Bytes(rivetResult)
     }
-    public func get_library() async throws -> [RivetTypes.LibraryEntry] {
-        let rivetResult = try await client.call("get-library", arguments: [])
-        return try decode__List_LibraryEntry_(rivetResult)
-    }
     public func get_recents() async throws -> [RivetTypes.RecentEntry] {
         let rivetResult = try await client.call("get-recents", arguments: [])
         return try decode__List_RecentEntry_(rivetResult)
@@ -450,38 +419,6 @@ public struct RivetAPI: Sendable {
     public func initialize() async throws -> Void {
         let rivetResult = try await client.call("initialize", arguments: [])
         return try decode_Void(rivetResult)
-    }
-    public func library_book_collection(path: String, name: String, add: Bool) async throws -> Void {
-        let rivetResult = try await client.call("library-book-collection", arguments: [encode_String(path), encode_String(name), encode_Bool(add)])
-        return try decode_Void(rivetResult)
-    }
-    public func library_collection_create(name: String) async throws -> Void {
-        let rivetResult = try await client.call("library-collection-create", arguments: [encode_String(name)])
-        return try decode_Void(rivetResult)
-    }
-    public func library_collection_delete(name: String) async throws -> Void {
-        let rivetResult = try await client.call("library-collection-delete", arguments: [encode_String(name)])
-        return try decode_Void(rivetResult)
-    }
-    public func library_collections() async throws -> [String] {
-        let rivetResult = try await client.call("library-collections", arguments: [])
-        return try decode__List_String_(rivetResult)
-    }
-    public func library_import(path: String, title: String, author: String, kind: String, pages: Int64, cover: Data) async throws -> RivetTypes.LibraryEntry {
-        let rivetResult = try await client.call("library-import", arguments: [encode_String(path), encode_String(title), encode_String(author), encode_String(kind), encode_Int64(pages), encode_Bytes(cover)])
-        return try decode_LibraryEntry(rivetResult)
-    }
-    public func library_relink(from: String, to: String) async throws -> Void {
-        let rivetResult = try await client.call("library-relink", arguments: [encode_String(from), encode_String(to)])
-        return try decode_Void(rivetResult)
-    }
-    public func library_remove(path: String) async throws -> Void {
-        let rivetResult = try await client.call("library-remove", arguments: [encode_String(path)])
-        return try decode_Void(rivetResult)
-    }
-    public func library_scan() async throws -> [RivetTypes.LibraryEntry] {
-        let rivetResult = try await client.call("library-scan", arguments: [])
-        return try decode__List_LibraryEntry_(rivetResult)
     }
     public func list_presets() async throws -> [RivetTypes.ProviderPreset] {
         let rivetResult = try await client.call("list-presets", arguments: [])

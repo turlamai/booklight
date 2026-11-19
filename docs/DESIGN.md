@@ -56,7 +56,7 @@ reading body.
 | Section heading | `.headline` / `.caption.weight(.semibold)` | welcome, sidebar |
 | Body | `.body` / 12–13 pt | controls, notes |
 | Secondary | `.footnote` / `.caption` | paths, metadata |
-| Reading body | New York / Iowan Old Style / Georgia, 17 pt × user scale, 1.75 line-height | EPUB |
+| Reading body | Georgia / Source Han Serif SC / Noto Serif SC / Songti SC, 17 px × user scale, 1.9 line-height | EPUB; same contract on all three hosts |
 | Reading measure | 38 rem (≈ 608 px) centred | EPUB chapter and title |
 
 PDF pages keep their own typography; Booklight never restyles document text.

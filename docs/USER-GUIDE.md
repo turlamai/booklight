@@ -6,7 +6,7 @@ Read PDF and EPUB files, annotate them and optionally ask your own AI provider a
 
 ## Availability
 
-Existing reading, annotation, light editing and single-document BYOK features remain free. No research Pro checkout is open.
+Booklight is free and non-commercial. Reading, annotation, light editing, single-document BYOK AI and the multi-document research workbench are all included; there is no paid tier or checkout.
 
 ## Platforms and installation
 
@@ -46,8 +46,18 @@ replaced. To preserve that edited document, use **File > Save PDF…**
 The suggested `-edited.pdf` filename is only a suggestion; confirm the
 destination yourself. macOS writes exports atomically. Do not close an edited
 document until you have saved it and reopened the output to verify the result.
-The native unsaved-change close prompt and automated export/reopen verification
-are still release-qualification work, not a promise of shipped behavior.
+All three hosts show a native unsaved-change confirmation before closing a
+document with unsaved PDF edits (shipped in 0.9.0).
+
+## Research across documents
+
+The research workbench searches the text of your open and recent documents
+locally — no account, no upload. Open it from **Tools > Research Workbench…**
+(Option-Command-R on macOS; Ctrl+Alt+R on Windows and Linux). Results show the
+matching passage and its source: jump to the exact page or chapter, copy a
+formatted citation, or pin passages to a citation deck. Pinned citations are
+stored as ordinary `cite` annotations on the source document, so they follow
+the same save/recovery contract as other notes.
 
 ## Network, keys and privacy
 
@@ -59,7 +69,7 @@ Your API key is not written to `settings.json`. Booklight stores it in the opera
 
 ## Known limits
 
-Damaged or hostile PDF/EPUB inputs are bounded by explicit resource budgets and fail with a clear open error instead of exhausting memory; the limits are documented in [the file-first design](FILE-FIRST-DESIGN.md#hostile-and-damaged-input). The same welcome, reader, sidebar, annotation, AI and settings information architecture is implemented on macOS, Windows and Linux, with each host using its own native chrome. Each host still needs its packaged accessibility acceptance before a design change is claimed as shipped. A new multi-document research workbench is not delivered.
+Damaged or hostile PDF/EPUB inputs are bounded by explicit resource budgets and fail with a clear open error instead of exhausting memory; the limits are documented in [the file-first design](FILE-FIRST-DESIGN.md#hostile-and-damaged-input). The same welcome, reader, sidebar, annotation, AI and settings information architecture is implemented on macOS, Windows and Linux, with each host using its own native chrome. Each host still needs its packaged accessibility acceptance before a design change is claimed as shipped.
 
 ## Updates and removal
 

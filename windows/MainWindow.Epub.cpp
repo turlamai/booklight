@@ -615,7 +615,7 @@ std::wstring MainWindow::BuildEpubHtml(
 html { background: var(--bg); }
 body { margin: 0; padding: 0 0 72px; color: var(--fg);
   font-family: Georgia, "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif;
-  font-size: calc(16px * var(--fs)); line-height: 1.9; }
+  font-size: calc(17px * var(--fs)); line-height: 1.9; }
 p { margin: 0 0 1em; text-align: justify; }
 h1, h2, h3, h4 { line-height: 1.35; margin: 1.4em 0 0.6em; }
 img, svg { max-width: 100%; height: auto; }

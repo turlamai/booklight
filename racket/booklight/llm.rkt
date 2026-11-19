@@ -23,15 +23,9 @@
          "sse.rkt"
          "urlnorm.rkt")
 
-(provide chat-completions-url
-         models-url
-         stream-chat!
+(provide stream-chat!
          list-models
          parse-sse-stream!
-         max-sse-line-bytes
-         default-connect-timeout-seconds
-         list-models-timeout-seconds
-         messages->jsexpr
          redact-secret)
 
 ;; ---- constants (parity with llm.rs) ----

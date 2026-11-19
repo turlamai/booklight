@@ -5,6 +5,57 @@ All notable changes to Booklight are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-19
+
+### Added
+
+- Multi-document research workbench on macOS, Windows and Linux (issues
+  #56, #57): local search across open and recent documents, jump back to
+  the exact source page/chapter, copy formatted citations and pin passages
+  to a citation deck. Pinned citations are ordinary `cite` annotations on
+  the source document and follow the same save/recovery contract. Ships
+  free per the 2026-11-18 owner decision — no paid tier, no checkout.
+  macOS opens a dedicated window from Tools (Option-Command-R); Windows
+  and Linux use the Tools menu with Ctrl+Alt+R (new Windows accelerator).
+
+### Changed
+
+- EPUB reading typography is now identical on all three hosts: the
+  Windows and Linux body size moves from 16 px to the prototype's 17 px
+  (× user scale, 1.9 line height); macOS already matched. docs/DESIGN.md
+  and design/DESIGN.md record the resolved contract (issue #58).
+- User guides, READMEs and the product site describe the shipped product:
+  the research workbench is documented in both languages, pricing-era
+  "not delivered" claims are gone, the macOS note reflects the release
+  pipeline's Developer ID signing + notarization, and links to the
+  retired PRICING documents point at the 2026-11-18 non-commercial
+  decision instead.
+- The Linux x64 release leg builds on ubuntu-latest again (issue #64);
+  the release Rivet pin carries the rpm 4.19 packaging fixes.
+
+### Fixed
+
+- The updater's Linux install-flavor probe recognizes Booklight package
+  installs under `/opt/booklight`; the legacy `/opt/pdfgist` prefix is
+  still accepted for old PDFGist debs.
+- Re-injecting EPUB annotations skips citation entries, so research pins
+  never render as reader highlights.
+
+### Removed
+
+- The retired bookshelf RPC surface (`library-import`, `get-library`,
+  `library-remove`, `library-relink`, `library-scan`,
+  `library-collection-create`, `library-collection-delete`,
+  `library-book-collection`, `library-collections`) now that the
+  three-host client sync and packaged acceptance are complete (issue
+  #63). Old clients receive a clean "unknown RPC" error; existing
+  `library.json` files and user documents are never touched.
+- Internal-only exports of the llm module (`chat-completions-url`,
+  `models-url`, `max-sse-line-bytes`, `default-connect-timeout-seconds`,
+  `list-models-timeout-seconds`, `messages->jsexpr`); behavior unchanged.
+- macOS brand leftovers: `GistPDFView` is now `BooklightPDFView` and
+  `LibraryView.swift` is `FileWelcomeView.swift` (issue #63).
+
 ## [0.11.0] - 2026-11-18
 
 ### Changed

@@ -14,7 +14,7 @@
          update-public-key-b64
          default-update-base-url)
 
-(define app-version "0.11.0")
+(define app-version "0.12.0")
 (define app-build 1)
 (define app-identifier "site.jrtx.booklight")
 (define app-channel 'stable)

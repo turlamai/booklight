@@ -2226,6 +2226,23 @@ void MainWindow::BuildKeyboardAccelerators() {
   add_accel(winrt::Windows::System::VirtualKey::P, false, [weak = get_weak()] {
     if (auto window = weak.get()) window->PrintDocument();
   });
+
+  // Research workbench: Ctrl+Alt+R — parity with macOS ⌥⌘R and Linux
+  // <Primary><Alt>r (design/DESIGN.md shortcut semantics, issue #56).
+  {
+    auto accel = mux::Input::KeyboardAccelerator();
+    accel.Key(winrt::Windows::System::VirtualKey::R);
+    accel.Modifiers(winrt::Windows::System::VirtualKeyModifiers::Control |
+                    winrt::Windows::System::VirtualKeyModifiers::Menu);
+    accel.Invoked([weak = get_weak()](
+                      mux::Input::KeyboardAccelerator const&,
+                      mux::Input::KeyboardAcceleratorInvokedEventArgs const&
+                          args) {
+      args.Handled(true);
+      if (auto window = weak.get()) window->ShowResearch();
+    });
+    Root().KeyboardAccelerators().Append(accel);
+  }
 }
 
 

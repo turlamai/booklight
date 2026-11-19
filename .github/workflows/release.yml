@@ -243,14 +243,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Legacy pin workaround, kept while unverified on the new pin:
-          # Ubuntu 26.04's rpm 4.19 changed the buildroot location and the
-          # old Rivet pin staged the RPM into the old BUILDROOT, so
-          # rpmbuild reported an empty /opt/booklight. Rivet d6e9889 carries
-          # the later RPM fixes (rpmdb topdir, unquoted %files globs,
-          # unprivileged dbpath); try the x64 release leg on ubuntu-latest
-          # again before retiring this pin to 24.04.
-          - { arch: x64, runner: ubuntu-24.04, racket-arch: x64 }
+          # x64 is back on ubuntu-latest (issue #64): the release Rivet pin
+          # (33de65c) carries the RPM fixes for Ubuntu 26.04's rpm 4.19
+          # (buildroot location, rpmdb topdir, unquoted %files globs,
+          # unprivileged dbpath); the v0.12.0 tag run is the verification.
+          # arm64 stays on the native ubuntu-24.04-arm runner.
+          - { arch: x64, runner: ubuntu-latest, racket-arch: x64 }
           - { arch: arm64, runner: ubuntu-24.04-arm, racket-arch: arm64 }
     steps:
       - uses: actions/checkout@v4
