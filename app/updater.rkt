@@ -172,11 +172,12 @@
 
 (define (install-flavor)
   ;; Mirrors the host's install_shape(): $APPIMAGE (set by the AppImage
-  ;; runtime) points at the running image; deb lands under /opt/pdfgist and
-  ;; rpm under /usr — those upgrade through the package manager; everything
-  ;; else is the portable tarball layout. The embedded runtime's own process
-  ;; is the host executable, so /proc/self/exe is the install prefix —
-  ;; Linux-only, which is exactly the flavor this check matters for.
+  ;; runtime) points at the running image; deb lands under /opt/booklight
+  ;; (legacy PDFGist debs under /opt/pdfgist) and rpm under /usr — those
+  ;; upgrade through the package manager; everything else is the portable
+  ;; tarball layout. The embedded runtime's own process is the host
+  ;; executable, so /proc/self/exe is the install prefix — Linux-only,
+  ;; which is exactly the flavor this check matters for.
   (define self (getenv "APPIMAGE"))
   (if (and self (non-empty-string? self))
       "appimage"
@@ -184,7 +185,8 @@
                    (resolve-path (string->path "/proc/self/exe")))])
         (if (and exe
                  (let ([s (path->string exe)])
-                   (or (string-prefix? s "/opt/pdfgist/")
+                   (or (string-prefix? s "/opt/booklight/")
+                       (string-prefix? s "/opt/pdfgist/")
                        (string-prefix? s "/usr/"))))
             "package"
             "tarball"))))

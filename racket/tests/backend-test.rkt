@@ -364,17 +364,26 @@
 (define epub-path (path->string (build-path temp-config "book.epub")))
 (copy-file sample-epub epub-path #t)
 
-;; The retired library import RPC is a compatibility shim, not a catalog.
-;; EPUB metadata is read when the real file is opened. Import must not create
-;; cover files or a library.json database.
-(define-values (epub-shelf-entry _e15-cover)
-  (call "library-import" epub-path "The Sample Book" "" "epub" 2 #""))
-(check-equal? (list-ref epub-shelf-entry 0) epub-path)
-(check-equal? (list-ref epub-shelf-entry 6) "")
+;; The retired bookshelf RPCs are removed from the wire surface (issue #63):
+;; an old client invoking one gets a clean "unknown RPC" error, and no
+;; catalog, cover cache or library.json database is ever recreated.
+(for ([rpc '("library-import" "get-library" "library-remove" "library-relink"
+             "library-scan" "library-collection-create" "library-collection-delete"
+             "library-book-collection" "library-collections")])
+  (check-exn (lambda (e)
+               (and (exn:fail? e)
+                    (regexp-match? (regexp (format "unknown RPC: ~a" rpc))
+                                   (exn-message e))))
+             (lambda ()
+               (case rpc
+                 [("library-import") (call rpc epub-path "The Sample Book" "" "epub" 2 #"")]
+                 [("library-remove") (call rpc epub-path)]
+                 [("library-relink") (call rpc epub-path epub-path)]
+                 [("library-collection-create" "library-collection-delete") (call rpc "旧合集")]
+                 [("library-book-collection") (call rpc epub-path "旧合集" #t)]
+                 [else (call rpc)]))))
 (check-false (file-exists? (build-path temp-config "library.json")))
 (check-false (directory-exists? (build-path temp-config "covers")))
-(define-values (empty-shelf _e15-read) (call "get-library"))
-(check-equal? empty-shelf '())
 
 (define-values (epub-view _e16) (call "epub-open" epub-path))
 ;; record shape: (title chapters (toc-items...))
@@ -390,11 +399,9 @@
 (define-values (epub-text _e18) (call "epub-chapter-text" epub-path 2))
 (check-true (string-contains? epub-text "The quick brown fox"))
 
-;; Deprecated collection commands are harmless no-ops: no catalog is
-;; recreated even if an old native client invokes one after an upgrade.
-(define-values (_col-created _ec1) (call "library-collection-create" "旧合集"))
-(define-values (collections-with-empty _ec2) (call "library-collections"))
-(check-equal? collections-with-empty '())
+;; Retired collection commands stay retired after an upgrade: the unknown-RPC
+;; error above is the whole contract, and the epub flows below never recreate
+;; a catalog even when an old native client invoked one before this check.
 (check-false (file-exists? (build-path temp-config "library.json")))
 
 (define-values (epub-doc _e19) (call "epub-doc-text" epub-path 12 24000))

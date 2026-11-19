@@ -20,7 +20,7 @@ final class PDFTab: ObservableObject, Identifiable {
     let id = UUID()
     let path: String
     let title: String
-    let pdfView: GistPDFView
+    let pdfView: BooklightPDFView
     weak var reader: ReaderModel?
 
     @Published var pageCount = 0
@@ -40,7 +40,7 @@ final class PDFTab: ObservableObject, Identifiable {
         self.path = path
         self.title = title
         self.reader = reader
-        let view = GistPDFView()
+        let view = BooklightPDFView()
         view.minScaleFactor = 0.4
         view.maxScaleFactor = 4.0
         view.autoScales = false

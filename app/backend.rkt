@@ -459,49 +459,13 @@
 (define-rpc (get-recents : (List RecentEntry))
   (map recent-entry->dto (settings-recent-files (load-settings))))
 
-;; ---- retired bookshelf RPCs (wire compatibility only) ----
-;;
-;; File-first Booklight does not own a catalog, cover cache, collections, or
-;; a database. These RPC shapes remain temporarily for already-generated
-;; clients while the native hosts move to File > Open + a small recent list.
-;; They NEVER write library.json, covers/, or a document copy.
-;; Existing library.json is deliberately left untouched for manual recovery.
-
-(define-record LibraryEntry
-  ([path : String]
-   [title : String]
-   [author : String]
-   [kind : String]
-   [pages : Int64]
-   [added-at-ms : Int64]
-   [cover : String]
-   [collections : (List String)]
-   [status : String]))
-
-(define-rpc (library-import [path : String]
-                            [title : String]
-                            [author : String]
-                            [kind : String]
-                            [pages : Int64]
-                            [cover : Bytes]
-                            : LibraryEntry)
-  ;; Old hosts can complete their in-flight import call, but it has no
-  ;; persistence, cover generation, copy or library side effect.
-  (LibraryEntry path title author kind (max 1 pages) 0 "" '()
-                (if (file-exists? path) "ok" "missing")))
-
-(define-rpc (get-library : (List LibraryEntry)) '())
-(define-rpc (library-remove [path : String] : Void) (void))
-(define-rpc (library-relink [from : String] [to : String] : Void) (void))
-(define-rpc (library-scan : (List LibraryEntry)) '())
-(define-rpc (library-collection-create [name : String] : Void) (void))
-(define-rpc (library-collection-delete [name : String] : Void) (void))
-(define-rpc (library-book-collection [path : String]
-                                     [name : String]
-                                     [add : Bool]
-                                     : Void)
-  (void))
-(define-rpc (library-collections : (List String)) '())
+;; The retired bookshelf RPC surface (library-import / get-library /
+;; library-remove / library-relink / library-scan / library-collection-* /
+;; library-book-collection / library-collections) is gone: the three-host
+;; client sync completed and packaged acceptance passed, so the temporary
+;; wire-compatibility stubs were removed (issue #63). File-first Booklight
+;; owns no catalog, cover cache, collections or database; existing
+;; library.json files are deliberately left untouched for manual recovery.
 
 ;; Backend-side error/status strings follow this locale ("zh" | "en").
 (define-rpc (set-locale [code : String] : Void)

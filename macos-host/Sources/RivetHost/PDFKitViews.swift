@@ -10,7 +10,7 @@ struct PDFViewport: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(tab: tab) }
 
-    func makeNSView(context: Context) -> GistPDFView {
+    func makeNSView(context: Context) -> BooklightPDFView {
         context.coordinator.install()
         if !tab.didInitialLayout {
             tab.didInitialLayout = true
@@ -26,7 +26,7 @@ struct PDFViewport: NSViewRepresentable {
         return tab.pdfView
     }
 
-    func updateNSView(_ view: GistPDFView, context: Context) {}
+    func updateNSView(_ view: BooklightPDFView, context: Context) {}
 
     final class Coordinator {
         private let tab: PDFTab

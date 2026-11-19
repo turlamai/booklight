@@ -93,7 +93,7 @@ raco rivet acceptance --json # 当前平台的打包产品验收
 - **P1**：AI 发送范围可预览/取消，密钥安全、无隐式网络上传。
 - **P1**：所有平台真实打包验收；测试和文档与 file-first 设计一致。
 - 研究工作台保持可用的非收费功能方向；以现有功能 Issue 与实际验收为准。
-- 旧 `library-*` RPC 只为生成客户端临时兼容，不能写数据；新的 schema 迁移应在三端客户端同步完成并经正式验收后移除。旧 `library.json` 与用户文件不可自动删除。
+- 旧 `library-*` RPC 已在 0.12.0 移除（三端客户端同步与打包验收完成后执行，issue #63）；旧客户端调用只会收到 unknown RPC 错误，不会重建任何书库数据。旧 `library.json` 与用户文件不可自动删除。
 - [Issue #20](https://github.com/turlamai/booklight/issues/20) 继续承载批注与 AI 的保存/隐私质量问题；此 PR 的方向与旧“书架保留”决策冲突时，以 2026-10-29 文件优先决策为准。
 
 ## Documentation languages

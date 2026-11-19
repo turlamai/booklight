@@ -198,7 +198,7 @@ final class BlockMenuItem: NSMenuItem {
 
 /// PDFView subclass offering the annotation/translate context menu whenever a
 /// text selection exists.
-final class GistPDFView: PDFView {
+final class BooklightPDFView: PDFView {
     weak var hostTab: PDFTab?
 
     override func menu(for event: NSEvent) -> NSMenu? {
