@@ -19,6 +19,7 @@ Booklight 是 macOS、Windows、Linux 原生 PDF / EPUB 阅读器与轻量 PDF �
 - **批注**：高亮、笔记、书签；保存失败和恢复状态清晰可见。
 - **轻量 PDF 编辑**：旋转、插页、删页、提取、合并、表单填写与导出；不静默覆盖原件。
 - **可选 AI**：划词翻译、总结、文档对话；由用户选择的服务商处理其明确提交的文档内容。
+- **跨文档研究**：本地检索打开与最近文件，跳回原文摘句，把可溯源引用钉入引用集。
 
 ## 文件始终属于用户
 
@@ -61,8 +62,9 @@ raco rivet acceptance --json
 `update-manifest.json` feed（key id `booklight-2026-11`；Sigstore 溯源：
 `gh attestation verify <file> -R turlamai/booklight`）。
 
-macOS 构建仅有 ad-hoc 签名，未公证。首次启动时右键应用选「打开」即可
-清除 Gatekeeper 提示。
+macOS 发布构建由发布流水线完成 Developer ID 签名与公证（缺少签名凭据时
+tag 发布会直接失败）。本地开发构建仅有 ad-hoc 签名：首次启动右键应用选
+「打开」即可清除 Gatekeeper 提示。
 
 ## 许可证
 
