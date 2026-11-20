@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 env:
-  RIVET_PIN: 179319936c6a22b2fa676c0fd557bcdb05ee5205
+  RIVET_PIN: c1f0d921e2136c0cfb2c1c1f6d273f2b26222a19
   KEEL_PIN: e11aa621df48daaa319b17ec742ffce808274c81
 
 concurrency:
@@ -132,7 +132,7 @@ jobs:
       - name: Remember full Racket command path
         run: echo "FULL_RACKET_BIN=$(dirname "$(command -v raco)")" >> "$GITHUB_ENV"
       - name: Set up embeddable Racket CS
-        uses: turlamai/rivet/.github/actions/setup-embed-racket@179319936c6a22b2fa676c0fd557bcdb05ee5205
+        uses: turlamai/rivet/.github/actions/setup-embed-racket@c1f0d921e2136c0cfb2c1c1f6d273f2b26222a19
       - name: Run executable product acceptance
         run: PATH="$FULL_RACKET_BIN:$PATH" dbus-run-session -- raco rivet acceptance --json
       - uses: actions/upload-artifact@v4
