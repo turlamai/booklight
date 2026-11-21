@@ -1,0 +1,32 @@
+/* Spike chrome only — tokens live in design/prototype/shared.css.
+ * The highlight overlay is content ink (--hl-yellow) at reading alpha,
+ * never a UI accent (DESIGN invariant 1). */
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+.spike-bar {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 44px; padding: 0 16px;
+  background: var(--sidebar); border-bottom: 1px solid var(--line);
+}
+.spike-title { font-weight: 600; }
+.spike-status {
+  color: var(--mute);
+  font: 12px/1.4 ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+.spike-pages { padding: 24px 16px 48px; }
+.pdf-page {
+  position: relative; width: max-content; margin: 0 auto 24px;
+  background: #fff; border: 1px solid var(--line);
+}
+.pdf-page canvas { display: block; }
+.pdf-page .hl-layer { position: absolute; inset: 0; pointer-events: none; }
+.pdf-page .hl {
+  position: absolute; background: var(--hl-yellow);
+  opacity: .45; border-radius: 2px;
+}

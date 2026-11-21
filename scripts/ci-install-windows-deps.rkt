@@ -24,6 +24,9 @@
 (define include-crypto?
   (for/or ([arg (in-vector (current-command-line-arguments))])
     (equal? arg "--crypto")))
+(define include-glaze?
+  (for/or ([arg (in-vector (current-command-line-arguments))])
+    (equal? arg "--glaze")))
 
 ;; Exact equivalent of the previous two 'raco pkg install --auto --no-docs'
 ;; calls, except the Racket TLS trust source is explicitly a verified CA file.
@@ -32,3 +35,10 @@
 (if include-crypto?
     (pkg-install-command #:auto #t #:no-docs #t rivet-url "crypto")
     (pkg-install-command #:auto #t #:no-docs #t rivet-url))
+;; pdf.js spike (#75 S0): the glaze carrier rides the same verified-TLS path.
+(when include-glaze?
+  (define glaze-pin (getenv "GLAZE_PIN"))
+  (unless (and glaze-pin (not (equal? glaze-pin "")))
+    (error 'ci-install-windows-deps "GLAZE_PIN is missing"))
+  (pkg-install-command #:auto #t #:no-docs #t
+                       (format "https://github.com/turlamai/glaze.git#~a" glaze-pin)))
