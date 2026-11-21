@@ -3,3 +3,7 @@
 *.ico binary
 *.icns binary
 *.pfb binary
+# pdf.js spike: fixture xref offsets and vendored minified builds must
+# survive checkout byte-exact on every platform.
+spike/pdfjs/fixture.pdf binary
+spike/pdfjs/vendor/** binary
