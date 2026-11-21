@@ -10,6 +10,19 @@ release` build also generates a `THIRD_PARTY_NOTICES.txt` and a CycloneDX
 license audit (`rivet-cli/compliance.rkt`); this file is the grouped
 overview of what actually ships.
 
+## pdf.js (vendored, glaze web UI)
+
+The PDF reading surface of the glaze rewrite (#75) renders through
+[pdf.js](https://mozilla.github.io/pdf.js/) (`pdfjs-dist` 3.11.174, legacy
+build), vendored self-hosted under `spike/pdfjs/vendor/pdfjs-dist/`
+(build + worker, `pdf_viewer.css`, cmaps, standard_fonts, image_decoders,
+`LICENSE`). No runtime remote fetch: worker, cmaps and standard fonts all
+resolve to same-origin vendored paths. pdf.js is distributed under the
+Apache License 2.0. pdf.js is render-only in Booklight: page-level surgery
+stays in the Racket domain core (`racket/booklight/pdfdoc.rkt`), whose
+edited bytes are re-rendered by pdf.js. The native PDFium / PDFKit legs
+retire with the native UI legs at the end of the rewrite.
+
 ## Racket CS runtime
 
 Every platform host embeds the statically linked Racket CS runtime

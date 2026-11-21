@@ -7,6 +7,11 @@ compiled/
 build/
 dist/
 compiled/
+# ...but the vendored pdf.js ships its own build/ (minified pdf.js + worker)
+!spike/pdfjs/vendor/**/build/
+
+# glaze real-window evidence (CI artifacts carry it)
+.glaze/
 
 # macOS
 *.swp

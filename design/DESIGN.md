@@ -11,6 +11,12 @@
 - **Exit 条件**：6 屏关键状态齐（空态/进行态/失败恢复态）+ 交互逻辑定稿 + HIG 清单全过 + 用户评审通过。
 - **不在范围**：付费/授权/checkout/entitlement UI——2026-11-18 owner 决策（AGENTS.md「quality-first」，#57）已取消全部商业化 gating，研究工作台免费交付；PRICING 文档已退役删除。书库/封面/阅读时长统计、路由与 `rivet-schema.json` RPC 契约变更、新配色体系。
 - **已同步（2026-11-19）**：正文排版三端统一为 17 px × 用户缩放 × 1.9 行高（原型值）；Windows/Linux 原 16 px 已对齐，`docs/DESIGN.md` 的 Reading body 行已同步为同一契约。
+- **已同步（2026-11-21，#75）**：owner 决策 UI 线 rivet → glaze（三原生腿删除、
+  单一 web UI）；PDF 阅读面迁 pdf.js（**仅渲染**：canvas + text layer + 选区/批注
+  叠层；页级手术仍归领域核心 `racket/booklight/pdfdoc.rkt`，编辑后字节重渲染）。
+  家族设计真源修订 `2026-11-20-minimal-family` 已核验；产品起始 SHA
+  `93341981d2637340d645f3a366b0a6302ad30ffa`。EPUB CSS 契约与阅读主题 Keep；
+  不变式 2（PDF 文字永不被产品重排）由 pdf.js 保留页面自身排版继续满足。
 
 ## 设计原则（HIG 内核 + 本产品特化）
 
