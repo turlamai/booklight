@@ -8,7 +8,7 @@
 <style>
   /* ==== ai 专属：外发永不过界 ==== */
   .docpane { flex: 1; display: grid; place-items: center; position: relative; min-width: 0; }
-  .docpane .dim { color: var(--mute); font-size: 12.5px; text-align: center; line-height: 1.9; padding: 24px; }
+  .docpane .dim { color: var(--mute); font-size: 13px; text-align: center; line-height: 1.9; padding: 24px; }
   .inspector {
     width: 340px; flex: none; display: flex; flex-direction: column;
     background: var(--sidebar); border-left: 1px solid var(--line);
@@ -16,31 +16,31 @@
   .itabs { display: flex; gap: 2px; padding: 10px 10px 0; }
   .itabs .itab {
     flex: 1; height: 30px; border-radius: 8px 8px 0 0; display: grid; place-items: center;
-    font-size: 12.5px; color: var(--mute); cursor: default; user-select: none;
+    font-size: 13px; color: var(--mute); cursor: default; user-select: none;
   }
   .itabs .itab.active { background: var(--panel); color: var(--accent); font-weight: 600; box-shadow: 0 -1px 0 var(--line) inset; }
   .ipane { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-top: 1px solid var(--line); }
   .iscope { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--mute); }
   .iscope .seg2 { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-left: auto; }
-  .iscope .seg2 button { border: none; background: transparent; padding: 3px 9px; font-size: 11.5px; color: var(--mute); cursor: pointer; font-family: inherit; }
+  .iscope .seg2 button { border: none; background: transparent; padding: 3px 9px; font-size: 12px; color: var(--mute); cursor: pointer; font-family: inherit; }
   .iscope .seg2 button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
   .ichat { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 12px; }
-  .who { font-size: 10.5px; font-weight: 600; color: var(--mute); letter-spacing: .5px; margin-bottom: 4px; }
+  .who { font-size: 12px; font-weight: 600; color: var(--mute); letter-spacing: .5px; margin-bottom: 4px; }
   .bub { font-size: 13px; line-height: 1.7; }
   .bub.me { padding: 9px 12px; background: var(--panel-alt); border-radius: 10px; max-width: 92%; }
   .bub.ai { max-width: 96%; }
   .cite {
     display: flex; gap: 7px; align-items: flex-start; margin-top: 8px; padding: 7px 10px;
     border: 1px solid var(--line); border-left: 2px solid var(--accent); border-radius: 6px;
-    background: var(--panel-alt); font-size: 11.5px; color: var(--mute); cursor: pointer;
+    background: var(--panel-alt); font-size: 12px; color: var(--mute); cursor: pointer;
   }
   .cite:hover { background: var(--accent-soft); }
   .cite .loc { color: var(--accent); font-weight: 600; white-space: nowrap; }
-  .think { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--accent); }
+  .think { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--accent); }
   .iinput { flex: none; display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
   .iinput .q {
     flex: 1; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg);
-    color: var(--mute); font-size: 12.5px; display: flex; align-items: center; padding: 0 10px;
+    color: var(--mute); font-size: 13px; display: flex; align-items: center; padding: 0 10px;
   }
   .iinput .send { height: 32px; }
   /* 发送前核对 sheet：只有「继续」才发请求 */
@@ -50,8 +50,8 @@
     padding: 20px 22px; box-shadow: 0 16px 48px rgba(23,20,18,.28);
   }
   .sheet h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-  .sheet .snote { font-size: 11.5px; color: var(--mute); line-height: 1.7; margin-bottom: 12px; }
-  .kv { display: flex; justify-content: space-between; font-size: 12.5px; padding: 7px 2px; border-bottom: 1px solid var(--line); }
+  .sheet .snote { font-size: 12px; color: var(--mute); line-height: 1.7; margin-bottom: 12px; }
+  .kv { display: flex; justify-content: space-between; font-size: 13px; padding: 7px 2px; border-bottom: 1px solid var(--line); }
   .kv:last-of-type { border-bottom: none; font-weight: 600; }
   .kv .v { font-variant-numeric: tabular-nums; color: var(--mute); }
   .kv:last-of-type .v { color: var(--accent); }
