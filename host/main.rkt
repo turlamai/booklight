@@ -26,6 +26,7 @@
          glaze/api-macros ; define-api-routes
          glaze/events     ; make-event-bus, bus-broadcast!
          glaze/types      ; GString, GInt64, GBool, GValue
+         racket/file
          racket/match
          racket/runtime-path
          json
@@ -257,7 +258,15 @@
 
 (define (host-e2e-fixtures)
   (unless (e2e-enabled?) (bad-param "e2e fixtures: harness not enabled"))
-  (hasheq 'epub (path->string fixture-epub) 'pdf (path->string fixture-pdf)))
+  ;; The journey writes annotation sidecars next to the PDF (file-first
+  ;; contract); hand it a disposable copy so the committed fixture tree
+  ;; stays untouched in CI and in local checkouts.
+  (define dir (make-temporary-file "booklight-e2e-~a"))
+  (delete-file dir)
+  (make-directory dir)
+  (define pdf-copy (build-path dir "fixture.pdf"))
+  (copy-file fixture-pdf pdf-copy)
+  (hasheq 'epub (path->string fixture-epub) 'pdf (path->string pdf-copy)))
 
 (define (host-e2e-report! payload)
   (when (e2e-enabled?) (set-box! e2e-report-box payload))
