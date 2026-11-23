@@ -455,7 +455,9 @@ jobs:
           printf '%s' "$UPDATE_ED25519_PRIVATE_KEY_B64" | base64 --decode > "$DER_FILE"
           "$OPENSSL3" pkey -inform DER -in "$DER_FILE" -out "$KEY_FILE"
           # A valid signature is insufficient if installed clients trust a different key.
-          ACTUAL_PUB="$("$OPENSSL3" pkey -in "$KEY_FILE" -pubout -outform DER | tail -c 32 | base64 | tr -d '\r\n')"
+          # booklight pins the full SPKI DER base64 (app/version.rkt), so compare
+          # the whole SubjectPublicKeyInfo, not just the raw 32-byte half.
+          ACTUAL_PUB="$("$OPENSSL3" pkey -in "$KEY_FILE" -pubout -outform DER | base64 | tr -d '\r\n')"
           BACKEND_PUB="$(grep -A1 'define update-public-key-b64' app/version.rkt | grep -oE '"[A-Za-z0-9+/=]+"' | head -1 | tr -d '"')"
           if [[ -z "$ACTUAL_PUB" || "$ACTUAL_PUB" != "$BACKEND_PUB" ]]; then
             echo "::error::Update signing key does not match the shipped client's pinned Ed25519 public key"
