@@ -527,13 +527,14 @@ async function boot() {
   fontPermille = (settings && settings.readingFontScalePermille) || 1000;
   $("#readTheme").value = readTheme;
   applyI18n(); applyTheme(); renderLibrary();
-  wire(); wireS4();
+  wire(); wireS4(); wireDrop();
   if (e2e) {
     const gate = await post("/api/host/e2e", {});
     if (gate.json && gate.json.enabled) {
       if (params.get("stage") === "pdf") runPdfStage();
       else if (params.get("stage") === "s4") runS4Stage();
       else if (params.get("stage") === "s5") runS5Stage();
+      else if (params.get("stage") === "drop") runDropStage();
       else runJourney();
     }
   }
@@ -1140,6 +1141,30 @@ async function runS4Stage() {
     state: { researchHidden: $("#view-research").hidden, cards: $$("#resResults .rcard").length, deck: $$("#deckList .ccard").length } } });
 }
 
+// ---- drop mask (welcome/drop-mask) -----------------------------------------
+let dragDepth = 0;
+function showDropMask(on) { $("#dropmask").hidden = !on; }
+function wireDrop() {
+  window.addEventListener("dragenter", e => { e.preventDefault(); dragDepth++; showDropMask(true); });
+  window.addEventListener("dragover", e => { e.preventDefault(); showDropMask(true); });
+  window.addEventListener("dragleave", e => { e.preventDefault(); dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) showDropMask(false); });
+  window.addEventListener("drop", async e => {
+    e.preventDefault(); dragDepth = 0; showDropMask(false);
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f) return;
+    try { await openDropped(f); }
+    catch (err) { announce(t("ui.open-failed") + " " + err.message); }
+  });
+}
+async function openDropped(f) {
+  if (!/\.(pdf|epub)$/i.test(f.name)) throw new Error(t("ui.filter.documents"));
+  const buf = new Uint8Array(await f.arrayBuffer());
+  const sc = await post("/api/host/scratch", { data: bytesToB64(buf) });
+  const dest = dirName(sc.json.path) + f.name;
+  await post("/api/host/write", { path: dest, data: bytesToB64(buf) });
+  await openPath(dest);
+}
+
 // ---- S5 reading-quality pixel evidence ------------------------------------
 function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -1184,6 +1209,42 @@ async function runS5Stage() {
     if (getComputedStyle(hl).opacity !== "0.45") throw new Error("ink opacity");
     return got;
   });
+  await step("underline-accent", async () => {
+    const spans = active.shell.tl.querySelectorAll("span");
+    const range = document.createRange();
+    range.setStart(spans[1], 0); range.setEnd(spans[Math.min(2, spans.length - 1)], 1);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    onPdfSelect(); await addAnnotation("", "underline");
+    window.getSelection().removeAllRanges();
+    const ul = $$("#prose .hl-layer .hl.underline").pop();
+    if (!ul) throw new Error("no underline ink");
+    const got = getComputedStyle(ul).borderBottomColor;
+    if (got !== tokenColor("--accent")) throw new Error("underline " + got);
+    return got;
+  });
+  await step("sel-precision", async () => {
+    const spans = active.shell.tl.querySelectorAll("span");
+    const range = document.createRange();
+    range.setStart(spans[0], 0); range.setEnd(spans[1], spans[1].childNodes.length || 1);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    onPdfSelect();
+    const want = [...range.getClientRects()].filter(r => r.width > 1 && r.height > 1);
+    await addAnnotation("blue", "highlight");
+    window.getSelection().removeAllRanges();
+    const got = $$("#prose .hl-layer .hl.highlight.blue").slice(-want.length).map(el => el.getBoundingClientRect());
+    if (got.length !== want.length) throw new Error("ink rects " + got.length + " != " + want.length);
+    let worst = 1;
+    for (let i = 0; i < want.length; i++) {
+      const a = want[i], g = got[i];
+      const ix = Math.max(0, Math.min(a.right, g.right) - Math.max(a.left, g.left));
+      const iy = Math.max(0, Math.min(a.bottom, g.bottom) - Math.max(a.top, g.top));
+      const inter = ix * iy;
+      const ua = a.width * a.height + g.width * g.height - inter;
+      worst = Math.min(worst, inter / ua);
+    }
+    if (worst < 0.8) throw new Error("ink IoU " + worst.toFixed(2));
+    return worst.toFixed(2);
+  });
   await step("open-epub", async () => { await openPath(fx.json.epub); return active.view.chapters; });
   await step("measure", () => {
     const cs = getComputedStyle($("#prose"));
@@ -1200,6 +1261,48 @@ async function runS5Stage() {
     if (Math.abs(ratio - 1.9) > 0.01) throw new Error("line-height " + ratio);
     if (cs.textAlign !== "justify") throw new Error("align " + cs.textAlign);
     return cs.fontFamily;
+  });
+  await step("citeblock", () => {
+    const bq = document.createElement("blockquote");
+    bq.textContent = "A cited passage.";
+    $("#prose").appendChild(bq);
+    const cs = getComputedStyle(bq);
+    const fontSize = cs.fontSize, lh = cs.lineHeight, blw = cs.borderLeftWidth, op = cs.opacity, ff = cs.fontFamily;
+    bq.remove();
+    const ratio = parseFloat(lh) / parseFloat(fontSize);
+    const ok = fontSize === "15px" && Math.abs(ratio - 1.8) < 0.01 &&
+      Math.abs(parseFloat(blw) - 3) < 0.5 && op === "0.88" && /Georgia/.test(ff);
+    if (!ok) throw new Error("citeblock " + fontSize + "/" + ratio + "/" + blw + "/" + op);
+    return fontSize;
+  });
+  await step("pagination", async () => {
+    const widths = [];
+    for (const ch of [1, 2]) {
+      await gotoChapter(ch);
+      const m = getComputedStyle($("#prose"));
+      widths.push(m.maxWidth);
+      if ($("#prose").scrollWidth > $("#prose").clientWidth + 1) throw new Error("h-overflow ch" + ch);
+    }
+    if (widths[0] !== widths[1] || widths[0] !== "608px") throw new Error("measure drift " + widths);
+    await gotoChapter(1);
+    return widths.join(",");
+  });
+  await step("scroll-feel", async () => {
+    const r = $("#reader");
+    if (getComputedStyle(r).scrollBehavior !== "smooth") throw new Error("scroll-behavior");
+    const saved = $("#prose").innerHTML;
+    for (let i = 0; i < 40; i++) {
+      const p = document.createElement("p");
+      p.textContent = "Scroll feel probe paragraph " + i + ". The quick brown fox jumps over the lazy dog.";
+      $("#prose").appendChild(p);
+    }
+    r.scrollTop = 240;
+    await new Promise(res => setTimeout(res, 500));
+    if (r.scrollTop <= 0) throw new Error("not scrollable");
+    const top = r.scrollTop;
+    $("#prose").innerHTML = saved;
+    r.scrollTop = 0;
+    return top;
   });
   await step("theme-paper", async () => {
     await setReadTheme("paper");
@@ -1233,6 +1336,44 @@ async function runS5Stage() {
       fontSize: getComputedStyle($("#prose p")).fontSize,
       lineHeight: getComputedStyle($("#prose p")).lineHeight,
       measure: getComputedStyle($("#prose")).maxWidth } } });
+}
+
+// Pixel-evidence stage for the drop mask: leave the mask over the library.
+async function runDropStage() {
+  const steps = {};
+  const step = async (id, fn) => {
+    try { const detail = await fn(); steps[id] = { ok: true, detail: String(detail ?? "") }; }
+    catch (err) { steps[id] = { ok: false, detail: err.message }; }
+  };
+  const fx = await post("/api/host/e2e_fixtures", {});
+  const f = await post("/api/host/file", { path: fx.json.epub });
+  const bytes = b64ToBytes(f.json.data);
+  const mkEvent = (type, withFile) => {
+    const dt = new DataTransfer();
+    if (withFile) dt.items.add(new File([bytes], "sample.epub", { type: "application/epub+zip" }));
+    return new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt });
+  };
+  await step("mask-show", () => {
+    renderLibrary();
+    window.dispatchEvent(mkEvent("dragover", true));
+    if ($("#dropmask").hidden) throw new Error("mask hidden");
+    return $(".dm-t").textContent;
+  });
+  await step("drop-open", async () => {
+    window.dispatchEvent(mkEvent("drop", true));
+    await new Promise(r => setTimeout(r, 600));
+    if (!active || active.kind !== "epub") throw new Error("drop did not open");
+    return active.title;
+  });
+  await step("mask-again", () => {
+    renderLibrary();
+    window.dispatchEvent(mkEvent("dragover", true));
+    if ($("#dropmask").hidden) throw new Error("mask hidden again");
+    return true;
+  });
+  const ok = Object.values(steps).every(s => s.ok);
+  await post("/api/host/e2e_report", { payload: { phase: "done", ok, stepCount: Object.keys(steps).length, steps,
+    state: { maskHidden: $("#dropmask").hidden, libHidden: $("#view-library").hidden } } });
 }
 
 boot();
