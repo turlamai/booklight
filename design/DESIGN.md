@@ -80,7 +80,9 @@
 ### 移动端视图（iOS，2026-11-22）
 
 **平台状态（2026-11-22）**：桌面当前实现为 rivet，macOS、Windows、Linux 三端已落地；#75 的
-glaze 换线进行中（S1 在 PR #78 审阅）。移动端遵循移动阅读契约，计划以原生 Swift 实现。
+glaze 换线进行中（S1 在 PR #78 审阅）。移动端遵循移动阅读契约，按 owner 2026-11-23 确认走
+平台原生语言（iOS/iPadOS Swift；Android 需要时 Kotlin），不复用 rivet 移动宿主，也不把
+glaze 载体延伸到移动端。
 原型包含移动端视图，界面与交互以本节和 `prototype/mobile-*.html` 为准。研究工作台
 （第 6 屏）为桌面专属。数据同步边界随实现立项另定。
 
