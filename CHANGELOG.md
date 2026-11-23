@@ -7,6 +7,13 @@ All notable changes to Booklight are documented here. Format follows
 
 ### Added
 
+- Reading-quality pixel evidence (#75 S5): real-window stage asserts the
+  reading typography against the kept contract at runtime — 608px measure
+  with 40px top padding, Georgia/Source Han Serif stack at 17px/1.9 justified,
+  paper/sepia/night backgrounds and inks equal to the `shared.css` reading
+  tokens, font scale permille applied to computed px, and highlight ink equal
+  to `--hl-yellow` at 0.45 opacity — then leaves the sepia prose on screen for
+  the capture (`booklight-host-s5.png`).
 - Settings / research workbench / AI inspector (#75 S4): native-grouped
   settings form (provider presets, base URL, model + suggested models, API key
   save, connection test, reading theme / view mode / target language / UI

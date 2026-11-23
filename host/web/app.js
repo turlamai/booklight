@@ -533,6 +533,7 @@ async function boot() {
     if (gate.json && gate.json.enabled) {
       if (params.get("stage") === "pdf") runPdfStage();
       else if (params.get("stage") === "s4") runS4Stage();
+      else if (params.get("stage") === "s5") runS5Stage();
       else runJourney();
     }
   }
@@ -1137,6 +1138,101 @@ async function runS4Stage() {
   const ok = Object.values(steps).every(s => s.ok);
   await post("/api/host/e2e_report", { payload: { phase: "done", ok, stepCount: Object.keys(steps).length, steps,
     state: { researchHidden: $("#view-research").hidden, cards: $$("#resResults .rcard").length, deck: $$("#deckList .ccard").length } } });
+}
+
+// ---- S5 reading-quality pixel evidence ------------------------------------
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+function hexToRgb(hex) {
+  const h = hex.replace("#", "");
+  const n = parseInt(h.length === 3 ? h.split("").map(c => c + c).join("") : h, 16);
+  return "rgb(" + ((n >> 16) & 255) + ", " + ((n >> 8) & 255) + ", " + (n & 255) + ")";
+}
+function tokenColor(name) {
+  const d = document.createElement("div");
+  d.style.background = cssVar(name);
+  document.body.appendChild(d);
+  const c = getComputedStyle(d).backgroundColor;
+  d.remove();
+  return c;
+}
+function readerBg() { return getComputedStyle($("#reader")).backgroundColor; }
+function readerInk() { return getComputedStyle($("#reader")).color; }
+async function runS5Stage() {
+  const steps = {};
+  const step = async (id, fn) => {
+    try { const detail = await fn(); steps[id] = { ok: true, detail: String(detail ?? "") }; }
+    catch (err) { steps[id] = { ok: false, detail: err.message }; }
+  };
+  const fx = await post("/api/host/e2e_fixtures", {});
+  settings = await rpc("save-reading-prefs", { theme: "paper", fontScalePermille: 1000 });
+  readTheme = "paper"; fontPermille = 1000; applyTheme();
+  await step("open-pdf", async () => { await openPath(fx.json.pdf); await new Promise(r => setTimeout(r, 400)); return active.pageCount; });
+  await step("ink-token", async () => {
+    const spans = active.shell.tl.querySelectorAll("span");
+    const range = document.createRange();
+    range.setStart(spans[0], 0); range.setEnd(spans[1], spans[1].childNodes.length || 1);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    onPdfSelect(); await addAnnotation("yellow", "highlight");
+    window.getSelection().removeAllRanges();
+    const hl = $("#prose .hl-layer .hl.highlight.yellow");
+    if (!hl) throw new Error("no ink");
+    const got = getComputedStyle(hl).backgroundColor;
+    const want = tokenColor("--hl-yellow");
+    if (got !== want) throw new Error("ink " + got + " != " + want);
+    if (getComputedStyle(hl).opacity !== "0.45") throw new Error("ink opacity");
+    return got;
+  });
+  await step("open-epub", async () => { await openPath(fx.json.epub); return active.view.chapters; });
+  await step("measure", () => {
+    const cs = getComputedStyle($("#prose"));
+    if (cs.maxWidth !== "608px") throw new Error("measure " + cs.maxWidth);
+    if (cs.paddingTop !== "40px") throw new Error("padding " + cs.paddingTop);
+    return cs.maxWidth;
+  });
+  await step("serif", () => {
+    const p = $("#prose p");
+    if (!p) throw new Error("no prose");
+    const cs = getComputedStyle(p);
+    if (!/Georgia/.test(cs.fontFamily) || !/serif\s*$/.test(cs.fontFamily)) throw new Error("family " + cs.fontFamily);
+    const ratio = parseFloat(cs.lineHeight) / parseFloat(cs.fontSize);
+    if (Math.abs(ratio - 1.9) > 0.01) throw new Error("line-height " + ratio);
+    if (cs.textAlign !== "justify") throw new Error("align " + cs.textAlign);
+    return cs.fontFamily;
+  });
+  await step("theme-paper", async () => {
+    await setReadTheme("paper");
+    if (readerBg() !== tokenColor("--reading-light-bg")) throw new Error("paper bg " + readerBg());
+    if (readerInk() !== tokenColor("--reading-light-ink")) throw new Error("paper ink");
+    return readerBg();
+  });
+  await step("theme-night", async () => {
+    await setReadTheme("night");
+    if (readerBg() !== tokenColor("--reading-dark-bg")) throw new Error("night bg " + readerBg());
+    if (readerInk() !== tokenColor("--reading-dark-ink")) throw new Error("night ink");
+    return readerBg();
+  });
+  await step("font-scale", async () => {
+    settings = await rpc("save-reading-prefs", { theme: readTheme, fontScalePermille: 1200 });
+    fontPermille = 1200; applyTheme();
+    const px = parseFloat(getComputedStyle($("#prose p")).fontSize);
+    if (Math.abs(px - 17 * 1.2) > 0.01) throw new Error("font px " + px);
+    settings = await rpc("save-reading-prefs", { theme: readTheme, fontScalePermille: 1000 });
+    fontPermille = 1000; applyTheme();
+    return px;
+  });
+  await step("theme-sepia", async () => {
+    await setReadTheme("sepia");
+    if (readerBg() !== tokenColor("--reading-sepia-bg")) throw new Error("sepia bg " + readerBg());
+    return readerBg();
+  });
+  const ok = Object.values(steps).every(s => s.ok);
+  await post("/api/host/e2e_report", { payload: { phase: "done", ok, stepCount: Object.keys(steps).length, steps,
+    state: { theme: readTheme, bg: readerBg(), ink: readerInk(),
+      fontSize: getComputedStyle($("#prose p")).fontSize,
+      lineHeight: getComputedStyle($("#prose p")).lineHeight,
+      measure: getComputedStyle($("#prose")).maxWidth } } });
 }
 
 boot();
