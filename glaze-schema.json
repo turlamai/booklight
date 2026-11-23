@@ -158,10 +158,102 @@
     {
       "method": "POST",
       "path": "/api/host/e2e_report_get"
+    },
+    {
+      "method": "POST",
+      "path": "/api/host/e2e_reset"
+    },
+    {
+      "method": "GET",
+      "path": "/api/host/i18n"
+    },
+    {
+      "method": "POST",
+      "path": "/api/host/file"
+    },
+    {
+      "method": "POST",
+      "path": "/api/dialog/open"
+    },
+    {
+      "method": "POST",
+      "path": "/api/dialog/save"
+    },
+    {
+      "method": "POST",
+      "path": "/api/dialog/message"
+    },
+    {
+      "method": "POST",
+      "path": "/api/dialog/ask"
     }
   ],
   "schema": {
     "commands": [
+      {
+        "errors": [
+          "invalid-args",
+          "capability-denied",
+          "token-required",
+          "timed-out",
+          "cancelled",
+          "internal"
+        ],
+        "name": "dialogAsk",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [
+          "invalid-args",
+          "capability-denied",
+          "token-required",
+          "timed-out",
+          "cancelled",
+          "internal"
+        ],
+        "name": "dialogMessage",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [
+          "invalid-args",
+          "capability-denied",
+          "token-required",
+          "timed-out",
+          "cancelled",
+          "internal"
+        ],
+        "name": "dialogOpen",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [
+          "invalid-args",
+          "capability-denied",
+          "token-required",
+          "timed-out",
+          "cancelled",
+          "internal"
+        ],
+        "name": "dialogSave",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
       {
         "errors": [],
         "name": "health",
@@ -209,6 +301,41 @@
       {
         "errors": [],
         "name": "hostE2e_report_get",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "hostE2e_reset",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Bool"
+        }
+      },
+      {
+        "errors": [],
+        "name": "hostFile",
+        "parameters": [
+          {
+            "name": "path",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "hostI18n",
         "parameters": [],
         "result": {
           "kind": "scalar",

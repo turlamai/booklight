@@ -1,4 +1,4 @@
-# Glaze carrier (#75 S1)
+# Glaze carrier + product web UI (#75 S1–S2)
 
 The rivet → glaze re-line keeps the Racket domain core (`racket/`) and the
 rivet backend (`app/backend.rkt`) untouched. This directory is the single
@@ -25,8 +25,32 @@ registered RPC 1:1 as a typed glaze route.
   inside the host process; the static require of `app/backend.rkt` keeps
   `raco exe` embedding working for packaged builds (S6).
 - **S1 scope**: carrier + 34-RPC surface + harness probe page + real-window
-  verify. The product web UI (library/reader chrome/tabs, EPUB surface)
-  lands in S2; the probe page is harness-only, never product UI.
+  verify. The probe page (`probe.html`) is harness-only, never product UI.
+- **S2 scope**: product web UI (`index.html` + `app.css` + `app.js`) —
+  library/welcome with file-first recents, reader chrome (titlebar, document
+  tabs, sidebar 目录/批注 tabs, statusbar) and the EPUB surface (toc, chapter
+  prose, chapter nav, reading theme + font scale). PDF rides the S0-verified
+  pdf.js render-only layer; page surgery and selection/pending-edit bars
+  remain S3.
+
+## S2 product UI contracts
+
+- **Tokens single source**: `design/prototype/shared.css` is served by the
+  carrier at `/shared.css`; `app.css` carries layout only (no token table).
+  The runtime public dir is assembled at startup (`assemble-public-dir`)
+  from `host/web/` + `shared.css` + the vendored `spike/pdfjs/vendor` tree,
+  so no copies are committed.
+- **Strings single source**: `shared/i18n/{zh,en}.json` served at
+  `api/host/i18n`; zh default. No new i18n keys (i18n is Keep).
+- **Native open panel**: glaze `make-dialog-routes` (`api/dialog/open`),
+  granted via the `dialog:open` capability.
+- **Render bytes**: `api/host/file` returns base64 bytes for pdf/epub only,
+  under the `host:file` capability; the page only passes user-picked or
+  recent paths. Production window runs with `host-capability`; the verifier
+  runs in open-route mode (no token) so headless CI needs no grant.
+- **Verify**: `host/verify.rkt` runs the S1 probe journey (`probe.html?e2e=1`,
+  12 steps) then resets the report and runs the S2 product journey
+  (`index.html?e2e=1`, 13 steps); verdicts cover both.
 
 ## Run
 
@@ -37,6 +61,6 @@ bash host/linux-verify.sh   # headless Linux (Xvfb + /run/user bus)
 python scripts/check-rpc-surface.py   # route surface vs rivet-schema.json
 ```
 
-Evidence lands in `.glaze/verify/` (boot + post-journey PNGs and
-`booklight-host-report.json`), collected over the loopback HTTP adapter —
-no host accessibility dependency.
+Evidence lands in `.glaze/verify/` (boot + S1 + S2 post-journey PNGs and
+`booklight-host-report.json` shaped `{s1:…, s2:…}`), collected over the
+loopback HTTP adapter — no host accessibility dependency.
