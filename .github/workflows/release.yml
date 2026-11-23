@@ -37,10 +37,10 @@ jobs:
       - name: Preflight mandatory signed-update key before platform builds
         shell: bash
         env:
-          UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
+          UPDATE_ED25519_PRIVATE_KEY_B64: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY_B64 }}
         run: |
-          if [[ -z "${UPDATE_ED25519_PRIVATE_KEY:-}" ]]; then
-            echo "::error::UPDATE_ED25519_PRIVATE_KEY missing; skipping expensive platform builds rather than publishing without a signed feed"
+          if [[ -z "${UPDATE_ED25519_PRIVATE_KEY_B64:-}" ]]; then
+            echo "::error::UPDATE_ED25519_PRIVATE_KEY_B64 missing; skipping expensive platform builds rather than publishing without a signed feed"
             exit 1
           fi
       - name: Read glaze + rivet pins from host-ci.yml
@@ -414,10 +414,10 @@ jobs:
       - name: Require Ed25519 update signing key
         shell: bash
         env:
-          UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
+          UPDATE_ED25519_PRIVATE_KEY_B64: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY_B64 }}
         run: |
-          if [[ -z "${UPDATE_ED25519_PRIVATE_KEY:-}" ]]; then
-            echo "::error::Missing UPDATE_ED25519_PRIVATE_KEY; refusing to publish without a signed update manifest"
+          if [[ -z "${UPDATE_ED25519_PRIVATE_KEY_B64:-}" ]]; then
+            echo "::error::Missing UPDATE_ED25519_PRIVATE_KEY_B64; refusing to publish without a signed update manifest"
             exit 1
           fi
       - name: Install Racket
@@ -440,15 +440,21 @@ jobs:
           ls -la dist/
       - name: Generate + sign update manifest
         env:
-          UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
+          UPDATE_ED25519_PRIVATE_KEY_B64: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY_B64 }}
         run: |
           set -euo pipefail
           umask 077
-          KEY_FILE=$(mktemp)
-          trap 'rm -f "$KEY_FILE"' EXIT
-          printf '%s\n' "$UPDATE_ED25519_PRIVATE_KEY" > "$KEY_FILE"
-          # A valid signature is insufficient if installed clients trust a different key.
+          # The repo secret holds the private OneAsymmetricKey DER, base64
+          # (scripts/update-keys.sh). Materialize it as a PEM file for the
+          # glaze signer; OpenSSL 3 reads the Ed25519 PKCS8 DER (macOS's
+          # LibreSSL cannot do Ed25519).
           OPENSSL3="$(brew --prefix openssl@3)/bin/openssl"
+          KEY_FILE=$(mktemp)
+          DER_FILE=$(mktemp)
+          trap 'rm -f "$KEY_FILE" "$DER_FILE"' EXIT
+          printf '%s' "$UPDATE_ED25519_PRIVATE_KEY_B64" | base64 --decode > "$DER_FILE"
+          "$OPENSSL3" pkey -inform DER -in "$DER_FILE" -out "$KEY_FILE"
+          # A valid signature is insufficient if installed clients trust a different key.
           ACTUAL_PUB="$("$OPENSSL3" pkey -in "$KEY_FILE" -pubout -outform DER | tail -c 32 | base64 | tr -d '\r\n')"
           BACKEND_PUB="$(grep -A1 'define update-public-key-b64' app/version.rkt | grep -oE '"[A-Za-z0-9+/=]+"' | head -1 | tr -d '"')"
           if [[ -z "$ACTUAL_PUB" || "$ACTUAL_PUB" != "$BACKEND_PUB" ]]; then
@@ -494,15 +500,17 @@ jobs:
           set -euo pipefail
           OPENSSL3="$(brew --prefix openssl@3)/bin/openssl"
           KEY_FILE=$(mktemp)
-          trap 'rm -f "$KEY_FILE"' EXIT
-          printf '%s\n' "$UPDATE_ED25519_PRIVATE_KEY" > "$KEY_FILE"
+          DER_FILE=$(mktemp)
+          trap 'rm -f "$KEY_FILE" "$DER_FILE"' EXIT
+          printf '%s' "$UPDATE_ED25519_PRIVATE_KEY_B64" | base64 --decode > "$DER_FILE"
+          "$OPENSSL3" pkey -inform DER -in "$DER_FILE" -out "$KEY_FILE"
           "$OPENSSL3" pkey -in "$KEY_FILE" -pubout -out "$RUNNER_TEMP/update-public.pem"
           raco glaze verify-release-assets public/update-manifest.json public \
             "$RUNNER_TEMP/update-public.pem" \
             --base-url "https://github.com/turlamai/booklight/releases/download/${{ github.ref_name }}" \
             --json
         env:
-          UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
+          UPDATE_ED25519_PRIVATE_KEY_B64: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY_B64 }}
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
