@@ -173,6 +173,14 @@
     },
     {
       "method": "POST",
+      "path": "/api/host/write"
+    },
+    {
+      "method": "POST",
+      "path": "/api/host/scratch"
+    },
+    {
+      "method": "POST",
       "path": "/api/dialog/open"
     },
     {
@@ -340,6 +348,47 @@
         "result": {
           "kind": "scalar",
           "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "hostScratch",
+        "parameters": [
+          {
+            "name": "data",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "hostWrite",
+        "parameters": [
+          {
+            "name": "path",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "data",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Bool"
         }
       },
       {
