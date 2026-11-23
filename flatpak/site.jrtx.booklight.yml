@@ -48,7 +48,7 @@ modules:
       - cp -a bin lib /app/booklight/
       - install -Dm755 booklight.sh /app/bin/booklight
       - install -Dm644 site.jrtx.booklight.desktop /app/share/applications/site.jrtx.booklight.desktop
-      - install -Dm644 app.png /app/share/icons/hicolor/512x512/apps/site.jrtx.booklight.png
+      - install -Dm644 icon-512.png /app/share/icons/hicolor/512x512/apps/site.jrtx.booklight.png
     sources:
       - type: dir
         path: flatpak-src
@@ -57,4 +57,4 @@ modules:
       - type: file
         path: site.jrtx.booklight.desktop
       - type: file
-        path: app.png
+        path: icon-512.png
