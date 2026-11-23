@@ -50,6 +50,16 @@
   sheet 只有「继续」才发请求、流式回答+停止）。字符串复用 kept i18n 键
   （含 `ui.ai-preview.body` 整段核对文案），无新增键、无共享层改动。
   真窗验收 +8 步 S4 journey（29 步）+ 研究工作台定格像素证据。
+- **已同步（2026-11-23，#75 S5）**：阅读质量像素证据——真窗定格 stage 逐项
+  断言正文排版等于 kept 契约：版心 608px/上padding 40px、Georgia+Source Han
+  Serif 栈 17px/1.9 两端对齐、citeblock 15px/1.8+3px 竖线 .88、paper/sepia/
+  night 底色与墨色等于 shared.css reading tokens、字号千分比落到 computed
+  px、高亮墨等于 --hl-yellow 且 opacity .45、下划线墨等于 --accent、逐行
+  选区→墨 IoU≥0.8、跨章版心不漂移且无横向溢出、平滑滚动手感；终态留 sepia
+  正文供 capture（booklight-host-s5.png）。welcome drop-mask 落地（ui.drop/
+  ui.welcome.drop-open，拖入字节经 scratch 暂存后打开），定格像素证据
+  booklight-host-drop.png。排版资产未被界面改动挤压（设计原则「文档即界面」
+  的验收面）。
 
 ## 设计原则（HIG 内核 + 本产品特化）
 

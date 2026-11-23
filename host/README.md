@@ -1,4 +1,4 @@
-# Glaze carrier + product web UI (#75 S1–S4)
+# Glaze carrier + product web UI (#75 S1–S5)
 
 The rivet → glaze re-line keeps the Racket domain core (`racket/`) and the
 rivet backend (`app/backend.rkt`) untouched. This directory is the single
@@ -82,7 +82,7 @@ python scripts/check-rpc-surface.py   # route surface vs rivet-schema.json
 ```
 
 Evidence lands in `.glaze/verify/` (boot + S1 + S2 post-journey PNGs and
-`booklight-host-report.json` shaped `{s1:…, s2:…, s3:…, s4:…}`), collected over the
+`booklight-host-report.json` shaped `{s1:…, s2:…, s3:…, s4:…, s5:…, drop:…}`), collected over the
 loopback HTTP adapter — no host accessibility dependency.
 ## S4 settings / research / AI inspector
 
@@ -104,3 +104,24 @@ loopback HTTP adapter — no host accessibility dependency.
 - **Verify**: +8 S4 journey steps (29 total) and a research pixel-evidence
   stage (`index.html?e2e=1&stage=s4`) leaving hit cards + citation deck on
   screen for the capture.
+
+## S5 reading-quality pixel evidence
+
+- Stage `index.html?e2e=1&stage=s5` resets reading prefs to paper/1000, then
+  asserts at runtime: highlight ink == `--hl-yellow` at opacity .45 (PDF);
+  measure max-width 608px + padding-top 40px; prose family Georgia/Source Han
+  Serif stack, line-height/font-size == 1.9, text-align justify; paper / night
+  / sepia reader background+ink equal the `shared.css` reading tokens; font
+  scale 1200 permille == 20.4px computed then restored to 1000.
+- Also asserts citeblock 15px/1.8 + 3px rule @ .88, underline ink == `--accent`,
+  per-line selection-to-ink IoU >= 0.8, stable 608px measure across chapters
+  with no horizontal overflow, and smooth scroll feel.
+- Ends on sepia EPUB prose; verify captures `booklight-host-s5.png` and gates
+  fourteen s5 verdicts plus the capture.
+
+## Drop mask pixel evidence
+
+- Stage `index.html?e2e=1&stage=drop` shows the drag-over mask over the
+  library, proves a synthetic drop of the EPUB fixture opens it (bytes staged
+  through `api/host/scratch` + `api/host/write` under the dropped file name),
+  then leaves the mask on screen; verify captures `booklight-host-drop.png`.
