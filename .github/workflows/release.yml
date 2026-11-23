@@ -131,7 +131,7 @@ jobs:
             --entry host/main.rkt \
             --installer \
             --icon design/app-icon.icns \
-            --dmg-background design/dmg-background.png \
+            --dmg-background ../design/dmg-background.png \
             --sign "$MACOS_SIGN_IDENTITY" \
             --notarize ASC_NOTARY
       - name: Build (ad-hoc dispatch smoke)
@@ -145,7 +145,7 @@ jobs:
             --entry host/main.rkt \
             --installer \
             --icon design/app-icon.icns \
-            --dmg-background design/dmg-background.png
+            --dmg-background ../design/dmg-background.png
       - name: Build requires signing credentials
         if: env.MACOS_SIGNING_CONFIGURED != 'true' && env.IS_TAG_RELEASE == 'true'
         run: |
@@ -231,9 +231,9 @@ jobs:
             --entry host/main.rkt \
             --installer \
             --icon design/app-icon.ico \
-            --installer-license LICENSE \
-            --installer-banner design/wizard-banner.bmp \
-            --installer-dialog design/wizard-dialog.bmp
+            --installer-license ../LICENSE \
+            --installer-banner ../design/wizard-banner.bmp \
+            --installer-dialog ../design/wizard-dialog.bmp
           test -s dist/booklight.msi
       - name: Collect MSI + portable zip + checksums
         shell: pwsh
@@ -362,7 +362,7 @@ jobs:
           cp -a dist/bin dist/lib flatpak-src/
           sed -e 's|path: booklight.sh|path: flatpak/booklight.sh|' \
               -e 's|path: site.jrtx.booklight.desktop|path: flatpak/site.jrtx.booklight.desktop|' \
-              -e 's|path: app.png|path: flatpak/icon-512.png|' \
+              -e 's|path: icon-512.png|path: flatpak/icon-512.png|' \
               flatpak/site.jrtx.booklight.yml > site.jrtx.booklight.gen.yml
           flatpak-builder --user --force-clean --disable-rofiles-fuse \
             --default-branch=stable --repo=flatpak-repo flatpak-build site.jrtx.booklight.gen.yml
