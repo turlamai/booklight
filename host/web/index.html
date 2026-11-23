@@ -18,6 +18,9 @@
     <div><div class="t" id="docTitle">Booklight</div><div class="sub" id="docSub"></div></div>
     <div class="sp"></div>
     <button class="btn" id="openBtn" data-i18n="ui.welcome.open-document"></button>
+    <button class="btn" id="researchBtn" data-i18n="ui.menu.research"></button>
+    <button class="btn" id="settingsBtn" data-i18n="ui.tab.settings"></button>
+    <button class="btn primary" id="aiBtn" data-i18n="ui.toolbar.ai" hidden></button>
     <button class="iconbtn" id="themeBtn" data-i18n-title="ui.toolbar.theme-dark">◐</button>
     <button class="iconbtn" id="langBtn" title="Language">文</button>
   </div>
@@ -87,8 +90,97 @@
           <button class="btn" id="pdfMenuBtn" hidden data-i18n="ui.pages.title"></button>
         </div>
       </div>
+      <!-- settings -->
+      <div class="view formwrap" id="view-settings" hidden>
+        <div class="formcol">
+          <div class="group">
+            <div class="gh" data-i18n="ui.settings.ai-section"></div>
+            <div class="frow"><label class="fl" data-i18n="ui.settings.preset"></label>
+              <select class="field" id="setPreset"></select></div>
+            <div class="frow"><label class="fl" data-i18n="ui.settings.base-url"></label>
+              <input class="field" id="setBaseUrl"></div>
+            <div class="frow"><label class="fl" data-i18n="ui.settings.model"></label>
+              <div class="field col"><input id="setModel" class="plain">
+                <div class="suggest" id="setSuggest"></div></div></div>
+            <div class="frow"><label class="fl" data-i18n="ui.settings.api-key"></label>
+              <input class="field" id="setKey" type="password">
+              <button class="btn" id="saveKeyBtn" data-i18n="ui.settings.save-key"></button></div>
+            <div class="frow"><label class="fl"></label>
+              <button class="btn" id="testBtn" data-i18n="ui.settings.test"></button>
+              <span class="saved" id="testMsg" hidden></span></div>
+          </div>
+          <div class="group">
+            <div class="gh" data-i18n="ui.settings.appearance"></div>
+            <div class="frow"><label class="fl" data-i18n="ui.reading.theme"></label>
+              <div class="segm" id="setTheme">
+                <button data-v="paper" data-i18n="ui.reading.theme.paper"></button>
+                <button data-v="sepia" data-i18n="ui.reading.theme.sepia"></button>
+                <button data-v="night" data-i18n="ui.reading.theme.night"></button>
+                <button data-v="system" data-i18n="ui.reading.theme.system"></button>
+              </div></div>
+            <div class="frow"><label class="fl" data-i18n="ui.settings.view-mode"></label>
+              <div class="segm" id="setView">
+                <button data-v="single" data-i18n="ui.settings.view-single"></button>
+                <button data-v="double" data-i18n="ui.settings.view-double"></button>
+              </div></div>
+            <div class="frow"><label class="fl" data-i18n="ui.settings.target-language"></label>
+              <select class="field" id="setTarget"></select></div>
+            <div class="frow"><label class="fl" data-i18n="ui.settings.language"></label>
+              <select class="field" id="setLocale">
+                <option value="system" data-i18n="ui.settings.language-system"></option>
+                <option value="zh">中文</option><option value="en">English</option>
+              </select>
+              <div class="hint" data-i18n="ui.settings.language-note"></div></div>
+          </div>
+          <div class="group">
+            <div class="gh" data-i18n="ui.sidebar.annotations"></div>
+            <div class="frow"><label class="check"><input type="checkbox" id="setSidecar"></label>
+              <div class="fl-wide" data-i18n="ui.settings.sidecar"></div></div>
+          </div>
+          <div class="privacy" data-i18n="ui.settings.privacy"></div>
+          <div class="frow"><button class="btn primary" id="saveSettingsBtn" data-i18n="ui.settings.save"></button>
+            <span class="saved" id="savedMsg" hidden data-i18n="ui.settings.saved"></span></div>
+        </div>
+      </div>
+      <!-- research workbench -->
+      <div class="view research-wrap" id="view-research" hidden>
+        <div class="rmain">
+          <div class="qhead">
+            <input class="qbox" id="resQuery" data-i18n-ph="ui.research.query-placeholder">
+            <button class="btn" id="resSearch" data-i18n="ui.research.search"></button>
+          </div>
+          <div class="results" id="resResults"></div>
+        </div>
+        <aside class="deck">
+          <div class="dh"><span data-i18n="ui.research.deck"></span><span class="cnt" id="deckCount"></span></div>
+          <div class="dlist" id="deckList"></div>
+          <div class="foot" data-i18n="ui.research.deck-footer"></div>
+        </aside>
+      </div>
       <div class="statusbar" id="statusbar"><span id="statusText"></span><span class="sp"></span><span id="statusSave"></span></div>
     </section>
+    <aside id="inspector" class="inspector" hidden>
+      <div class="itabs">
+        <div class="itab active" data-itab="chat" data-i18n="ui.tab.chat"></div>
+        <div class="itab" data-itab="summarize" data-i18n="ui.tab.summarize"></div>
+        <div class="itab" data-itab="translate" data-i18n="ui.tab.translate"></div>
+      </div>
+      <div class="ipane">
+        <div class="iscope"><span data-i18n="ui.chat.scope"></span>
+          <div class="seg2" id="aiScope">
+            <button data-scope="selection" data-i18n="ui.chat.scope.selection"></button>
+            <button data-scope="page" class="on" data-i18n="ui.chat.scope.page"></button>
+            <button data-scope="document" data-i18n="ui.chat.scope.doc"></button>
+          </div>
+        </div>
+        <div class="ichat" id="aiChat"></div>
+        <div class="iinput">
+          <input class="q" id="aiInput" data-i18n-ph="ui.chat.placeholder">
+          <button class="btn primary" id="aiSend" data-i18n="ui.chat.send"></button>
+          <button class="btn" id="aiStop" data-i18n="ui.chat.stop" hidden></button>
+        </div>
+      </div>
+    </aside>
   </div>
 </div>
 <dialog id="pdfMenu" class="menu-dialog">
@@ -103,6 +195,14 @@
     <button class="btn" data-edit="bake" data-i18n="ui.pages.bake"></button>
   </div>
   <div class="dialog-actions"><button class="btn" id="pdfMenuClose" data-i18n="ui.password.cancel"></button></div>
+</dialog>
+<dialog id="aiPreview" class="menu-dialog sheet">
+  <h2 data-i18n="ui.ai-preview.title"></h2>
+  <p class="muted snote" id="pvBody"></p>
+  <div class="dialog-actions">
+    <button class="btn" id="pvCancel" data-i18n="ui.ai-preview.cancel"></button>
+    <button class="btn primary" id="pvContinue" data-i18n="ui.ai-preview.continue"></button>
+  </div>
 </dialog>
 <div id="toast" class="toast" role="status" hidden></div>
 <div id="live" aria-live="polite" class="sr-only"></div>

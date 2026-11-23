@@ -75,6 +75,7 @@ function applyI18n() {
   document.documentElement.lang = lang === "zh" ? "zh" : "en";
   $$("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
   $$("[data-i18n-title]").forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  $$("[data-i18n-ph]").forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
   $("#prevChapter").textContent = t("ui.menu.prev-page");
   $("#nextChapter").textContent = t("ui.menu.next-page");
   $("#fontLabel").textContent = Math.round(fontPermille / 10) + "%";
@@ -91,6 +92,10 @@ function applyTheme() {
 function renderLibrary() {
   $("#view-library").hidden = false;
   $("#view-reader").hidden = true;
+  $("#view-settings").hidden = true;
+  $("#view-research").hidden = true;
+  $("#inspector").hidden = true;
+  $("#aiBtn").hidden = true;
   $("#tabbar").hidden = docs.length === 0;
   $("#docTitle").textContent = t("app.name");
   $("#docSub").textContent = "";
@@ -185,6 +190,9 @@ async function renderReader() {
   if (!active) return renderLibrary();
   $("#view-library").hidden = true;
   $("#view-reader").hidden = false;
+  $("#view-settings").hidden = true;
+  $("#view-research").hidden = true;
+  $("#aiBtn").hidden = false;
   $("#sidebar").hidden = !sideVisible;
   renderTabs();
   $("#docTitle").textContent = active.title;
@@ -519,11 +527,13 @@ async function boot() {
   fontPermille = (settings && settings.readingFontScalePermille) || 1000;
   $("#readTheme").value = readTheme;
   applyI18n(); applyTheme(); renderLibrary();
-  wire();
+  wire(); wireS4();
   if (e2e) {
     const gate = await post("/api/host/e2e", {});
     if (gate.json && gate.json.enabled) {
-      if (params.get("stage") === "pdf") runPdfStage(); else runJourney();
+      if (params.get("stage") === "pdf") runPdfStage();
+      else if (params.get("stage") === "s4") runS4Stage();
+      else runJourney();
     }
   }
 }
@@ -648,6 +658,7 @@ async function runJourney() {
     if (active.bytes.length !== active.originalBytes.length) throw new Error("source not restored");
     return active.bytes.length;
   });
+  await runS4Steps(step);
   await step("tabs", () => { const n = $$("#tabbar .doctab").length; if (n !== 2) throw new Error("tabs=" + n); return n; });
   await step("tab-close", async () => { const d = docs.find(x => x.kind === "pdf"); closeDoc(d); if (docs.length !== 1) throw new Error("close failed"); return docs.length; });
   const ok = Object.values(steps).every(s => s.ok);
@@ -681,6 +692,451 @@ async function runPdfStage() {
   const ok = Object.values(steps).every(s => s.ok);
   await post("/api/host/e2e_report", { payload: { phase: "done", ok, stepCount: Object.keys(steps).length, steps,
     state: { readerHidden: $("#view-reader").hidden, libHidden: $("#view-library").hidden, active: active && active.kind, dirty: active && active.dirty, hl: $$("#prose .hl-layer .hl").length } } });
+}
+
+// ---- S4: settings / research workbench / AI inspector ---------------------
+let presets = [];
+let aiMode = "chat";
+let aiScope = "page";
+let aiHistory = [];
+let aiStreamId = null;
+let aiBubble = null;
+let aiPending = null;
+let sse = null;
+const pdfTextCache = new Map();
+
+function showOnly(view) {
+  ["library", "reader", "settings", "research"].forEach(v => { $("#view-" + v).hidden = v !== view; });
+  $("#inspector").hidden = true;
+  $("#aiBtn").hidden = view !== "reader";
+  $("#sidebar").hidden = view !== "reader" || !sideVisible;
+}
+
+async function showSettings() {
+  showOnly("settings");
+  $("#docTitle").textContent = t("ui.tab.settings");
+  $("#docSub").textContent = "";
+  settings = await rpc("get-settings", {});
+  presets = await rpc("list-presets", {});
+  const ps = $("#setPreset"); ps.innerHTML = "";
+  presets.forEach(p => { const o = document.createElement("option"); o.value = p.id; o.textContent = p.label; ps.appendChild(o); });
+  ps.value = settings.provider;
+  $("#setBaseUrl").value = settings.baseUrl;
+  $("#setModel").value = settings.model;
+  $("#setKey").value = "";
+  $("#setKey").placeholder = settings.hasApiKey ? t("ui.settings.api-key-saved") : "";
+  $("#setTarget").innerHTML = "";
+  ["zh", "zh-hant", "en", "ja", "ko", "fr", "de", "es"].forEach(c => {
+    const o = document.createElement("option"); o.value = c; o.textContent = c; $("#setTarget").appendChild(o);
+  });
+  $("#setTarget").value = settings.targetLanguage;
+  $("#setLocale").value = lang;
+  $("#setSidecar").checked = !!settings.annotationSidecar;
+  $$("#setTheme button").forEach(b => b.classList.toggle("on", b.dataset.v === readTheme));
+  $$("#setView button").forEach(b => b.classList.toggle("on", b.dataset.v === settings.viewMode));
+  $("#setSuggest").innerHTML = "";
+  $("#testMsg").hidden = true; $("#savedMsg").hidden = true;
+  $("#statusText").textContent = t("ui.settings.privacy");
+}
+
+function settingsUpdate() {
+  return {
+    provider: $("#setPreset").value,
+    baseUrl: $("#setBaseUrl").value,
+    model: $("#setModel").value,
+    targetLanguage: $("#setTarget").value,
+    viewMode: ($$("#setView button").find(b => b.classList.contains("on")) || {}).dataset?.v || "single",
+    annotationSidecar: $("#setSidecar").checked,
+  };
+}
+async function saveSettings() {
+  settings = await rpc("save-settings", { update: settingsUpdate() });
+  $("#savedMsg").hidden = false;
+  announce(t("ui.settings.saved"));
+}
+async function saveKey() {
+  const k = $("#setKey").value;
+  if (!k) { announce(t("ui.settings.need-input")); return; }
+  await rpc("save-api-key", { key: k });
+  $("#setKey").value = "";
+  settings = await rpc("get-settings", {});
+  $("#setKey").placeholder = t("ui.settings.api-key-saved");
+  announce(t("ui.settings.api-key-saved"));
+}
+async function testConnection() {
+  $("#testMsg").hidden = false; $("#testMsg").textContent = t("ui.settings.fetching");
+  try {
+    const r = await rpc("test-connection", { baseUrl: $("#setBaseUrl").value, apiKey: $("#setKey").value, model: $("#setModel").value });
+    if (!r.ok) throw new Error(r.error || t("ui.settings.test"));
+    const models = r.models || [];
+    $("#testMsg").textContent = models.length ? t("ui.settings.test-ok", models.length) : t("ui.settings.test-ok-no-list");
+    const sg = $("#setSuggest"); sg.innerHTML = "";
+    models.slice(0, 6).forEach(m => {
+      const s = document.createElement("span"); s.className = "sg"; s.textContent = m;
+      s.addEventListener("click", () => { $("#setModel").value = m; });
+      sg.appendChild(s);
+    });
+  } catch (err) { $("#testMsg").textContent = err.message; }
+}
+
+// ---- research ------------------------------------------------------------
+async function pdfDocFor(path) {
+  if (pdfTextCache.has(path)) return pdfTextCache.get(path);
+  await ensurePdfjs();
+  const f = await post("/api/host/file", { path });
+  const doc = await pdfjsLib.getDocument({ data: b64ToBytes(f.json.data) }).promise;
+  pdfTextCache.set(path, doc);
+  return doc;
+}
+async function docUnits(d) {
+  const units = [];
+  if (d.kind === "epub") {
+    for (let c = 1; c <= d.view.chapters; c++) {
+      const text = await rpc("epub-chapter-text", { path: d.path, index: c });
+      units.push({ loc: t("ui.epub.chapter-n", c), page: c, text });
+    }
+  } else {
+    const doc = await pdfDocFor(d.path);
+    for (let p = 1; p <= doc.numPages; p++) {
+      const tc = await doc.getPage(p).then(pg => pg.getTextContent());
+      units.push({ loc: t("ui.notes.page", p), page: p, text: tc.items.map(i => i.str).join(" ") });
+    }
+  }
+  return units;
+}
+let resHits = [];
+async function runSearch() {
+  const q = $("#resQuery").value.trim();
+  const terms = q.split(/\s+/).filter(Boolean);
+  const box = $("#resResults"); box.innerHTML = "";
+  resHits = [];
+  if (!docs.length) {
+    box.innerHTML = '<div class="noresult"><div class="nr-t"></div><div class="nr-h"></div></div>';
+    $(".nr-t", box).textContent = t("ui.research.no-docs");
+    $(".nr-h", box).textContent = t("ui.research.no-docs-hint");
+    $("#statusText").textContent = t("ui.research.footer");
+    return 0;
+  }
+  if (!terms.length) return 0;
+  const t0 = performance.now();
+  for (const d of docs) {
+    const units = await docUnits(d);
+    const mine = [];
+    for (const u of units) {
+      for (const term of terms) {
+        const i = u.text.indexOf(term);
+        if (i < 0) continue;
+        const a = Math.max(0, i - 30), b = Math.min(u.text.length, i + term.length + 40);
+        mine.push({ path: d.path, title: d.title, kind: d.kind, loc: u.loc, page: u.page,
+          excerpt: u.text.slice(a, b), term });
+        break;
+      }
+      if (mine.length >= 8) break;
+    }
+    if (!mine.length) continue;
+    const head = document.createElement("div"); head.className = "rdoc";
+    head.textContent = t("ui.research.hits", d.title, mine.length);
+    box.appendChild(head);
+    for (const h of mine) {
+      resHits.push(h);
+      const card = document.createElement("div"); card.className = "rcard";
+      const ex = document.createElement("div"); ex.className = "ex";
+      const pre = h.excerpt.slice(0, h.excerpt.indexOf(h.term));
+      const post = h.excerpt.slice(h.excerpt.indexOf(h.term) + h.term.length);
+      ex.append("…" + pre);
+      const mk = document.createElement("mark"); mk.textContent = h.term; ex.appendChild(mk);
+      ex.append(post + "…");
+      card.appendChild(ex);
+      const src = document.createElement("span"); src.className = "src"; src.textContent = h.loc + " ↗";
+      src.addEventListener("click", () => jumpHit(h));
+      card.appendChild(src);
+      const acts = document.createElement("div"); acts.className = "acts";
+      const jump = document.createElement("button"); jump.className = "btn"; jump.textContent = t("ui.research.jump");
+      jump.addEventListener("click", () => jumpHit(h));
+      const copy = document.createElement("button"); copy.className = "btn"; copy.textContent = t("ui.research.cite");
+      copy.addEventListener("click", () => { navigator.clipboard && navigator.clipboard.writeText(citeText(h)); announce(t("ui.card.copied")); });
+      const pin = document.createElement("button"); pin.className = "btn"; pin.textContent = t("ui.research.pin");
+      pin.addEventListener("click", async () => { await pinHit(h); pin.classList.add("pinned"); pin.textContent = t("ui.research.pinned"); });
+      acts.append(jump, copy, pin);
+      card.appendChild(acts);
+      box.appendChild(card);
+    }
+  }
+  if (!resHits.length) {
+    box.innerHTML = '<div class="noresult"><div class="nr-t"></div><div class="nr-h"></div></div>';
+    $(".nr-t", box).textContent = t("ui.research.no-result-title");
+    $(".nr-h", box).textContent = t("ui.research.no-result-hint");
+  }
+  const secs = ((performance.now() - t0) / 1000).toFixed(1);
+  $("#statusText").textContent = t("ui.research.stats", docs.length, resHits.length, secs);
+  return resHits.length;
+}
+function citeText(h) { return t("ui.research.cite-format", h.title, h.loc, h.excerpt); }
+async function jumpHit(h) {
+  await openPath(h.path);
+  if (active.kind === "epub") await gotoChapter(h.page); else await gotoPage(h.page);
+}
+async function pinHit(h) {
+  const sidecar = !!(settings && settings.annotationSidecar);
+  const doc = await rpc("load-annotations", { pdfPath: h.path, sidecar });
+  const data = JSON.parse(b64ToText(doc.data));
+  data.annotations = data.annotations || [];
+  data.annotations.push({ id: "cite-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+    page: h.page, rects: [], excerpt: h.excerpt, color: "", kind: "cite", note: "", created: new Date().toISOString() });
+  await rpc("set-annotations", { pdfPath: h.path, sidecar, data: bytesToB64(new TextEncoder().encode(JSON.stringify(data))) });
+  const d = docs.find(x => x.path === h.path);
+  if (d) d.annotations = data.annotations;
+  await renderDeck();
+}
+async function renderDeck() {
+  const list = $("#deckList"); list.innerHTML = "";
+  let n = 0;
+  const sidecar = !!(settings && settings.annotationSidecar);
+  for (const d of docs) {
+    const doc = await rpc("load-annotations", { pdfPath: d.path, sidecar });
+    const data = JSON.parse(b64ToText(doc.data));
+    for (const a of (data.annotations || []).filter(x => x.kind === "cite")) {
+      n++;
+      const c = document.createElement("div"); c.className = "ccard";
+      const q = document.createElement("div"); q.className = "cq"; q.textContent = "「" + a.excerpt + "」";
+      const src = document.createElement("div"); src.className = "csrc";
+      src.append("《" + d.title + "》· " + (d.kind === "epub" ? t("ui.epub.chapter-n", a.page) : t("ui.notes.page", a.page)));
+      const j = document.createElement("span"); j.className = "jump"; j.textContent = t("ui.research.jump-back");
+      j.addEventListener("click", () => jumpHit({ path: d.path, page: a.page }));
+      src.appendChild(j);
+      c.append(q, src);
+      list.appendChild(c);
+    }
+  }
+  $("#deckCount").textContent = t("ui.research.deck-count", n);
+  return n;
+}
+async function showResearch() {
+  showOnly("research");
+  $("#docTitle").textContent = t("ui.research.title");
+  $("#docSub").textContent = t("ui.research.subtitle");
+  $("#statusText").textContent = t("ui.research.footer");
+  await renderDeck();
+}
+
+// ---- AI inspector ---------------------------------------------------------
+async function contextFor(scope) {
+  if (!active) return { text: "", label: "" };
+  if (scope === "selection") {
+    const s = (pendingSelection && pendingSelection.excerpt) || String(window.getSelection());
+    return { text: s, label: t("ui.chat.scope.selection") };
+  }
+  if (active.kind === "epub") {
+    if (scope === "document") return { text: await rpc("epub-doc-text", { path: active.path, maxChapters: 64, capChars: 200000 }), label: t("ui.chat.scope.doc") };
+    return { text: await rpc("epub-chapter-text", { path: active.path, index: active.chapter }), label: t("ui.epub.chapter-n", active.chapter) };
+  }
+  const doc = await pdfDocFor(active.path);
+  if (scope === "document") {
+    let all = "";
+    for (let p = 1; p <= doc.numPages; p++) all += (await doc.getPage(p).then(pg => pg.getTextContent())).items.map(i => i.str).join(" ") + "\n";
+    return { text: all, label: t("ui.chat.scope.doc") };
+  }
+  const tc = await doc.getPage(active.page).then(pg => pg.getTextContent());
+  return { text: tc.items.map(i => i.str).join(" "), label: t("ui.notes.page", active.page) };
+}
+function addBubble(who, text, cls) {
+  const wrap = document.createElement("div"); wrap.className = "bub " + cls;
+  const w = document.createElement("div"); w.className = "who"; w.textContent = who;
+  const body = document.createElement("div"); body.textContent = text;
+  wrap.append(w, body);
+  $("#aiChat").appendChild(wrap);
+  $("#aiChat").scrollTop = $("#aiChat").scrollHeight;
+  return body;
+}
+function ensureSse() {
+  if (sse) return;
+  sse = new EventSource("/glaze/events");
+  sse.addEventListener("stream-chunk", ev => {
+    const d = JSON.parse(ev.data);
+    if (d.requestId !== aiStreamId || !aiBubble) return;
+    aiBubble.textContent += d.delta;
+    $("#aiChat").scrollTop = $("#aiChat").scrollHeight;
+  });
+  sse.addEventListener("stream-done", ev => {
+    const d = JSON.parse(ev.data);
+    if (d.requestId !== aiStreamId) return;
+    finishStream();
+  });
+  sse.addEventListener("stream-error", ev => {
+    const d = JSON.parse(ev.data);
+    if (d.requestId !== aiStreamId) return;
+    announce(d.message); finishStream();
+  });
+}
+function finishStream() {
+  if (aiBubble) aiHistory.push(["ai", aiBubble.textContent]);
+  aiStreamId = null; aiBubble = null;
+  $("#aiStop").hidden = true; $("#aiSend").hidden = false;
+}
+async function aiSend() {
+  const msg = $("#aiInput").value.trim();
+  const ctx = await contextFor(aiScope);
+  if (aiMode === "chat" && !msg) { announce(t("ui.chat.placeholder")); return; }
+  if (!ctx.text && aiScope !== "selection") { announce(t("ui.need.document")); return; }
+  if (aiScope === "selection" && !ctx.text) { announce(t("ui.need.selection")); return; }
+  const action = aiMode;
+  const preview = await rpc("preview-ai-send", { action, scope: aiScope, contentText: ctx.text, history: aiHistory, userMessage: msg });
+  aiPending = { action, ctx, msg };
+  $("#pvBody").textContent = t("ui.ai-preview.body",
+    t("ui.ai-preview.action." + action), t("ui.ai-preview.scope." + (aiScope === "document" ? "document" : aiScope)),
+    preview.contentChars, preview.historyChars, preview.messageChars, preview.totalChars);
+  $("#aiPreview").showModal();
+}
+async function aiContinue() {
+  $("#aiPreview").close();
+  const { action, ctx, msg } = aiPending; aiPending = null;
+  ensureSse();
+  $("#aiSend").hidden = true; $("#aiStop").hidden = false;
+  if (action === "chat") {
+    addBubble(t("ui.chat.you"), msg, "me");
+    aiHistory.push(["user", msg]);
+    aiBubble = addBubble("BOOKLIGHT · " + (settings ? settings.model : ""), "", "ai");
+    const st = await rpc("chat", { contextText: ctx.text, contextLabel: ctx.label, history: aiHistory.slice(0, -1), userMessage: msg });
+    aiStreamId = st.requestId;
+    $("#aiInput").value = "";
+  } else if (action === "summarize") {
+    const mode = aiScope === "selection" ? "selection" : aiScope === "document" ? "doc" : "page";
+    aiBubble = addBubble(t("ui.tab.summarize"), "", "ai");
+    const st = await rpc("summarize-text", { text: ctx.text, mode });
+    aiStreamId = st.requestId;
+  } else {
+    aiBubble = addBubble(t("ui.tab.translate"), "", "ai");
+    const st = await rpc("translate-text", { text: ctx.text, target: settings ? settings.targetLanguage : "zh" });
+    aiStreamId = st.requestId;
+  }
+}
+async function aiStop() {
+  if (aiStreamId != null) await rpc("stop-stream", { requestId: aiStreamId });
+  finishStream();
+}
+function toggleInspector() {
+  const ins = $("#inspector");
+  ins.hidden = !ins.hidden;
+}
+
+function wireS4() {
+  $("#settingsBtn").addEventListener("click", showSettings);
+  $("#researchBtn").addEventListener("click", showResearch);
+  $("#aiBtn").addEventListener("click", toggleInspector);
+  $("#saveSettingsBtn").addEventListener("click", () => saveSettings().catch(e => announce(t("ui.settings.save-failed") + " " + e.message)));
+  $("#saveKeyBtn").addEventListener("click", () => saveKey().catch(e => announce(e.message)));
+  $("#testBtn").addEventListener("click", testConnection);
+  $("#setPreset").addEventListener("change", () => {
+    const p = presets.find(x => x.id === $("#setPreset").value);
+    if (p) { $("#setBaseUrl").value = p.baseUrl; $("#setModel").value = p.defaultModel; }
+  });
+  $$("#setTheme button").forEach(b => b.addEventListener("click", async () => {
+    $$("#setTheme button").forEach(x => x.classList.toggle("on", x === b));
+    await setReadTheme(b.dataset.v);
+  }));
+  $$("#setView button").forEach(b => b.addEventListener("click", () => {
+    $$("#setView button").forEach(x => x.classList.toggle("on", x === b));
+  }));
+  $("#setLocale").addEventListener("change", async e => {
+    const v = e.target.value;
+    lang = v === "system" ? "zh" : v;
+    localStorage.setItem("booklight-lang", lang);
+    await rpc("set-locale", { code: lang });
+    applyI18n();
+  });
+  $("#resSearch").addEventListener("click", () => runSearch().catch(e => announce(e.message)));
+  $("#resQuery").addEventListener("keydown", e => { if (e.key === "Enter") runSearch().catch(err => announce(err.message)); });
+  $$("#inspector .itab").forEach(tb => tb.addEventListener("click", () => {
+    aiMode = tb.dataset.itab;
+    $$("#inspector .itab").forEach(x => x.classList.toggle("active", x === tb));
+  }));
+  $$("#aiScope button").forEach(b => b.addEventListener("click", () => {
+    aiScope = b.dataset.scope;
+    $$("#aiScope button").forEach(x => x.classList.toggle("on", x === b));
+  }));
+  $("#aiSend").addEventListener("click", () => aiSend().catch(e => announce(t("ui.ai-preview.failed") + " " + e.message)));
+  $("#aiStop").addEventListener("click", () => aiStop().catch(e => announce(e.message)));
+  $("#pvCancel").addEventListener("click", () => { $("#aiPreview").close(); aiPending = null; });
+  $("#pvContinue").addEventListener("click", () => aiContinue().catch(e => { announce(e.message); finishStream(); }));
+}
+
+// ---- S4 e2e journey steps (appended by runJourney) ------------------------
+async function runS4Steps(step) {
+  await step("s4-settings-open", async () => {
+    await showSettings();
+    if ($("#view-settings").hidden) throw new Error("settings hidden");
+    if (!$$("#setPreset option").length) throw new Error("no presets");
+    return $$("#setPreset option").length;
+  });
+  await step("s4-settings-save", async () => {
+    $$("#setView button").forEach(x => x.classList.toggle("on", x.dataset.v === "double"));
+    await saveSettings();
+    if (settings.viewMode !== "double") throw new Error("viewMode not saved");
+    return settings.viewMode;
+  });
+  await step("s4-settings-theme", async () => {
+    const b = $$("#setTheme button").find(x => x.dataset.v === "sepia");
+    b.click(); await new Promise(r => setTimeout(r, 200));
+    if (readTheme !== "sepia") throw new Error("theme not saved");
+    return readTheme;
+  });
+  await step("s4-research-open", async () => {
+    await showResearch();
+    if ($("#view-research").hidden) throw new Error("research hidden");
+    return docs.length;
+  });
+  await step("s4-research-search", async () => {
+    $("#resQuery").value = "Alpha";
+    const n = await runSearch();
+    if (!n) throw new Error("no hits");
+    if (!$$("#resResults .rcard").length) throw new Error("no cards");
+    return n;
+  });
+  await step("s4-research-pin", async () => {
+    const before = await renderDeck();
+    await pinHit(resHits[0]);
+    const after = await renderDeck();
+    if (after !== before + 1) throw new Error("deck not grown");
+    return after;
+  });
+  await step("s4-ai-open", async () => {
+    await openPath(docs.find(d => d.kind === "epub").path);
+    toggleInspector();
+    if ($("#inspector").hidden) throw new Error("inspector hidden");
+    return aiMode;
+  });
+  await step("s4-ai-preview", async () => {
+    $("#aiInput").value = "What is this chapter about?";
+    await aiSend();
+    if (!$("#aiPreview").open) throw new Error("preview not open");
+    const txt = $("#pvBody").textContent;
+    if (!txt || txt.includes("{0}")) throw new Error("preview body unfilled");
+    $("#pvCancel").click();
+    return txt.length;
+  });
+}
+
+// Pixel-evidence stage for S4: research results + citation deck on screen.
+async function runS4Stage() {
+  const steps = {};
+  const step = async (id, fn) => {
+    try { const detail = await fn(); steps[id] = { ok: true, detail: String(detail ?? "") }; }
+    catch (err) { steps[id] = { ok: false, detail: err.message }; }
+  };
+  const fx = await post("/api/host/e2e_fixtures", {});
+  await step("open-epub", async () => { await openPath(fx.json.epub); return active.view.chapters; });
+  await step("open-pdf", async () => { await openPath(fx.json.pdf); return active.pageCount; });
+  await step("research", async () => {
+    await showResearch();
+    $("#resQuery").value = "Alpha";
+    const n = await runSearch();
+    if (!n) throw new Error("no hits");
+    await pinHit(resHits[0]);
+    return n;
+  });
+  const ok = Object.values(steps).every(s => s.ok);
+  await post("/api/host/e2e_report", { payload: { phase: "done", ok, stepCount: Object.keys(steps).length, steps,
+    state: { researchHidden: $("#view-research").hidden, cards: $$("#resResults .rcard").length, deck: $$("#deckList .ccard").length } } });
 }
 
 boot();
