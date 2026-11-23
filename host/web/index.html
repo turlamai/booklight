@@ -3,18 +3,77 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Booklight carrier probe</title>
-<link rel="stylesheet" href="probe.css">
+<meta name="color-scheme" content="light dark">
+<title>Booklight</title>
+<!-- Token single source: design/prototype/shared.css, served by the carrier
+     (no copied token table). Page layout lives in app.css. -->
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="app.css">
 </head>
 <body>
-<main>
-  <h1>Booklight <span class="tag">S1 carrier probe</span></h1>
-  <p id="status" class="status">loading…</p>
-  <ul id="steps" class="steps"></ul>
-  <p class="note">Harness page for #75 S1: the 34-RPC surface over rivet/bridge.
-  Product UI lands in S2. Journeys run only with <code>?e2e=1</code> and
-  <code>BOOKLIGHT_E2E=1</code>.</p>
-</main>
-<script src="probe.js"></script>
+<div class="window" id="app">
+  <div class="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <button class="iconbtn" id="sidebarBtn" data-i18n-title="ui.toolbar.panel">◧</button>
+    <div><div class="t" id="docTitle">Booklight</div><div class="sub" id="docSub"></div></div>
+    <div class="sp"></div>
+    <button class="btn" id="openBtn" data-i18n="ui.welcome.open-document"></button>
+    <button class="iconbtn" id="themeBtn" data-i18n-title="ui.toolbar.theme-dark">◐</button>
+    <button class="iconbtn" id="langBtn" title="Language">文</button>
+  </div>
+  <div class="tabbar" id="tabbar" hidden></div>
+  <div class="body">
+    <aside class="sidebar" id="sidebar">
+      <div class="vswitch" id="vswitch">
+        <div class="v active" data-tab="toc" data-i18n="ui.viewer.outline"></div>
+        <div class="v" data-tab="notes" data-i18n="ui.sidebar.annotations"></div>
+      </div>
+      <div class="sect" id="sideSect"></div>
+      <div class="side-list" id="sideList"></div>
+      <div class="foot" id="sideFoot"></div>
+    </aside>
+    <section class="main">
+      <!-- library / welcome -->
+      <div class="view welcome" id="view-library">
+        <section class="pitch">
+          <div class="wordmark" id="wordmark">Booklight</div>
+          <div class="promise" data-i18n="ui.welcome.open-any"></div>
+          <button class="btn primary open-cta" id="openCta" data-i18n="ui.welcome.open-document"></button>
+          <div class="privacy" data-i18n="ui.welcome.privacy"></div>
+        </section>
+        <section class="recents">
+          <h2 data-i18n="ui.viewer.recents"></h2>
+          <div id="recList"></div>
+        </section>
+      </div>
+      <!-- reader -->
+      <div class="view reader-wrap" id="view-reader" hidden>
+        <div class="reader paper" id="reader">
+          <div class="measure" id="prose"></div>
+        </div>
+        <div class="chapterbar">
+          <button class="btn" id="prevChapter"></button>
+          <span class="tiny muted" id="chapterStatus"></span>
+          <button class="btn" id="nextChapter"></button>
+          <div class="sp"></div>
+          <label class="tiny muted" for="readTheme" data-i18n="ui.reading.theme"></label>
+          <select id="readTheme">
+            <option value="system" data-i18n="ui.reading.theme.system"></option>
+            <option value="paper" data-i18n="ui.reading.theme.paper"></option>
+            <option value="sepia" data-i18n="ui.reading.theme.sepia"></option>
+            <option value="night" data-i18n="ui.reading.theme.night"></option>
+          </select>
+          <button class="iconbtn" id="fontMinus" aria-label="A-">−</button>
+          <span class="tiny muted" id="fontLabel"></span>
+          <button class="iconbtn" id="fontPlus" aria-label="A+">+</button>
+        </div>
+      </div>
+      <div class="statusbar" id="statusbar"><span id="statusText"></span><span class="sp"></span><span id="statusSave"></span></div>
+    </section>
+  </div>
+</div>
+<div id="toast" class="toast" role="status" hidden></div>
+<div id="live" aria-live="polite" class="sr-only"></div>
+<script src="app.js"></script>
 </body>
 </html>

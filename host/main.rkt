@@ -24,11 +24,15 @@
 (require glaze/app        ; run-app, open-app-window, current-app
          glaze/api        ; POST, GET, exn:fail:glaze:bad-param
          glaze/api-macros ; define-api-routes
+         glaze/capability ; make-capability, allow-permission
+         glaze/dialogs    ; make-dialog-routes (native open/save panels)
          glaze/events     ; make-event-bus, bus-broadcast!
          glaze/types      ; GString, GInt64, GBool, GValue
          racket/file
          racket/match
+         racket/path
          racket/runtime-path
+         net/base64
          json
          (prefix-in engine: "../app/backend.rkt")
          "../app/version.rkt"
@@ -38,7 +42,7 @@
 ;; start-engine! wires the codec to the in-process RVT1 transport — the
 ;; app entry and the real-window verifier both call it; schema checks
 ;; load this module without starting anything.
-(provide api start-engine! event-bus probe-dir)
+(provide api start-engine! event-bus probe-dir assemble-public-dir host-capability)
 
 (define-runtime-path schema-path "../rivet-schema.json")
 (define schema (call-with-input-file schema-path read-json))
@@ -245,9 +249,70 @@
    #t]
   [(POST "api/host/e2e_report_get" #:returns GValue)
    (e2eReportGet)
-   (or (unbox e2e-report-box) (hasheq 'phase "waiting"))])
+   (or (unbox e2e-report-box) (hasheq 'phase "waiting"))]
+  [(POST "api/host/e2e_reset" #:returns GBool)
+   (e2eReset)
+   (when (e2e-enabled?) (set-box! e2e-report-box #f))
+   #t]
 
-(define api api-typed)
+  ;; ---- S2 product web UI host capabilities -------------------------------
+  ;; i18n single source (shared/i18n) served to the web UI; no copied string
+  ;; table. zh is the default locale.
+  [(GET "api/host/i18n" #:returns GValue)
+   (hostI18n)
+   (hasheq 'zh (call-with-input-file i18n-zh-path read-json)
+           'en (call-with-input-file i18n-en-path read-json))]
+  ;; Read-only file bytes for the pdf.js render layer (S0 spike). The page
+  ;; only ever passes paths the user picked via the native open dialog or
+  ;; from recents; the capability grant scopes this to the local user.
+  [(POST "api/host/file" #:returns GValue #:permission 'host:file)
+   (hostFile [path GString])
+   (host-file-bytes path)])
+
+(define api (append api-typed (make-dialog-routes)))
+
+;; Runtime authority for the production window: native open panel + the
+;; read-only file bridge. The verifier runs without a capability (open-route
+;; mode) so headless CI needs no interactive grant.
+(define host-capability
+  (make-capability "booklight" (list 'dialog:open 'host:file)))
+
+(define-runtime-path i18n-zh-path "../shared/i18n/zh.json")
+(define-runtime-path i18n-en-path "../shared/i18n/en.json")
+
+(define (host-file-bytes path)
+  (define p (string->path path))
+  (define ext (path-get-extension p))
+  (unless (and (file-exists? p) ext
+               (member (string-downcase (bytes->string/utf-8 ext))
+                       '(".pdf" ".epub")))
+    (bad-param (format "not a readable pdf/epub: ~a" path)))
+  (define bytes (file->bytes p))
+  (when (> (bytes-length bytes) (* 64 1024 1024))
+    (bad-param "file too large for the render bridge"))
+  (hasheq 'data (bytes->base64 bytes)))
+
+(define (bytes->base64 b)
+  (bytes->string/utf-8 (base64-encode b #"")))
+
+;; ---- runtime public dir ---------------------------------------------------
+;; The web UI's token sheet (design/prototype/shared.css) and the vendored
+;; pdf.js (spike/pdfjs/vendor) stay single-source in the repo; the carrier
+;; assembles a runtime public dir at startup instead of committing copies.
+(define-runtime-path web-dir "web")
+(define-runtime-path shared-css-path "../design/prototype/shared.css")
+(define-runtime-path pdfjs-dist-path "../spike/pdfjs/vendor/pdfjs-dist")
+
+(define (assemble-public-dir)
+  (define dir (build-path (find-system-path 'temp-dir)
+                          (format "booklight-public-~a-~a"
+                                  (current-seconds) (current-inexact-milliseconds))))
+  ;; copy-directory/files creates `dir` as the copy of web-dir; pre-creating
+  ;; it would make the copy collide with the existing directory.
+  (copy-directory/files web-dir dir)
+  (copy-file shared-css-path (build-path dir "shared.css"))
+  (copy-directory/files pdfjs-dist-path (build-path dir "pdfjs"))
+  dir)
 
 ;; ---- harness gate state ---------------------------------------------------
 (define (e2e-enabled?) (equal? (getenv "BOOKLIGHT_E2E") "1"))
@@ -305,10 +370,11 @@
         'http))
   (define-values (_kind stop)
     (run-app
-     #:public-dir probe-dir
+     #:public-dir (assemble-public-dir)
      #:api api
      #:transport transport
      #:api-token (or (getenv "GLAZE_API_TOKEN") #t)
+     #:capability host-capability
      #:events bus
      #:title "Booklight"
      #:width 1200

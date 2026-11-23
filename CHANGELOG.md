@@ -7,6 +7,17 @@ All notable changes to Booklight are documented here. Format follows
 
 ### Added
 
+- Product web UI (#75 S2): library / welcome with file-first recents, reader
+  chrome (titlebar, document tabs, sidebar 目录/批注 tabs, statusbar) and the
+  EPUB surface (toc, chapter prose, chapter nav, reading theme + font scale)
+  on the kept CSS contract (`design/prototype/shared.css` tokens served
+  single-source; typography mirrors `reading.html` / `welcome.html`). PDF
+  rides the S0-verified pdf.js render-only layer; page surgery and
+  selection / pending-edit bars remain S3. Strings come from the
+  `shared/i18n` single source via `api/host/i18n`; native open panel via
+  glaze `make-dialog-routes`; read-only render bytes via `api/host/file`
+  under a named capability. Real-window verify now runs the S1 probe journey
+  plus a 13-step S2 product journey (`host/verify.rkt`).
 - Glaze carrier (#75 S1): `host/` drives the kept rivet backend over
   in-process RVT1 through `rivet/bridge` (upstream extraction
   turlamai/rivet#493, glaze#159) and exposes all 34 RPCs 1:1 as typed glaze

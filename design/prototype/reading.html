@@ -40,6 +40,12 @@
   .reader.paper { background: #F5F2ED; color: #292524; --rline: rgba(0,0,0,.08); }
   .reader.sepia { background: #EFE6D5; color: #292524; --rline: rgba(0,0,0,.10); }
   .reader.night { background: #171412; color: #D6D3D1; --rline: rgba(255,255,255,.10); }
+  /* 文档标签条：多文档并行（与原生宿主 ui.menu.close-tab 同语义） */
+  .tabbar { flex: none; display: flex; gap: 4px; padding: 6px 10px 0; background: var(--sidebar); border-bottom: 1px solid var(--line); }
+  .tabbar .doctab { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 6px 6px 0 0; border: 1px solid var(--line); border-bottom: none; background: var(--panel-alt); color: var(--mute); font-size: 12px; cursor: pointer; }
+  .tabbar .doctab.active { background: var(--bg); color: var(--ink); font-weight: 600; }
+  .tabbar .doctab .x { border: none; background: transparent; color: var(--mute); cursor: pointer; font-size: 12px; }
+  .tabbar .doctab .x:hover { color: var(--danger); }
   /* 批注侧栏 */
   .arow { display: flex; gap: 9px; padding: 10px 10px; border-radius: 8px; }
   .arow:hover { background: var(--panel-alt); }
@@ -62,6 +68,10 @@
       <button class="btn" title="AI 助手">✦ AI 助手</button>
       <button class="iconbtn" title="书签当前页（⌘B）"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
       <button class="iconbtn" id="themeBtn" title="切换亮暗主题">◐</button>
+    </div>
+    <div class="tabbar">
+      <div class="doctab active"><span>The Sample Book</span><button class="x" title="关闭标签页">✕</button></div>
+      <div class="doctab"><span>光学实验记录.pdf</span><button class="x" title="关闭标签页">✕</button></div>
     </div>
     <div class="body">
       <aside class="sidebar">

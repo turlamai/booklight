@@ -22,6 +22,16 @@
   glaze#159）；边界约定 Bytes=base64 字符串、enum=字符串、章节序号 1-based；
   `glaze-schema.json` 为 glaze 面基线，`scripts/check-rpc-surface.py` 门禁；
   S1 探针页仅 harness，产品 web UI 自 S2 起按原型渐进落地。
+- **已同步（2026-11-23，#75 S2）**：产品 web UI 落地 `host/web/`（library/
+  welcome + 文件优先 recents、reader chrome：标题栏/文档标签/侧栏目录·批注
+  tabs/状态栏、EPUB 面：toc/章节正文/章导航/阅读主题+字号）。token 单一真源
+  `design/prototype/shared.css` 由载体运行时装配 serve（不复制进仓）；正文
+  排版对照 `reading.html`/.measure、library 对照 `welcome.html`/.rrow；
+  文档标签条先落原型 `reading.html` 再实现。字符串走 `shared/i18n` 单源
+  （`api/host/i18n`，zh 默认）；原生打开面板走 glaze `make-dialog-routes`；
+  只读渲染字节 `api/host/file` 受命名 capability 约束。PDF 仅 pdf.js 只读
+  渲染（S0 已验证），页手术与划词/待编辑条留 S3。真窗验收含 S1 探针 + 13 步
+  S2 产品 journey。
 
 ## 设计原则（HIG 内核 + 本产品特化）
 
