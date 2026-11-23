@@ -1,0 +1,105 @@
+name: glaze carrier
+
+# #75 S1: the glaze carrier + 34-RPC surface over rivet/bridge on every
+# declared platform. Route-surface gate + real-window journey evidence
+# (PNG + typed report), no host AX dependency.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  GLAZE_PIN: e2731a3a1440c9cf705f2c0e77b945a3dec05e79
+  # rivet/bridge landed in turlamai/rivet#493 (glaze#159 extraction).
+  GLAZE_RIVET_PIN: 0db8b76396f70dde6d0a9c7935a0bd91d8c066f3
+  # The Windows verified-TLS installer reads RIVET_PIN; the carrier pins the
+  # rivet revision glaze itself is built against (same pairing as podlens).
+  RIVET_PIN: 0db8b76396f70dde6d0a9c7935a0bd91d8c066f3
+  # GPU-less hosted runners have no DRI3 device; WebKitGTK must fall back
+  # to the software path or webview startup crashes (glaze docs/ci.md).
+  WEBKIT_DISABLE_DMABUF_RENDERER: '1'
+
+jobs:
+  surface:
+    name: RPC surface gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Bogdanp/setup-racket@v1.15
+        with:
+          version: stable
+          distribution: full
+          architecture: x64
+      - name: Install pinned Rivet + Glaze (catalog)
+        shell: bash
+        run: |
+          raco pkg install --auto --no-docs "https://github.com/turlamai/rivet.git#${GLAZE_RIVET_PIN}"
+          raco pkg install --auto --no-docs "https://github.com/turlamai/glaze.git#${GLAZE_PIN}"
+      - name: Glaze schema baseline must be committed current
+        shell: bash
+        run: |
+          raco glaze schema write
+          git diff --exit-code -- glaze-schema.json
+      - name: Route surface vs rivet-schema.json
+        shell: bash
+        run: python scripts/check-rpc-surface.py
+
+  carrier:
+    name: glaze carrier (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Bogdanp/setup-racket@v1.15
+        with:
+          version: stable
+          distribution: full
+          # Auto-detection installs x64 on arm64 runners (Exec format error);
+          # always pass the matrix architecture explicitly.
+          architecture: ${{ contains(matrix.os, 'arm') && 'arm64' || 'x64' }}
+      - name: Export trusted Mozilla CA roots for Windows Racket
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bundle = Join-Path $env:RUNNER_TEMP 'booklight-mozilla-roots.pem'
+          $js = 'const tls=require("node:tls"),fs=require("node:fs"); if(tls.rootCertificates.length<50) process.exit(2); fs.writeFileSync(process.argv[1],tls.rootCertificates.join("\n")+"\n",{flag:"wx"});'
+          node -e $js $bundle
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $bundle -PathType Leaf)) {
+            throw "Unable to export trusted CA roots; refusing insecure TLS fallback"
+          }
+          "BOOKLIGHT_CI_CA_BUNDLE=$bundle" >> $env:GITHUB_ENV
+      - name: Install pinned Glaze (Windows, verified TLS)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: racket scripts/ci-install-windows-deps.rkt --glaze
+      - name: Install pinned Rivet + Glaze (catalog)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          raco pkg install --auto --no-docs "https://github.com/turlamai/rivet.git#${GLAZE_RIVET_PIN}"
+          raco pkg install --auto --no-docs "https://github.com/turlamai/glaze.git#${GLAZE_PIN}"
+      - name: Linux webview runtime deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -o Acquire::ForceIPv4=true -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+          sudo apt-get install -y -o DPkg::Lock::Timeout=120 -o Acquire::ForceIPv4=true -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 libgtk-3-0 libwebkit2gtk-4.1-0 xvfb dbus
+      - name: Real-window carrier (Linux, Xvfb)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash host/linux-verify.sh
+      - name: Real-window carrier
+        if: runner.os != 'Linux'
+        shell: bash
+        run: racket host/verify.rkt
+      - name: Upload carrier evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carrier-evidence-${{ matrix.os }}
+          path: .glaze/verify/
+          if-no-files-found: warn

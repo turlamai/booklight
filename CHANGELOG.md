@@ -5,6 +5,16 @@ All notable changes to Booklight are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- Glaze carrier (#75 S1): `host/` drives the kept rivet backend over
+  in-process RVT1 through `rivet/bridge` (upstream extraction
+  turlamai/rivet#493, glaze#159) and exposes all 34 RPCs 1:1 as typed glaze
+  routes; `glaze-schema.json` baseline + `scripts/check-rpc-surface.py`
+  gate; harness probe page + real-window verify on four platforms
+  (`.github/workflows/host-ci.yml`). Bytes ride base64 strings at the JSON
+  boundary; the product web UI lands in S2.
+
 ## [0.12.0] - 2026-11-19
 
 ### Added
