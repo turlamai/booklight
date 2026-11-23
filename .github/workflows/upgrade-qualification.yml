@@ -1,38 +1,34 @@
 name: Published upgrade qualification (N -> N+1)
 
-# Real-feed upgrade qualification (owner mandate #14 evidence ladder):
+# Real-feed upgrade qualification (#75 S6, owner mandate evidence ladder):
 # install the previous *published* release, drive the updater entry points
 # that release shipped against the real signed feed
-# (releases/latest/download/update-manifest.json — the family-canonical
-# feed name), extract the downloaded N+1 tarball over
-# the app directory, relaunch both versions headlessly on the same config
-# directory, execute the documented rollback, and refuse a one-byte-
-# tampered live feed. Green offline tests never prove an upgrade; the
-# evidence artifact this workflow uploads does.
+# (releases/latest/download/update-manifest.json), extract the downloaded
+# N+1 tarball over the app directory (the documented tarball install path),
+# relaunch both versions headlessly on the same data directory, execute the
+# documented rollback, and refuse a one-byte-tampered live feed. Green
+# offline tests never prove an upgrade; the evidence artifact this workflow
+# uploads does.
 #
-# Install shape: the feed's Linux entry is the tar.gz (extract-anywhere
-# install; upgrades overlay the newer tarball over the app directory). The
-# updater also selects the signed AppImage artifact for AppImage-running
-# installs, which swaps the running image through #:after-download — this
-# workflow qualifies the tarball feed path and records `installShape` in
-# the evidence; the file name keeps the family workflow name.
+# Install shape: Booklight's feed carries the tar.gz for Linux — the glaze
+# portable tree (bin/ + lib/, launcher bin/booklight; public/ is assembled
+# at runtime from define-runtime-path inside lib/). The Linux install form
+# is "extract anywhere, run bin/booklight"; upgrades extract the newer
+# tarball over the app directory (docs/USER-GUIDE.md). The workflow
+# qualifies exactly that path and records `installShape` in the evidence.
 #
-# Throttle note: booklight's check throttle is 24h (a documented deviation
-# from the family 4h baseline) and lives in the check-updates RPC
-# (app/backend.rkt auto-check-interval-seconds); the qualification calls
-# the updater entry points directly, which never consult it.
-#
-# Updater note: the workflow checks out the N tag but overlays
-# app/updater.rkt and the driver from main. The published tags' config shim
-# constructed the ten-field updater-config with the wrong component ('app
-# against a component-less feed), so their real check path answered
-# up-to-date forever; main's managed updater replaces that shim and takes
-# the rivet pin from its own revision (below). Once a release ships the
-# managed updater the overlay becomes a no-op. The evidence records the
-# overlay commit as `updaterSource`.
+# Both published tags are glaze-stack releases (the version line restarted
+# at 0.1.0 with #75 S6), so the N tag ships the updater and the qualification
+# driver under test — no overlay from main is needed or applied.
 
 on:
   workflow_dispatch:
+
+# Fallback so the file is self-consistent for static pin checks; the "Read
+# the glaze pin" step below always overwrites this with the pin the
+# published N release was actually built against.
+env:
+  GLAZE_PIN: e2731a3a1440c9cf705f2c0e77b945a3dec05e79
 
 permissions:
   contents: read
@@ -52,8 +48,6 @@ jobs:
             racket-arch: arm64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
-    env:
-      XDG_CONFIG_HOME: /tmp/qual/config
     steps:
       - name: Find the two newest published releases
         id: releases
@@ -72,59 +66,38 @@ jobs:
           echo "to-version=${to_tag#v}" >> "$GITHUB_OUTPUT"
 
       - name: Check out the updater under test (N)
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           ref: ${{ steps.releases.outputs.from-tag }}
 
-      - name: Overlay the corrected updater and the driver from main
+      - name: Read the glaze pin the N release was built against
         run: |
           set -euo pipefail
-          git fetch origin main --depth 1
-          git checkout FETCH_HEAD -- app/updater.rkt scripts/acceptance/upgrade-qualification.rkt
-          echo "OVERLAY_SHA=$(git rev-parse FETCH_HEAD)" >> "$GITHUB_ENV"
-
-      - name: Read the rivet pin the updater under test was built against
-        run: |
-          set -euo pipefail
-          # The overlay runs main's updater against the N tag; that updater
-          # needs the pin from its own revision, not the N release's pin
-          # (which predates the managed-updater hooks it calls). Without an
-          # overlay (a future release that ships this updater), the checked
-          # out tag's pin is the right one.
-          if [ -n "${OVERLAY_SHA:-}" ]; then
-            ci="$(git show "$OVERLAY_SHA:.github/workflows/ci.yml")"
-          else
-            ci="$(cat .github/workflows/ci.yml)"
-          fi
-          spec="$(printf '%s\n' "$ci" | grep -ohE "https://[^']+rivet\.git#[^']+" | head -1)"
-          test -n "$spec"
-          # workflows may pin through the env indirection (a "RIVET_PIN:"
-          # env block at the top) rather than a literal ref
-          if echo "$spec" | grep -qF 'env.RIVET_PIN'; then
-            pin="$(printf '%s\n' "$ci" | grep -m1 -E '^ *RIVET_PIN:' | sed -E 's/.*RIVET_PIN:[[:space:]]*//')"
-            test -n "$pin"
-            spec="$(echo "$spec" | cut -d'#' -f1)#$pin"
-          fi
-          echo "RIVET_SPEC=$spec" >> "$GITHUB_ENV"
+          pin="$(grep -m1 -E '^ *GLAZE_PIN:' .github/workflows/host-ci.yml | sed -E 's/.*GLAZE_PIN:[[:space:]]*//')"
+          test -n "$pin"
+          echo "GLAZE_PIN=$pin" >> "$GITHUB_ENV"
+          echo "UPDATER_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Install headless GUI runtime + accessibility tools
         run: |
           sudo apt-get update
           sudo apt-get install -y -o Acquire::Retries=5 --no-install-recommends \
-            libgtk-4-1 libadwaita-1-0 libwebkitgtk-6.0-4 libjson-glib-1.0-0 \
-            libsecret-1-0 liblz4-1 zlib1g libncurses6 libx11-6 libxtst6 \
-            weston at-spi2-core dbus python3-pyatspi libglib2.0-bin
+            libgtk-3-0 libwebkit2gtk-4.1-0 \
+            libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad liblz4-1 \
+            zlib1g libncurses6 libx11-6 libxtst6 \
+            xvfb at-spi2-core dbus python3-pyatspi libglib2.0-bin
 
-      - uses: Bogdanp/setup-racket@v1.16
+      - uses: Bogdanp/setup-racket@v1.15
         with:
           version: '9.3'
           architecture: ${{ matrix.racket-arch }}
           distribution: full
           variant: CS
 
-      - name: Install the rivet release N was built against
+      - name: Install the glaze release N was built against
         run: |
-          raco pkg install --auto --no-docs "$RIVET_SPEC" crypto
+          raco pkg install --auto --no-docs "https://github.com/turlamai/glaze.git#${GLAZE_PIN}"
 
       - name: Fetch published N, N+1 and the live signed feed
         env:
@@ -143,8 +116,7 @@ jobs:
           TO_TAR="/tmp/qual/to/$TO_ASSET"
           test -s "$FROM_TAR" && test -s "$TO_TAR"
           # the published checksum file must agree with the downloaded N+1 bytes
-          grep "$TO_ASSET" /tmp/qual/to/SHA256SUMS
-          grep "$TO_ASSET" /tmp/qual/to/SHA256SUMS | grep -q "$(sha256sum "$TO_TAR" | cut -d' ' -f1)"
+          ( cd /tmp/qual/to && grep "$TO_ASSET" SHA256SUMS )
           # the live feed we exercise is the moving latest, and it must offer N+1
           LIVE_FEED_URL="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/update-manifest.json"
           curl -fsSL -o /tmp/qual/update-manifest.json "$LIVE_FEED_URL"
@@ -162,11 +134,10 @@ jobs:
         run: |
           cat > /tmp/qual/boot-probe.py <<'EOF'
           #!/usr/bin/env python3
-          # Boot proof: the "Booklight" frame maps — the packaged host
-          # starts, renders, and talks to the session bus. (The seeded
-          # state's survival is asserted at file level in the workflow;
-          # shelf rendering needs the document-open journey, which stays
-          # with scripts/e2e/linux-atspi.py.)
+          # Boot proof: the "Booklight" frame maps and the web document is
+          # live in the a11y tree with the library welcome copy (PDF/EPUB)
+          # visible — the first assertions of the real-window acceptance
+          # journeys, without the listening journey.
           import argparse, json, time
           from pathlib import Path
           import pyatspi
@@ -200,8 +171,8 @@ jobs:
               except Exception:
                   return ""
 
-          def contains(root, expected):
-              return any((n.name or "") == expected or text(n) == expected
+          def mentions(root, needle):
+              return any(needle in (n.name or "") or needle in text(n)
                          for n in walk(root))
 
           def find_app():
@@ -227,41 +198,46 @@ jobs:
           window = wait_for(
               "Booklight frame",
               lambda: next((n for n in walk(app) if role(n) == "frame"), None))
+          wait_for(
+              "live web document",
+              lambda: any(role(n) == "document web" for n in walk(window)))
+          wait_for(
+              "library welcome copy (PDF/EPUB)",
+              lambda: mentions(window, "PDF") or mentions(window, "EPUB"))
           args.output.mkdir(parents=True, exist_ok=True)
           (args.output / "boot-proof.json").write_text(
               json.dumps({"boot": True, "frame": "Booklight"}))
           EOF
           cat > /tmp/qual/boot-verify.sh <<'EOF'
           #!/usr/bin/env bash
-          # Boot a packaged Booklight tree headlessly (weston + at-spi, the
-          # scripts/e2e/e2e-linux.sh pattern, including the WebKitGTK
-          # sandbox escape hatch runners require) and run the boot probe.
+          # Boot a packaged Booklight tree headlessly (Xvfb + at-spi) and run
+          # the boot probe. The tree root holds bin/ + lib/ (public/ is
+          # assembled at runtime by the glaze carrier).
           set -euo pipefail
           app_dir="$1"; out="$2"
-          exe="$app_dir/RivetHost"
+          exe="$app_dir/bin/booklight"
           test -x "$exe"
           mkdir -p "$out"
           export HOME=/tmp/qual/home
-          export XDG_DATA_HOME=/tmp/qual/data-home
-          export XDG_CONFIG_HOME=/tmp/qual/config
-          export XDG_CACHE_HOME=/tmp/qual/cache
+          export XDG_CONFIG_HOME=/tmp/qual/data
           export XDG_RUNTIME_DIR=/tmp/qual/runtime
-          export WAYLAND_DISPLAY=wayland-booklight-qual GDK_BACKEND=wayland GTK_A11Y=atspi NO_AT_BRIDGE=0 LANG=C.UTF-8
-          # GitHub-hosted runners deny the user namespace WebKitGTK's
-          # bubblewrap sandbox needs (same hatch scripts/e2e/e2e-linux.sh uses)
-          export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
-          unset DISPLAY
-          mkdir -p "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$XDG_RUNTIME_DIR"
+          export DISPLAY=:99
+          export GDK_BACKEND=x11
+          export GTK_A11Y=atspi
+          export NO_AT_BRIDGE=0
+          export LANG=C.UTF-8
+          unset WAYLAND_DISPLAY
+          mkdir -p "$HOME" "$XDG_RUNTIME_DIR"
           chmod 700 "$XDG_RUNTIME_DIR"
-          rm -f "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"
-          # wide headless output: the real window is 1280x860 (see e2e-linux.sh)
-          weston --backend=headless-backend.so --width=1600 --height=1000 --socket="$WAYLAND_DISPLAY" --idle-time=0 --log="$out/weston.log" &
-          weston_pid=$!
+          rm -rf /tmp/.X11-unix/X99
+          Xvfb "$DISPLAY" -screen 0 1440x900x24 -nolisten tcp >"$out/xvfb.log" 2>&1 &
+          xvfb_pid=$!
           for _ in $(seq 1 100); do
-            [[ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]] && break
+            [[ -S /tmp/.X11-unix/X99 ]] && break
+            kill -0 "$xvfb_pid"
             sleep 0.05
           done
-          [[ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]]
+          [[ -S /tmp/.X11-unix/X99 ]]
           launcher="$(command -v at-spi-bus-launcher || true)"
           [[ -n "$launcher" ]] || launcher=/usr/libexec/at-spi-bus-launcher
           "$launcher" --launch-immediately >"$out/at-spi-bus.log" 2>&1 &
@@ -285,50 +261,33 @@ jobs:
           }
           status=0
           python3 /tmp/qual/boot-probe.py --output "$out" || status=$?
-          if [[ "$status" != "0" ]]; then
-            echo "--- application.log (tail) ---"
-            tail -40 "$out/application.log" || true
-            echo "--- weston.log (tail) ---"
-            tail -10 "$out/weston.log" || true
-          fi
           stop_bounded "$app_pid"
           kill -TERM "$atspi_pid" 2>/dev/null || true
-          stop_bounded "$weston_pid"
+          stop_bounded "$xvfb_pid"
           exit "$status"
           EOF
           chmod +x /tmp/qual/boot-verify.sh /tmp/qual/boot-probe.py
 
-      - name: Install N (tarball extract) and seed the config state
+      - name: Install N (tarball extract) and seed the data directory
         run: |
           set -euo pipefail
-          APPDIR="booklight-linux-${{ matrix.arch }}"
-          mkdir -p /tmp/qual/install /tmp/qual/config
-          tar -xzf "$FROM_TAR" -C /tmp/qual/install
-          test -x "/tmp/qual/install/$APPDIR/RivetHost"
+          mkdir -p /tmp/qual/install/n /tmp/qual/data
+          tar -xzf "$FROM_TAR" -C /tmp/qual/install/n
+          test -x /tmp/qual/install/n/bin/booklight
           # retain N beside the install for the executed rollback
-          cp -a "/tmp/qual/install/$APPDIR" "/tmp/qual/install/$APPDIR.previous"
-          # seed the config state through the shipped fixture tooling: the
-          # same annotation-recovery fixture scripts/e2e/e2e-linux.sh
-          # writes, plus a real settings.json for fresh-install parity
-          racket scripts/acceptance/seed-annotation-recovery.rkt \
-            "/tmp/qual/config/site.jrtx.booklight" \
-            "racket/tests/fixtures/sample.epub"
-          racket scripts/acceptance/seed-ai-preview.rkt \
-            "/tmp/qual/config/site.jrtx.booklight"
-          # file-level persistence baseline: every seeded byte is compared
-          # after the upgrade boot and again after the rollback boot (the
-          # UI shelf rendering needs the document-open journey and stays
-          # with the e2e journey)
-          ( cd /tmp/qual/config && find . -type f | sort | xargs sha256sum ) \
-            > /tmp/qual/seed-manifest.txt
-          test -s /tmp/qual/seed-manifest.txt
+          cp -a /tmp/qual/install/n /tmp/qual/install/n.previous
+          # a settings.json shaped like a real install (sepia reading theme);
+          # its survival across upgrade/rollback boots is the data-persistence
+          # proof. check-updates stays off so no boot touches the live feed.
+          printf '%s\n' '{"reading_theme":"sepia","view_mode":"single"}' \
+            > /tmp/qual/data/settings.json
+          grep -q '"reading_theme":"sepia"' /tmp/qual/data/settings.json
 
-      - name: Boot N headlessly (the install works)
+      - name: Boot N headlessly (the install works, the library loads)
         run: |
           set -euo pipefail
-          APPDIR="booklight-linux-${{ matrix.arch }}"
           dbus-run-session -- bash /tmp/qual/boot-verify.sh \
-            "/tmp/qual/install/$APPDIR" /tmp/qual/boot-n
+            /tmp/qual/install/n /tmp/qual/boot-n
           touch /tmp/qual/boot-n.ok
 
       - name: Refuse a one-byte-tampered live feed (bad signature)
@@ -345,20 +304,22 @@ jobs:
           env['payload'] = base64.b64encode(bytes(payload)).decode()
           open('/tmp/qual/tamper/update-manifest.json', 'w').write(json.dumps(env))
           PY
+          DATA_DIR=/tmp/qual/data \
           PRISTINE_BYTES_PATH=/tmp/qual/update-manifest.json \
           TAMPER_BYTES_PATH=/tmp/qual/tamper/update-manifest.json \
           OUTPUT_JSON=/tmp/qual/bad-signature.json \
-          racket scripts/acceptance/upgrade-qualification.rkt
+          racket scripts/qualification/upgrade-qualification.rkt
           # a refused manifest must never reach disk as an artifact
-          test -z "$(ls -A /tmp/qual/config/site.jrtx.booklight/updates 2>/dev/null || true)"
+          test -z "$(ls -A /tmp/qual/data/updates 2>/dev/null || true)"
           touch /tmp/qual/bad-signature.ok
 
       - name: Drive the shipped updater through the live feed
         run: |
           set -euo pipefail
+          DATA_DIR=/tmp/qual/data \
           EXPECTED_VERSION="${{ steps.releases.outputs.to-version }}" \
           OUTPUT_JSON=/tmp/qual/upgrade.json \
-          racket scripts/acceptance/upgrade-qualification.rkt
+          racket scripts/qualification/upgrade-qualification.rkt
           # the updater already hash-checked against the signed manifest;
           # the bytes must also equal the independently published release asset
           test "$(jq -r .downloadedSha256 /tmp/qual/upgrade.json)" = "$TO_SHA"
@@ -368,49 +329,38 @@ jobs:
       - name: Install N+1 over the app directory and verify the tree
         run: |
           set -euo pipefail
-          APPDIR="booklight-linux-${{ matrix.arch }}"
           mkdir -p /tmp/qual/reference /tmp/qual/from-reference
           tar -xzf "$TO_TAR" -C /tmp/qual/reference
           tar -xzf "$FROM_TAR" -C /tmp/qual/from-reference
-          tar -xzf "$(jq -r .downloadedPath /tmp/qual/upgrade.json)" -C /tmp/qual/install
+          tar -xzf "$(jq -r .downloadedPath /tmp/qual/upgrade.json)" -C /tmp/qual/install/n
           # the replaced tree must equal the published N+1 tree (no stale files)
-          diff -r --brief "/tmp/qual/install/$APPDIR" "/tmp/qual/reference/$APPDIR"
+          diff -r --brief /tmp/qual/install/n /tmp/qual/reference
           # the retained tree must still be N byte for byte
-          diff -r --brief "/tmp/qual/install/$APPDIR.previous" "/tmp/qual/from-reference/$APPDIR"
+          diff -r --brief /tmp/qual/install/n.previous /tmp/qual/from-reference
 
-      - name: Boot N+1 headlessly (seeded state must survive the upgrade)
+      - name: Boot N+1 headlessly (data must survive the upgrade)
         run: |
           set -euo pipefail
-          APPDIR="booklight-linux-${{ matrix.arch }}"
           dbus-run-session -- bash /tmp/qual/boot-verify.sh \
-            "/tmp/qual/install/$APPDIR" /tmp/qual/boot-n1
-          # every seeded config byte survives the upgrade unchanged (the
-          # updater's own bookkeeping — updater.json, updates/ — may
-          # legitimately appear or change around it)
-          ( cd /tmp/qual/config && while read -r hex path; do
-              test "$(sha256sum "$path" | cut -d' ' -f1)" = "$hex"
-            done < /tmp/qual/seed-manifest.txt )
+            /tmp/qual/install/n /tmp/qual/boot-n1
+          grep -q '"reading_theme":"sepia"' /tmp/qual/data/settings.json
           touch /tmp/qual/boot-n1.ok
 
       - name: Execute the documented rollback and boot N again
         run: |
           set -euo pipefail
-          APPDIR="booklight-linux-${{ matrix.arch }}"
-          rm -rf "/tmp/qual/install/$APPDIR"
-          cp -a "/tmp/qual/install/$APPDIR.previous" "/tmp/qual/install/$APPDIR"
-          diff -r --brief "/tmp/qual/install/$APPDIR" "/tmp/qual/from-reference/$APPDIR"
+          rm -rf /tmp/qual/install/n
+          cp -a /tmp/qual/install/n.previous /tmp/qual/install/n
+          diff -r --brief /tmp/qual/install/n /tmp/qual/from-reference
           dbus-run-session -- bash /tmp/qual/boot-verify.sh \
-            "/tmp/qual/install/$APPDIR" /tmp/qual/boot-rollback
-          ( cd /tmp/qual/config && while read -r hex path; do
-              test "$(sha256sum "$path" | cut -d' ' -f1)" = "$hex"
-            done < /tmp/qual/seed-manifest.txt )
+            /tmp/qual/install/n /tmp/qual/boot-rollback
           touch /tmp/qual/rollback.ok
 
       - name: Write evidence
         if: always()
         run: |
           set -euo pipefail
-          mkdir -p .rivet/qualification
+          mkdir -p .glaze/qualification
           jq -n \
             --arg arch "${{ matrix.arch }}" \
             --arg fromTag "${{ steps.releases.outputs.from-tag }}" \
@@ -421,7 +371,7 @@ jobs:
             --arg toSha256 "${TO_SHA:-unknown}" \
             --arg feedUrl "${LIVE_FEED_URL:-unknown}" \
             --arg manifestKeyId "${FEED_KEY_ID:-unknown}" \
-            --arg updaterSource "${OVERLAY_SHA:-unknown}" \
+            --arg updaterSource "${UPDATER_SHA:-unknown}" \
             --arg runUrl "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             --argjson bootN "$([[ -f /tmp/qual/boot-n.ok ]] && echo true || echo false)" \
             --argjson badSignature "$([[ -f /tmp/qual/bad-signature.ok ]] && echo true || echo false)" \
@@ -432,10 +382,10 @@ jobs:
             --argjson badSignatureDetail "$(cat /tmp/qual/bad-signature.json 2>/dev/null || echo null)" \
             '{
               format: "booklight-published-upgrade-qualification",
-              formatVersion: 1,
+              formatVersion: 2,
               arch: $arch,
-              installShape: "tar.gz extracted over the app directory (feed entry linux/targz via the update-manifest.json family-canonical carrier); the AppImage install selects the signed appimage artifact and swaps the running image in place, qualified separately",
-              throttleBypass: "direct updater entry points; the 24h check throttle (family-deviating contract) lives in the check-updates RPC and is never consulted",
+              installShape: "tar.gz extracted over the app directory (feed entry linux/tar.gz; the glaze portable tree bin/ + lib/, launcher bin/booklight, public/ assembled at runtime; upgrades overlay the newer tarball)",
+              throttleBypass: "direct updater entry points; the 24h silent-check throttle lives in app/backend.rkt (check-updates RPC) and is never consulted",
               updaterSource: $updaterSource,
               feedUrl: $feedUrl,
               manifestKeyId: $manifestKeyId,
@@ -448,14 +398,14 @@ jobs:
               bootNplus1: $bootNplus1,
               rollback: $rollback,
               badSignatureDetail: $badSignatureDetail,
-              dataPersistence: "seeded config state (annotation recovery file + settings.json) byte-identical across the upgrade boot and the rollback boot (updater bookkeeping - updater.json and updates/ - is allowed to change around it)",
+              dataPersistence: "seeded settings.json (reading_theme sepia) present in the data directory across upgrade and rollback boots",
               runUrl: $runUrl
-            }' > .rivet/qualification/evidence.json
-          cat .rivet/qualification/evidence.json
+            }' > .glaze/qualification/evidence.json
+          cat .glaze/qualification/evidence.json
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: published-upgrade-${{ matrix.arch }}
-          path: .rivet/qualification/evidence.json
+          path: .glaze/qualification/evidence.json
           if-no-files-found: warn

@@ -1,9 +1,10 @@
 #lang racket/base
 
-;; Release identity duplicated from rivet.rktd. The packaged app cannot read
-;; the project file at runtime, so the updater embeds these constants. Keep
-;; them in sync with rivet.rktd (AGENTS.md lists this as a release checklist
-;; item).
+;; Release identity. The packaged app cannot read the project file at
+;; runtime, so the updater embeds these constants. Keep them in sync with
+;; VERSION and CHANGELOG.md (scripts/check-release-version.sh gates the
+;; release; AGENTS.md lists this as a release checklist item). The version
+;; line restarted at 0.1.0 with the glaze carrier (#75 S6).
 
 (provide app-version
          app-build
@@ -14,7 +15,7 @@
          update-public-key-b64
          default-update-base-url)
 
-(define app-version "0.12.0")
+(define app-version "0.1.0")
 (define app-build 1)
 (define app-identifier "site.jrtx.booklight")
 (define app-channel 'stable)

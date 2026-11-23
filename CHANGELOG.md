@@ -5,6 +5,42 @@ All notable changes to Booklight are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-23
+
+Version line restarted at 0.1.0 with the glaze carrier (#75 S6). The native
+macOS / Windows / Linux host legs are retired; every platform now ships the
+single web UI on the glaze carrier as portable archives (macOS/Windows zip,
+Linux tar.gz + Flatpak bundle), signed by `raco glaze manifest-sign` and
+verified by the shipped updater. All prior releases and tags were removed;
+0.1.0 is the first published release of the new line.
+
+### Changed
+
+- Release pipeline is glaze-only (#75 S6): `ci.yml` runs the contract gate
+  plus the Racket engine tests; `release.yml` builds the five portable
+  archives, the Linux Flatpak bundles, `SHA256SUMS` and the signed
+  `update-manifest.json` (`scripts/make-update-manifest.sh`, key-id
+  `booklight-2026-11`). `scripts/check-release-version.sh` aligns VERSION ==
+  `app/version.rkt` == CHANGELOG (the retired `rivet.rktd` is gone).
+- Published-upgrade qualification (#75 S6):
+  `.github/workflows/upgrade-qualification.yml` +
+  `scripts/qualification/upgrade-qualification.rkt` install the previous
+  published release, drive its shipped updater against the live signed feed,
+  overlay the N+1 tarball, boot both versions headlessly, execute the
+  rollback and refuse a one-byte-tampered feed; evidence uploads per arch.
+- Flatpak bundle rides the glaze portable tree (#75 S6): `command: booklight`
+  through `flatpak/booklight.sh`, payload `bin/` + `lib/` (public/ assembled
+  at runtime), desktop `Exec=booklight`.
+
+### Removed
+
+- Native host legs and their acceptance/e2e scaffolding (#75 S6):
+  `macos-host/`, `windows/`, `linux/`, `rivet.rktd`, `rivet-acceptance.rktd`,
+  the SwiftUI/AppImage acceptance workflows and `scripts/gen-*-strings.mjs`,
+  `scripts/acceptance/`, `scripts/e2e/`. The web UI on the glaze carrier is
+  the only surface; `scripts/locate-zlib.ps1` moves to `scripts/` for the
+  Windows release build.
+
 ### Added
 
 - Reading-quality pixel evidence (#75 S5): real-window stage asserts the
