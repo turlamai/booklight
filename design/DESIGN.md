@@ -11,9 +11,8 @@
 - **Exit 条件**：6 屏关键状态齐（空态/进行态/失败恢复态）+ 交互逻辑定稿 + HIG 清单全过 + 用户评审通过。
 - **不在范围**：付费/授权/checkout/entitlement UI——2026-11-18 owner 决策（AGENTS.md「quality-first」，#57）已取消全部商业化 gating，研究工作台免费交付；PRICING 文档已退役删除。书库/封面/阅读时长统计、路由与 `rivet-schema.json` RPC 契约变更、新配色体系。
 - **已同步（2026-11-19）**：正文排版三端统一为 17 px × 用户缩放 × 1.9 行高（原型值）；Windows/Linux 原 16 px 已对齐，`docs/DESIGN.md` 的 Reading body 行已同步为同一契约。
-- **进行中（2026-11-21，#75）**：owner 决策 UI 线 rivet → glaze（三原生腿删除、
-  单一 web UI）；S0 pdf.js spike 已绿，S1 glaze carrier 在 PR #78 审阅中，换线完成前
-  桌面三腿仍是当前实现。PDF 阅读面迁 pdf.js（**仅渲染**：canvas + text layer + 选区/批注
+- **已锁定（owner 2026-11-23）**：UI 线 rivet → glaze，不再评估回 rivet。当前 main 仍为
+  rivet 三腿（0.12.0），按 #75 S1→S6 推进到单一 web UI。PDF 阅读面迁 pdf.js（**仅渲染**：canvas + text layer + 选区/批注
   叠层；页级手术仍归领域核心 `racket/booklight/pdfdoc.rkt`，编辑后字节重渲染）。
   家族设计真源修订 `2026-11-20-minimal-family` 已核验；产品起始 SHA
   `93341981d2637340d645f3a366b0a6302ad30ffa`。EPUB CSS 契约与阅读主题 Keep；
@@ -79,10 +78,11 @@
 
 ### 移动端视图（iOS，2026-11-22）
 
-**平台状态（2026-11-22）**：桌面当前实现为 rivet，macOS、Windows、Linux 三端已落地；#75 的
-glaze 换线进行中（S1 在 PR #78 审阅）。移动端遵循移动阅读契约，按 owner 2026-11-23 确认走
-平台原生语言（iOS/iPadOS Swift；Android 需要时 Kotlin），不复用 rivet 移动宿主，也不把
-glaze 载体延伸到移动端。
+**桌面定线（owner 2026-11-23 锁死）**：桌面 = **glaze**。当前 main 仍为 rivet 三腿
+（0.12.0），按 #75 S1→S6 推进到单一 web UI；不再评估回 rivet。PDF 面按 pdf.js 质量门禁
+验收（长文档滚动/选区/内存/输入延迟），不过线只在该 surface 做原生例外，不回退整条线。
+移动端按 owner 2026-11-23 确认走平台原生语言（iOS/iPadOS Swift；Android 需要时 Kotlin），
+不复用 rivet 移动宿主，也不把 glaze 载体延伸到移动端。
 原型包含移动端视图，界面与交互以本节和 `prototype/mobile-*.html` 为准。研究工作台
 （第 6 屏）为桌面专属。数据同步边界随实现立项另定。
 

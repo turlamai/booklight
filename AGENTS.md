@@ -19,14 +19,16 @@ This is a **non-commercial development product**. The previous 2026-10 authoriza
 
 指引给 AI agent（及开发者）：如何理解、构建、运行、改动 Booklight。
 
-> main 是 Booklight 的开发主线，纯 Rivet 架构（Rivet 线自 2026-10-08 接替）。
+> UI 线已锁定 glaze（owner 2026-11-23），按 #75 换线；换线完成前 main 上仍是
+> Rivet 三腿（0.12.0），以下宿主表描述的是当前实现，不是目标架构。
 > v1 是已归档的 Tauri 2 + PDF.js 实现，仅存于 git 历史；
 > v1 的行为/文案语义已由领域核心承接。
 
 ## 这是什么
 
-Booklight 以 Rivet（github.com/turlamai/rivet）构建：一份 Racket 领域核心，
-通过 Rivet 类型化 RPC（RVT1 协议）驱动各平台第一方原生 UI 薄壳。
+Booklight 的领域核心是 Racket，经 Rivet 类型化 RPC（RVT1）对外；UI 线已锁定
+glaze（系统 WebView + 单一 web UI，owner 2026-11-23）。换线完成前，三平台原生
+宿主仍是当前实现。
 
 | 平台宿主 | 技术栈 | 目录 | 状态 |
 |---|---|---|---|
