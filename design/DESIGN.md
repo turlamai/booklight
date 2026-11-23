@@ -11,8 +11,9 @@
 - **Exit 条件**：6 屏关键状态齐（空态/进行态/失败恢复态）+ 交互逻辑定稿 + HIG 清单全过 + 用户评审通过。
 - **不在范围**：付费/授权/checkout/entitlement UI——2026-11-18 owner 决策（AGENTS.md「quality-first」，#57）已取消全部商业化 gating，研究工作台免费交付；PRICING 文档已退役删除。书库/封面/阅读时长统计、路由与 `rivet-schema.json` RPC 契约变更、新配色体系。
 - **已同步（2026-11-19）**：正文排版三端统一为 17 px × 用户缩放 × 1.9 行高（原型值）；Windows/Linux 原 16 px 已对齐，`docs/DESIGN.md` 的 Reading body 行已同步为同一契约。
-- **已同步（2026-11-21，#75）**：owner 决策 UI 线 rivet → glaze（三原生腿删除、
-  单一 web UI）；PDF 阅读面迁 pdf.js（**仅渲染**：canvas + text layer + 选区/批注
+- **进行中（2026-11-21，#75）**：owner 决策 UI 线 rivet → glaze（三原生腿删除、
+  单一 web UI）；S0 pdf.js spike 已绿，S1 glaze carrier 在 PR #78 审阅中，换线完成前
+  桌面三腿仍是当前实现。PDF 阅读面迁 pdf.js（**仅渲染**：canvas + text layer + 选区/批注
   叠层；页级手术仍归领域核心 `racket/booklight/pdfdoc.rkt`，编辑后字节重渲染）。
   家族设计真源修订 `2026-11-20-minimal-family` 已核验；产品起始 SHA
   `93341981d2637340d645f3a366b0a6302ad30ffa`。EPUB CSS 契约与阅读主题 Keep；
@@ -76,15 +77,16 @@
 差异声明纪律：宿主特例必须先写进本节才能实现；未声明的宿主差异按违约处理
 （案例：taskly 漂移台账 D8）。
 
-## 移动端视图（iOS，2026-11-22）
+### 移动端视图（iOS，2026-11-22）
 
-**定线声明（owner 2026-11-22）**：桌面 = rivet（macOS/Windows/Linux 三腿已落地）；移动端 = 原生
-Swift iOS app（等 rivet 移动宿主定型后接入引擎绑定；绑定/同步架构随实现立项另定，本节与
-`prototype/mobile-*.html` 锁定界面与交互契约）。研究工作台（第 6 屏）为桌面专属，移动端不承载。
+**平台状态（2026-11-22）**：桌面当前实现为 rivet，macOS、Windows、Linux 三端已落地；#75 的
+glaze 换线进行中（S1 在 PR #78 审阅）。移动端遵循移动阅读契约，计划以原生 Swift 实现。
+原型包含移动端视图，界面与交互以本节和 `prototype/mobile-*.html` 为准。研究工作台
+（第 6 屏）为桌面专属。数据同步边界随实现立项另定。
 
 **契约**：`prototype/mobile-{library,reading,pdf,ai,settings}.html` 五屏；纯 390px 内容画布居中，
 不自绘手机外壳/状态栏；触控目标 ≥44×44；正文对比 ≥4.5:1（sepia 同验）。阅读排版契约在窄屏不变：
-serif 栈、行高 1.7–1.9、字号 16–26 可调、版心随屏宽自适应。阅读主题三档（light/sepia/dark）与
+serif 栈、1.9 行高、两端对齐、字号 16–26 可调、版心随屏宽自适应。阅读主题三档（light/sepia/dark）与
 应用亮暗主题独立并存，与桌面语义一致。划词浮条/高亮/下划线/AiCiteChip/引用回跳语义与桌面一致，
 AI 面板 sheet 化（摘要/对话、发送前核对、进行中可停、草稿保留）。PDF 屏保留页码/旋转与
 PendingEditBar（未保存编辑横幅 + 放弃需确认）语义。书库屏为移动端新入口：桌面开书靠拖放，

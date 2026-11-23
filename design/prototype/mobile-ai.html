@@ -35,7 +35,7 @@ const icon = name => `<svg class="m-icon" viewBox="0 0 24 24" aria-hidden="true"
 const button = (text,action,cls='',attr='',ico='') => `<button type="button" class="${cls}" data-action="${action}" ${attr}>${ico?icon(ico):''}${text}</button>`;
 const ib = (label,action,name,attr='') => button('',action,'quiet m-iconbutton',`aria-label="${label}" title="${label}" ${attr}`,name);
 const link = (text,to,cls='',ico='',attrs='') => `<a class="m-button ${cls}" href="${routes[to]}" data-nav="${to}" ${attrs}>${ico?icon(ico):''}${text}</a>`;
-const defaultState = () => ({appTheme:'light',readTheme:'light',font:17,chapter:2,scroll:{},books:['epub','pdf'],recent:'epub',selection:null,marks:[],bookmark:false,settingsFrom:'library',aiSource:'reading',pdf:{page:3,rotation:90,pending:true},config:{provider:'智谱 GLM',url:'',model:'glm-4.7'},ai:{tab:'summary',scope:'当前页',draft:'',summary:null,chat:[],status:'idle'},saved:'idle',jump:null});
+const defaultState = () => ({appTheme:'light',readTheme:'light',font:17,chapter:2,scroll:{},books:['epub','pdf'],recent:'epub',selection:null,noteDraft:null,marks:[],bookmark:false,settingsFrom:'library',aiSource:'reading',pdf:{page:3,rotation:90,pending:true},config:{provider:'智谱 GLM',url:'',model:'glm-4.7'},ai:{tab:'summary',scope:'当前页',draft:'',summary:null,chat:[],status:'idle'},saved:'idle',jump:null});
 let stored={},storage=true;
 try { stored=JSON.parse(localStorage.getItem(key)||'{}'); }
 catch { storage=false;try { if(window.name.startsWith(key+':'))stored=JSON.parse(window.name.slice(key.length+1)); }catch {} }
@@ -108,8 +108,8 @@ const handlers={
  'selection-close':()=>{M.selection=null;save();window.getSelection()?.removeAllRanges();render(true)},
  'mark':b=>mark('highlight',b.dataset.color),'underline':()=>mark('underline'),'strike':()=>mark('strike'),
  'copy':()=>copy(M.selection?.text||''),
- 'excerpt':()=>{if(!M.selection)return;dialog('<h2>保存摘句</h2><p>'+esc(M.selection.text)+'</p><label for="noteInput">我的笔记</label><textarea id="noteInput" rows="3" placeholder="记下你的想法"></textarea><div class="m-actions">'+button('取消','dialog-close')+button('保存摘句','excerpt-save','emphasis')+'</div>')},
- 'excerpt-save':()=>{const text=$('#noteInput').value;if(!M.selection)return;M.marks.push({id:crypto.randomUUID(),chapter:M.chapter,para:M.selection.para,text:M.selection.text,note:text,type:'highlight',color:'yellow'});M.selection=null;close();persistMark()},
+ 'excerpt':()=>{if(!M.selection)return;dialog('<h2>保存摘句</h2><p>'+esc(M.selection.text)+'</p><label for="noteInput">我的笔记</label><textarea id="noteInput" rows="3" placeholder="记下你的想法">'+esc(M.noteDraft?.chapter===M.chapter&&M.noteDraft.para===M.selection.para&&M.noteDraft.quote===M.selection.text?M.noteDraft.text:'')+'</textarea><div class="m-actions">'+button('取消','dialog-close')+button('保存摘句','excerpt-save','emphasis')+'</div>')},
+ 'excerpt-save':()=>{const text=$('#noteInput').value;if(!M.selection)return;M.marks.push({id:crypto.randomUUID(),chapter:M.chapter,para:M.selection.para,text:M.selection.text,note:text,type:'highlight',color:'yellow'});M.noteDraft=null;M.selection=null;close();persistMark()},
  'retry-save':()=>{M.saved='recovered';render(true);setTimeout(persistMark,250)},
  'export-notes':()=>dlFile('booklight-mobile-annotations.json',JSON.stringify({prototype:true,book:'The Sample Book',marks:M.marks},null,2)),
  'ai-selection':()=>{M.ai.scope='选区';M.aiSource='reading';go('ai')},
@@ -133,13 +133,15 @@ const handlers={
  'config-save':()=>{const url=$('#baseUrl').value.trim(),model=$('#model').value.trim();const err=$('#configError');if(url&&!/^https?:\/\/[^\s]+$/.test(url)){err.hidden=false;err.textContent='服务地址应以 http:// 或 https:// 开头。';$('#baseUrl').focus();return}if(!model){err.hidden=false;err.textContent='请填写模型名称。';$('#model').focus();return}M.config={provider:$('#provider').value,url,model};const ok=save();err.hidden=true;$('#configState').textContent=ok?'配置已保存在此浏览器；未发起连接。':'当前环境不允许持久保存，配置仅在本次浏览中有效。'}
 };
 document.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(b&&!b.disabled){handlers[b.dataset.action]?.(b);return}const a=e.target.closest('[data-nav],[data-book]');if(a){e.preventDefault();if(a.dataset.book){M.recent=a.dataset.book;go(bookLink(a.dataset.book))}else go(a.dataset.nav);return}if(screen==='reading'&&e.target.closest('#prose')&&!e.target.closest('button,a,mark')&&!window.getSelection()?.toString()){const rect=$('#readScroll').getBoundingClientRect();if(e.clientX>rect.left+rect.width*.25&&e.clientX<rect.left+rect.width*.75){const scroll=$('#readScroll').scrollTop;immersive=!immersive;render();$('#readScroll').scrollTop=scroll;$('#readScroll').focus({preventScroll:true})}}});
-document.addEventListener('input',e=>{const t=e.target;if(t.id==='fontSize'){M.font=+t.value;$('#fontOutput').textContent=M.font+'px';$('#fontPreview').style.fontSize=M.font+'px';save()}if(t.id==='question'){M.ai.draft=t.value;save()}if(['provider','baseUrl','model'].includes(t.id))$('#configState').textContent='配置尚未保存'});
+document.addEventListener('input',e=>{const t=e.target;if(t.id==='fontSize'){M.font=+t.value;$('#fontOutput').textContent=M.font+'px';$('#fontPreview').style.fontSize=M.font+'px';save()}if(t.id==='question'){M.ai.draft=t.value;save()}if(t.id==='noteInput'&&M.selection){M.noteDraft={chapter:M.chapter,para:M.selection.para,quote:M.selection.text,text:t.value};save()}if(['provider','baseUrl','model'].includes(t.id))$('#configState').textContent='配置尚未保存'});
 document.addEventListener('change',e=>{const t=e.target;if(t.id==='appAppearance'){M.appTheme=t.value;save();render(true)}if(t.id==='aiScope'){M.ai.scope=t.value;save()}if(t.id==='pageRange'){M.pdf.page=+t.value;save();render(true)}});
 document.addEventListener('keydown',e=>{if(e.isComposing)return;if(screen==='reading'&&e.target.id==='readScroll'&&e.key==='Enter'){e.preventDefault();const old=$('#readScroll').scrollTop;immersive=!immersive;render();$('#readScroll').scrollTop=old;$('#readScroll').focus()}if((e.metaKey||e.ctrlKey)&&e.key==='Enter'&&e.target.id==='question'){e.preventDefault();aiPreview()}});
 let selectionTimer;
 document.addEventListener('selectionchange',()=>{if(screen!=='reading')return;clearTimeout(selectionTimer);selectionTimer=setTimeout(()=>{const s=window.getSelection();if(!s||s.isCollapsed)return;const a=s.anchorNode?.parentElement?.closest('#prose p[data-para]'),b=s.focusNode?.parentElement?.closest('#prose p[data-para]');if(!a||a!==b)return;M.selection={text:s.toString().trim(),para:+a.dataset.para};save();const bar=$('#selectionBar');if(bar){bar.innerHTML=selectionBar();bar.hidden=false}},80)});
 $('#dialog').addEventListener('cancel',()=>{setTimeout(()=>{if(dialogTrigger?.isConnected)dialogTrigger.focus();else $('button,a')?.focus()},0)});
-window.addEventListener('pagehide',capture);
+let restoringFromCache=false;
+window.addEventListener('pagehide',()=>{if(!restoringFromCache)capture()});
+window.addEventListener('pageshow',event=>{if(event.persisted){restoringFromCache=true;location.reload()}});
 render();
 requestAnimationFrame(()=>{const r=$('#readScroll');if(r)r.scrollTop=M.scroll[screen]||0;if(M.jump?.screen===screen){if(screen==='reading')$('#passage-'+M.jump.para)?.scrollIntoView({block:'center'});else announce('已回到引用原文所在的第 '+M.pdf.page+' 页');M.jump=null;save()}});
 if(M.saved==='saving'){M.saved='recovered';save();if(screen==='reading')render(true)}

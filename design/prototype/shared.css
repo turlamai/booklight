@@ -199,6 +199,7 @@ body.mobile { display:block; min-height:100dvh; padding:0; background:var(--side
 .mobile [data-read-theme="dark"] { --reader-bg:var(--reading-dark-bg); --reader-ink:var(--reading-dark-ink); }
 .mobile .m-reader .m-header { background:var(--reader-bg); color:var(--reader-ink); }
 .mobile .m-reader .m-header button,.mobile .m-reader .m-header a { color:var(--reader-ink); }
+.mobile .m-reader .m-header :focus-visible,.mobile .m-reader .m-scroll:focus-visible { outline-color:var(--reader-ink); }
 .mobile .m-scroll { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; }
 .mobile .m-prose { width:100%; max-width:608px; padding:32px 16px 48px; margin:0 auto; font:var(--read-size,17px)/1.9 var(--reading-serif); text-align:justify; overflow-wrap:anywhere; }
 .mobile .m-prose h1 { font:600 24px/1.5 var(--reading-serif); margin:8px 0 24px; text-align:start; }
@@ -208,6 +209,7 @@ body.mobile { display:block; min-height:100dvh; padding:0; background:var(--side
 .mobile .m-prose mark { color:var(--reading-light-ink); background:var(--hl-yellow); padding:0; border-radius:4px; }
 .mobile .m-prose mark.blue { background:var(--hl-blue); }
 .mobile .m-prose mark.green { background:var(--hl-green); }
+.mobile [data-read-theme="dark"] .m-prose mark { color:var(--reading-dark-bg); }
 .mobile .m-prose .m-underline { text-decoration:underline; text-decoration-color:currentColor; text-underline-offset:4px; }
 .mobile .m-prose .m-strike { text-decoration:line-through; }
 .mobile .m-footer { flex:none; padding:12px 16px max(12px,env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:var(--bg); color:var(--ink); }
@@ -268,7 +270,10 @@ body.mobile { display:block; min-height:100dvh; padding:0; background:var(--side
 .mobile .m-immersion .m-scroll { outline-offset:-4px; }
 .mobile .m-pulsing { animation:m-pulse 1s ease-in-out infinite alternate; }
 @keyframes m-pulse { to { opacity:.55; } }
-@media(hover:hover) { .mobile button:hover:not(:disabled),.mobile a.m-button:hover { background:var(--panel-alt); color:var(--ink); } }
+@media(hover:hover) {
+  .mobile button:hover:not(:disabled),.mobile a.m-button:hover { background:var(--panel-alt); color:var(--ink); }
+  .mobile .m-reader .m-header .quiet:hover { color:var(--reader-ink); background:transparent; border-color:currentColor; }
+}
 @media(prefers-reduced-motion:reduce) { .mobile * { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
 
 .mobile .m-notice-wrap {max-width:390px;margin-inline:auto;}
