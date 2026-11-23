@@ -160,6 +160,10 @@
       "path": "/api/host/e2e_report_get"
     },
     {
+      "method": "POST",
+      "path": "/api/host/e2e_reset"
+    },
+    {
       "method": "GET",
       "path": "/api/host/i18n"
     },
@@ -301,6 +305,15 @@
         "result": {
           "kind": "scalar",
           "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "hostE2e_reset",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Bool"
         }
       },
       {
