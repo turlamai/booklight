@@ -7,6 +7,21 @@ All notable changes to Booklight are documented here. Format follows
 
 ### Added
 
+- Settings / research workbench / AI inspector (#75 S4): native-grouped
+  settings form (provider presets, base URL, model + suggested models, API key
+  save, connection test, reading theme / view mode / target language / UI
+  language, annotation sidecar) over `get-settings` / `save-settings` /
+  `save-reading-prefs` / `set-locale` / `save-api-key` / `test-connection` /
+  `list-presets`; cross-document research workbench searching open documents
+  in place (EPUB per chapter, PDF per page via pdf.js text content) with
+  jump-to-source, copy-citation and a citation deck persisted as `cite`
+  annotations; AI inspector (chat / summarize / translate tabs, selection /
+  page / document scope) with the mandatory pre-send review sheet
+  (`preview-ai-send`) and streamed answers over the carrier SSE bus
+  (`stream-chunk` / `stream-done` / `stream-error`, `stop-stream`). Strings
+  reuse the kept `shared/i18n` keys; surfaces mirror `settings.html` /
+  `research.html` / `ai.html`. Real-window verify adds 8 S4 journey steps
+  (29 total) plus a research pixel-evidence stage.
 - Production PDF surface (#75 S3): pdf.js text layer + native selection mapped
   to PDF user-space rects; SelectionBar (three highlight colors, underline,
   strike, copy) persisting through the kept annotation store (sidecar/central,

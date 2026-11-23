@@ -1,4 +1,4 @@
-# Glaze carrier + product web UI (#75 S1–S3)
+# Glaze carrier + product web UI (#75 S1–S4)
 
 The rivet → glaze re-line keeps the Racket domain core (`racket/`) and the
 rivet backend (`app/backend.rkt`) untouched. This directory is the single
@@ -50,7 +50,7 @@ registered RPC 1:1 as a typed glaze route.
   runs in open-route mode (no token) so headless CI needs no grant.
 - **Verify**: `host/verify.rkt` runs the S1 probe journey (`probe.html?e2e=1`,
   12 steps) then resets the report and runs the S2 product journey
-  (`index.html?e2e=1`, 21 steps incl. S3); verdicts cover both, plus a
+  (`index.html?e2e=1`, 29 steps incl. S3+S4); verdicts cover both, plus a
   pixel-evidence stage (`index.html?e2e=1&stage=pdf`) that leaves highlight
   ink + the pending-edit bar on screen for the capture.
 
@@ -82,5 +82,25 @@ python scripts/check-rpc-surface.py   # route surface vs rivet-schema.json
 ```
 
 Evidence lands in `.glaze/verify/` (boot + S1 + S2 post-journey PNGs and
-`booklight-host-report.json` shaped `{s1:…, s2:…, s3:…}`), collected over the
+`booklight-host-report.json` shaped `{s1:…, s2:…, s3:…, s4:…}`), collected over the
 loopback HTTP adapter — no host accessibility dependency.
+## S4 settings / research / AI inspector
+
+- **Settings**: native-grouped form over `get-settings` / `save-settings` /
+  `save-reading-prefs` / `set-locale` / `save-api-key` / `test-connection` /
+  `list-presets`; presets fill base URL + default model; connection test
+  surfaces suggested-model chips; API key never round-trips to the page.
+- **Research**: searches open documents in place (EPUB per chapter via
+  `epub-chapter-text`, PDF per page via pdf.js `getTextContent`); hit cards
+  carry mark + source pill, jump-to-source, copy-citation
+  (`ui.research.cite-format`) and pin-to-deck; the deck persists as `cite`
+  annotations through the kept annotation store and jumps back.
+- **AI inspector**: chat / summarize / translate tabs with selection / page /
+  document scope; every send goes through `preview-ai-send` and the review
+  sheet (`ui.ai-preview.body`); only 「继续」 issues `chat` / `summarize-text` /
+  `translate-text`; answers stream over the carrier SSE bus
+  (`/glaze/events`: stream-chunk / stream-done / stream-error) with
+  `stop-stream`; history pairs feed subsequent previews.
+- **Verify**: +8 S4 journey steps (29 total) and a research pixel-evidence
+  stage (`index.html?e2e=1&stage=s4`) leaving hit cards + citation deck on
+  screen for the capture.

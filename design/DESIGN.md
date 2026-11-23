@@ -41,6 +41,15 @@
   `racket/booklight/pdfdoc.rkt`。原子写 `api/host/write` + 原生另存面板。
   划词浮条对照 `reading.html` .selbar、待编辑条对照 `pdf.html` notice（原型
   已有，无需改共享层）。真窗验收 +8 步 S3 journey + 定格像素证据。
+- **已同步（2026-11-23，#75 S4）**：设置/研究工作台/AI inspector 落地——
+  设置对照 `settings.html` 原生分组 Form（服务商预设/Base URL/模型+建议/
+  API Key/测试连接/阅读主题/页面显示/目标语言/界面语言/批注 sidecar）；
+  研究工作台对照 `research.html`（跨打开文档原位检索、命中卡 mark+溯源、
+  跳转/复制引用/加入引用集，引用集以 `cite` 批注随文档保存）；AI inspector
+  对照 `ai.html`（对话/总结/翻译 tabs、选区/当前页/全文 scope、发送前核对
+  sheet 只有「继续」才发请求、流式回答+停止）。字符串复用 kept i18n 键
+  （含 `ui.ai-preview.body` 整段核对文案），无新增键、无共享层改动。
+  真窗验收 +8 步 S4 journey（29 步）+ 研究工作台定格像素证据。
 
 ## 设计原则（HIG 内核 + 本产品特化）
 
