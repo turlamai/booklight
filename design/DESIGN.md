@@ -32,6 +32,15 @@
   只读渲染字节 `api/host/file` 受命名 capability 约束。PDF 仅 pdf.js 只读
   渲染（S0 已验证），页手术与划词/待编辑条留 S3。真窗验收含 S1 探针 + 13 步
   S2 产品 journey。
+- **已同步（2026-11-23，#75 S3）**：PDF 生产面落地——pdf.js text layer + 原生
+  划词映射到 PDF 用户空间 rect（points、左下原点、未旋转，与 macOS PDFKit
+  同空间）；SelectionBar（三色高亮/下划线/删除线/复制）经 kept 批注存储持久化
+  （sidecar/central + recovery 重试）；PendingEditBar 页手术预览（旋转/删除/
+  插空白/合并/水印）+ 撤销/放弃/显式另存，原件不被隐式覆写；extract 走另存
+  导出。预览链经载体托管 scratch 文件串接 edit-* RPC，页手术唯一实现仍在
+  `racket/booklight/pdfdoc.rkt`。原子写 `api/host/write` + 原生另存面板。
+  划词浮条对照 `reading.html` .selbar、待编辑条对照 `pdf.html` notice（原型
+  已有，无需改共享层）。真窗验收 +8 步 S3 journey + 定格像素证据。
 
 ## 设计原则（HIG 内核 + 本产品特化）
 

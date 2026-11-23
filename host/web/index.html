@@ -48,8 +48,26 @@
       </div>
       <!-- reader -->
       <div class="view reader-wrap" id="view-reader" hidden>
+        <div class="banner warn pendingbar" id="pendingbar" hidden>
+          <span id="pendingText"></span>
+          <span class="go">
+            <button class="btn" id="editUndo"></button>
+            <button class="btn" id="editDiscard"></button>
+            <button class="btn primary" id="editSave"></button>
+          </span>
+        </div>
         <div class="reader paper" id="reader">
           <div class="measure" id="prose"></div>
+          <div class="selbar" id="selbar" hidden>
+            <span class="swatch sw-y" data-color="yellow" data-kind="highlight"></span>
+            <span class="swatch sw-b" data-color="blue" data-kind="highlight"></span>
+            <span class="swatch sw-g" data-color="green" data-kind="highlight"></span>
+            <span class="sep"></span>
+            <span class="act" data-kind="underline" data-i18n="ui.menu.underline"></span>
+            <span class="act" data-kind="strike" data-i18n="ui.menu.strike"></span>
+            <span class="sep"></span>
+            <span class="act" id="selCopy" data-i18n="ui.menu.copy"></span>
+          </div>
         </div>
         <div class="chapterbar">
           <button class="btn" id="prevChapter"></button>
@@ -66,12 +84,26 @@
           <button class="iconbtn" id="fontMinus" aria-label="A-">−</button>
           <span class="tiny muted" id="fontLabel"></span>
           <button class="iconbtn" id="fontPlus" aria-label="A+">+</button>
+          <button class="btn" id="pdfMenuBtn" hidden data-i18n="ui.pages.title"></button>
         </div>
       </div>
       <div class="statusbar" id="statusbar"><span id="statusText"></span><span class="sp"></span><span id="statusSave"></span></div>
     </section>
   </div>
 </div>
+<dialog id="pdfMenu" class="menu-dialog">
+  <h2 id="pdfMenuTitle"></h2>
+  <p class="muted" data-i18n="ui.pdf.preserve-original"></p>
+  <div class="menu-grid">
+    <button class="btn" data-edit="rotate" data-i18n="ui.pages.rotate-90"></button>
+    <button class="btn danger" data-edit="delete" data-i18n="ui.pages.delete"></button>
+    <button class="btn" data-edit="extract" data-i18n="ui.pages.extract"></button>
+    <button class="btn" data-edit="blank" data-i18n="ui.pages.blank"></button>
+    <button class="btn" data-edit="append" data-i18n="ui.pages.merge"></button>
+    <button class="btn" data-edit="bake" data-i18n="ui.pages.bake"></button>
+  </div>
+  <div class="dialog-actions"><button class="btn" id="pdfMenuClose" data-i18n="ui.password.cancel"></button></div>
+</dialog>
 <div id="toast" class="toast" role="status" hidden></div>
 <div id="live" aria-live="polite" class="sr-only"></div>
 <script src="app.js"></script>

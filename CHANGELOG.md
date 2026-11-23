@@ -7,6 +7,16 @@ All notable changes to Booklight are documented here. Format follows
 
 ### Added
 
+- Production PDF surface (#75 S3): pdf.js text layer + native selection mapped
+  to PDF user-space rects; SelectionBar (three highlight colors, underline,
+  strike, copy) persisting through the kept annotation store (sidecar/central,
+  recovery retry); PendingEditBar for page surgery previews (rotate / delete /
+  insert-blank / append / bake) with undo / discard / explicit save-as — the
+  source is never overwritten implicitly; extract exports via save-as. Edit
+  previews chain through carrier-managed scratch files so the kept pdfdoc
+  domain core stays the only page-surgery implementation. Atomic save
+  (`api/host/write`) + native save panel; real-window verify adds 8 S3 journey
+  steps plus a pixel-evidence stage (highlight ink + pending bar on screen).
 - Product web UI (#75 S2): library / welcome with file-first recents, reader
   chrome (titlebar, document tabs, sidebar 目录/批注 tabs, statusbar) and the
   EPUB surface (toc, chapter prose, chapter nav, reading theme + font scale)

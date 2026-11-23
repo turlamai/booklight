@@ -1,4 +1,4 @@
-# Glaze carrier + product web UI (#75 S1–S2)
+# Glaze carrier + product web UI (#75 S1–S3)
 
 The rivet → glaze re-line keeps the Racket domain core (`racket/`) and the
 rivet backend (`app/backend.rkt`) untouched. This directory is the single
@@ -50,7 +50,27 @@ registered RPC 1:1 as a typed glaze route.
   runs in open-route mode (no token) so headless CI needs no grant.
 - **Verify**: `host/verify.rkt` runs the S1 probe journey (`probe.html?e2e=1`,
   12 steps) then resets the report and runs the S2 product journey
-  (`index.html?e2e=1`, 13 steps); verdicts cover both.
+  (`index.html?e2e=1`, 21 steps incl. S3); verdicts cover both, plus a
+  pixel-evidence stage (`index.html?e2e=1&stage=pdf`) that leaves highlight
+  ink + the pending-edit bar on screen for the capture.
+
+## S3 PDF production surface
+
+- **Selection**: pdf.js `renderTextLayer` provides the native selection
+  source; client rects convert to PDF user-space (points, bottom-left,
+  unrotated — same space as the macOS PDFKit host) via
+  `viewport.convertToPdfPoint`, and back via `convertToViewportPoint` for
+  persisted highlight/underline/strike ink.
+- **SelectionBar**: three highlight colors + underline + strike + copy;
+  annotations persist through `set-annotations` / `load-annotations`
+  (sidecar/central per settings), with `annotation-recovery-pending` +
+  retry-save in the notes tab.
+- **PendingEditBar**: rotate / delete / insert-blank / append / bake preview
+  by chaining `edit-*` RPCs over carrier-managed scratch files
+  (`api/host/scratch`); undo / discard restore prior / original bytes;
+  save-as uses the native save panel + atomic `api/host/write`. extract
+  exports via save-as. The source file is never overwritten implicitly.
+- **Capabilities**: `dialog:open`, `dialog:save`, `host:file`, `host:write`.
 
 ## Run
 
@@ -62,5 +82,5 @@ python scripts/check-rpc-surface.py   # route surface vs rivet-schema.json
 ```
 
 Evidence lands in `.glaze/verify/` (boot + S1 + S2 post-journey PNGs and
-`booklight-host-report.json` shaped `{s1:…, s2:…}`), collected over the
+`booklight-host-report.json` shaped `{s1:…, s2:…, s3:…}`), collected over the
 loopback HTTP adapter — no host accessibility dependency.

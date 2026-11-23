@@ -267,7 +267,20 @@
   ;; from recents; the capability grant scopes this to the local user.
   [(POST "api/host/file" #:returns GValue #:permission 'host:file)
    (hostFile [path GString])
-   (host-file-bytes path)])
+   (host-file-bytes path)]
+  ;; Explicit save-as for page surgery / form export: the page only writes
+  ;; to a destination the user picked in the native save panel. The source
+  ;; is never overwritten implicitly (DATA-FORMAT save semantics).
+  [(POST "api/host/write" #:returns GBool #:permission 'host:write)
+   (hostWrite [path GString] [data GString])
+   (host-write-bytes path data)
+   #t]
+  ;; Scratch file for chaining page-surgery previews: the edit RPCs read a
+  ;; path, so the carrier stages the current preview bytes in a managed
+  ;; temp file and hands back its path (never the user's source).
+  [(POST "api/host/scratch" #:returns GValue #:permission 'host:write)
+   (hostScratch [data GString])
+   (hasheq 'path (host-scratch-path data))])
 
 (define api (append api-typed (make-dialog-routes)))
 
@@ -275,7 +288,7 @@
 ;; read-only file bridge. The verifier runs without a capability (open-route
 ;; mode) so headless CI needs no interactive grant.
 (define host-capability
-  (make-capability "booklight" (list 'dialog:open 'host:file)))
+  (make-capability "booklight" (list 'dialog:open 'dialog:save 'host:file 'host:write)))
 
 (define-runtime-path i18n-zh-path "../shared/i18n/zh.json")
 (define-runtime-path i18n-en-path "../shared/i18n/en.json")
@@ -294,6 +307,28 @@
 
 (define (bytes->base64 b)
   (bytes->string/utf-8 (base64-encode b #"")))
+
+(define (host-write-bytes path data)
+  (define p (string->path path))
+  (define dir (path-only p))
+  (unless (and dir (directory-exists? dir))
+    (bad-param (format "destination directory missing: ~a" path)))
+  (define bytes (base64-decode (string->bytes/utf-8 data)))
+  ;; Atomic replace: write a sibling temp then rename, so a failed write
+  ;; never truncates an existing destination.
+  (define tmp (build-path dir (format ".booklight-save-~a" (current-seconds))))
+  (call-with-output-file tmp (lambda (out) (write-bytes bytes out)) #:exists 'truncate/replace)
+  (rename-file-or-directory tmp p #t))
+
+(define (host-scratch-path data)
+  (define dir (build-path (find-system-path 'temp-dir) "booklight-scratch"))
+  (make-directory* dir)
+  (define p (build-path dir (format "preview-~a-~a.pdf"
+                                    (current-seconds) (current-inexact-milliseconds))))
+  (call-with-output-file p
+    (lambda (out) (write-bytes (base64-decode (string->bytes/utf-8 data)) out))
+    #:exists 'truncate/replace)
+  (path->string p))
 
 ;; ---- runtime public dir ---------------------------------------------------
 ;; The web UI's token sheet (design/prototype/shared.css) and the vendored

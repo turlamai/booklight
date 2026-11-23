@@ -164,10 +164,14 @@ async function openPath(p) {
         const bytes = await post("/api/host/file", { path: p });
         if (!bytes.json || !bytes.json.data) throw new Error(t("ui.open-failed", p));
         d.bytes = b64ToBytes(bytes.json.data);
+        d.originalBytes = d.bytes;
+        d.undo = []; d.dirty = false;
+        d.annotations = []; d.bookmarks = [];
       }
       docs.push(d);
     }
     active = d;
+    if (kind === "pdf") { try { await loadAnnotations(); } catch (_) { active.annotations = []; } }
     await rpc("update-recents", { path: p, page: kind === "epub" ? d.chapter : d.page, scrollRatioScaled: 0 });
     settings = await rpc("get-settings", {});
     await renderReader();
@@ -190,6 +194,7 @@ async function renderReader() {
     $("#prevChapter").disabled = active.chapter <= 1;
     $("#nextChapter").disabled = active.chapter >= active.view.chapters;
     $("#readTheme").disabled = false; $("#fontMinus").disabled = false; $("#fontPlus").disabled = false;
+    $("#pdfMenuBtn").hidden = true; $("#pendingbar").hidden = true; hideSelbar();
     await renderChapter();
   } else {
     $("#docSub").textContent = t("ui.viewer.pdf-info", active.pageCount || "…");
@@ -211,6 +216,7 @@ async function renderChapter() {
   [...doc.body.childNodes].forEach(n => prose.appendChild(document.importNode(n, true)));
   $("#reader").scrollTop = 0;
 }
+const PDF_FONTS = { cMapUrl: "/pdfjs/cmaps/", cMapPacked: true, standardFontDataUrl: "/pdfjs/standard_fonts/" };
 async function ensurePdfjs() {
   if (pdfjsReady) return pdfjsReady;
   pdfjsReady = new Promise((resolve, reject) => {
@@ -225,23 +231,186 @@ async function ensurePdfjs() {
   });
   return pdfjsReady;
 }
+function bytesToB64(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+// PDF user-space (points, bottom-left, unrotated) <-> viewport px.
+function rectToPdf(viewport, r, base) {
+  const [x1, y1] = viewport.convertToPdfPoint(r.left - base.left, r.bottom - base.top);
+  const [x2, y2] = viewport.convertToPdfPoint(r.right - base.left, r.top - base.top);
+  return { x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) };
+}
+function rectToView(viewport, r) {
+  const [x1, y1] = viewport.convertToViewportPoint(r.x, r.y);
+  const [x2, y2] = viewport.convertToViewportPoint(r.x + r.width, r.y + r.height);
+  return { left: Math.min(x1, x2), top: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) };
+}
 async function renderPdf() {
   const lib = await ensurePdfjs();
   if (!active.pdf) {
-    active.pdf = await lib.getDocument({ data: active.bytes.slice(0) }).promise;
+    active.pdf = await lib.getDocument(Object.assign({ data: active.bytes.slice(0) }, PDF_FONTS)).promise;
     active.pageCount = active.pdf.numPages;
   }
   const page = await active.pdf.getPage(active.page);
-  const viewport = page.getViewport({ scale: 1.2 });
+  const viewport = page.getViewport({ scale: 1.5 });
   const prose = $("#prose");
-  prose.innerHTML = '<canvas id="pdfCanvas"></canvas>';
-  const canvas = $("#pdfCanvas");
+  prose.innerHTML = "";
+  const wrap = document.createElement("div");
+  wrap.className = "pdf-page";
+  wrap.style.width = viewport.width + "px";
+  const canvas = document.createElement("canvas");
   canvas.width = viewport.width; canvas.height = viewport.height;
-  canvas.style.maxWidth = "100%";
-  await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+  canvas.style.width = viewport.width + "px"; canvas.style.height = viewport.height + "px";
+  const tl = document.createElement("div");
+  tl.className = "textLayer";
+  tl.style.width = viewport.width + "px"; tl.style.height = viewport.height + "px";
+  tl.style.setProperty("--scale-factor", viewport.scale);
+  const hl = document.createElement("div");
+  hl.className = "hl-layer";
+  wrap.append(canvas, tl, hl);
+  prose.appendChild(wrap);
+  active.shell = { wrap, canvas, tl, hl, viewport, page };
+  await Promise.all([
+    page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise,
+    lib.renderTextLayer({ textContentSource: page.streamTextContent(), container: tl, viewport }).promise,
+  ]);
+  paintAnnotations();
   $("#docSub").textContent = t("ui.viewer.pdf-info", active.pageCount);
   $("#chapterStatus").textContent = t("ui.viewer.page-status", active.page, active.pageCount);
   $("#nextChapter").disabled = active.page >= active.pageCount;
+  $("#pdfMenuBtn").hidden = false;
+  renderPendingBar();
+}
+function paintAnnotations() {
+  if (!active || active.kind !== "pdf" || !active.shell) return;
+  const { hl, viewport } = active.shell;
+  hl.innerHTML = "";
+  (active.annotations || []).filter(a => a.page === active.page && (a.rects || []).length).forEach(a => {
+    a.rects.forEach(r => {
+      const v = rectToView(viewport, r);
+      const div = document.createElement("div");
+      div.className = "hl " + (a.kind || "highlight") + " " + (a.color || "yellow");
+      div.style.left = v.left + "px"; div.style.top = v.top + "px";
+      div.style.width = v.width + "px"; div.style.height = v.height + "px";
+      hl.appendChild(div);
+    });
+  });
+}
+async function loadAnnotations() {
+  const sidecar = !!(settings && settings.annotationSidecar);
+  const doc = await rpc("load-annotations", { pdfPath: active.path, sidecar });
+  const data = doc.data ? JSON.parse(b64ToText(doc.data)) : {};
+  active.annotations = data.annotations || [];
+  active.bookmarks = data.bookmarks || [];
+  active.recoveryPending = !!doc.recoveryPending;
+}
+async function saveAnnotations() {
+  const sidecar = !!(settings && settings.annotationSidecar);
+  const payload = { annotations: active.annotations || [], bookmarks: active.bookmarks || [] };
+  const b64 = bytesToB64(new TextEncoder().encode(JSON.stringify(payload)));
+  await rpc("set-annotations", { pdfPath: active.path, sidecar, data: b64 });
+  active.recoveryPending = false;
+}
+function showSelbar(range) {
+  const bar = $("#selbar");
+  const reader = $("#reader");
+  const rb = reader.getBoundingClientRect();
+  const r = range.getBoundingClientRect();
+  bar.hidden = false;
+  bar.style.left = Math.max(8, (r.left - rb.left) + (r.width / 2) - 90) + "px";
+  bar.style.top = Math.max(8, (r.top - rb.top) - 34 + reader.scrollTop) + "px";
+}
+function hideSelbar() { $("#selbar").hidden = true; pendingSelection = null; }
+let pendingSelection = null;
+function onPdfSelect() {
+  if (!active || active.kind !== "pdf" || !active.shell) return;
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.rangeCount) { hideSelbar(); return; }
+  const range = sel.getRangeAt(0);
+  if (!active.shell.tl.contains(range.commonAncestorContainer)) { hideSelbar(); return; }
+  const base = active.shell.wrap.getBoundingClientRect();
+  const rects = [...range.getClientRects()].filter(r => r.width > 1 && r.height > 1)
+    .map(r => rectToPdf(active.shell.viewport, r, base));
+  if (!rects.length) { hideSelbar(); return; }
+  pendingSelection = { page: active.page, rects, excerpt: sel.toString().trim().slice(0, 800) };
+  showSelbar(range);
+}
+async function addAnnotation(color, kind) {
+  if (!pendingSelection) return;
+  const a = Object.assign({ id: "a-" + Date.now() + "-" + Math.floor(Math.random() * 10000), color, kind, note: "", created: Math.floor(Date.now() / 1000) }, pendingSelection);
+  active.annotations = [...(active.annotations || []), a];
+  try { await saveAnnotations(); $("#statusSave").textContent = ""; }
+  catch (err) { $("#statusSave").textContent = t("ui.notes.save-failed", ""); }
+  window.getSelection().removeAllRanges();
+  hideSelbar(); paintAnnotations(); renderSide();
+}
+// ---- pending page edits (preview bytes; source untouched until save-as) --
+function renderPendingBar() {
+  const bar = $("#pendingbar");
+  const dirty = active && active.kind === "pdf" && active.dirty;
+  bar.hidden = !dirty;
+  if (dirty) {
+    $("#pendingText").textContent = t("ui.pdf.pending-body");
+    $("#editUndo").textContent = t("ui.undo");
+    $("#editDiscard").textContent = t("ui.pdf.discard");
+    $("#editSave").textContent = t("ui.pdf.save-as");
+    $("#editUndo").disabled = !(active.undo || []).length;
+  }
+}
+async function scratchPath() {
+  const r = await post("/api/host/scratch", { data: bytesToB64(active.bytes) });
+  return r.json && r.json.path;
+}
+async function applyEdit(kind) {
+  if (!active || active.kind !== "pdf") return;
+  const old = active.bytes;
+  let next = null;
+  const p = await scratchPath();
+  if (kind === "rotate") next = await rpc("edit-rotate-pages", { path: p, pages: [active.page], delta: 90 });
+  else if (kind === "delete") { if (active.pageCount <= 1) return announce(t("ui.pages.edit-failed")); next = await rpc("edit-delete-pages", { path: p, pages: [active.page] }); }
+  else if (kind === "blank") next = await rpc("edit-insert-blank-after", { path: p, page: active.page });
+  else if (kind === "append") {
+    const r = await post("/api/dialog/open", { title: t("ui.pages.merge"), filters: [[t("ui.filter.pdf"), "*.pdf"]] });
+    const other = r.json && r.json.path; if (!other) return;
+    next = await rpc("edit-append-doc", { path: p, otherPath: other });
+  } else if (kind === "extract") {
+    const bytes = await rpc("edit-extract-pages", { path: p, pages: [active.page] });
+    return exportBytes(bytes, "extract.pdf");
+  } else if (kind === "bake") {
+    next = await rpc("edit-bake-text", { path: p, watermarkText: active.title, watermarkSize: 24, watermarkOpacityMilli: 300, boxes: [] });
+  }
+  if (!next) return;
+  active.undo = [...(active.undo || []), old];
+  active.bytes = b64ToBytes(next);
+  active.pdf = null; active.dirty = true;
+  active.page = 1;
+  await renderReader();
+}
+async function exportBytes(b64, name) {
+  const r = await post("/api/dialog/save", { defaultName: name });
+  const dest = r.json && r.json.path; if (!dest) return;
+  await post("/api/host/write", { path: dest, data: b64 });
+  announce(t("ui.settings.saved"));
+}
+async function undoEdit() {
+  if (!active.undo || !active.undo.length) return;
+  active.bytes = active.undo.pop();
+  active.pdf = null; active.dirty = active.undo.length > 0; active.page = 1;
+  await renderReader();
+}
+async function discardEdit() {
+  active.bytes = active.originalBytes; active.undo = []; active.pdf = null; active.dirty = false; active.page = 1;
+  await renderReader();
+}
+async function saveEdit() {
+  const r = await post("/api/dialog/save", { defaultName: fileName(active.path) });
+  const dest = r.json && r.json.path; if (!dest) return;
+  await post("/api/host/write", { path: dest, data: bytesToB64(active.bytes) });
+  active.dirty = false; active.undo = [];
+  renderPendingBar(); announce(t("ui.settings.saved"));
 }
 async function gotoChapter(n) {
   if (!active || active.kind !== "epub") return;
@@ -294,11 +463,16 @@ function renderSide() {
 async function renderNotes(list) {
   list.innerHTML = '<div class="empty"></div>';
   try {
-    const sidecar = !!(settings && settings.annotationSidecar);
-    const doc = await rpc("load-annotations", { pdfPath: active.path, sidecar });
-    $("#sideFoot").textContent = doc.recoveryPending ? t("ui.notes.recovery-pending") : "";
-    const data = doc.data ? JSON.parse(b64ToText(doc.data)) : null;
-    const items = (data && (data.annotations || data.items)) || [];
+    if (active.kind === "pdf" && active.annotations) {
+      // cached in-session doc (includes unsaved edits); refresh recovery flag
+      const sidecar = !!(settings && settings.annotationSidecar);
+      const pend = await rpc("annotation-recovery-pending", { pdfPath: active.path, sidecar });
+      active.recoveryPending = !!pend;
+    } else {
+      await loadAnnotations();
+    }
+    $("#sideFoot").textContent = active.recoveryPending ? t("ui.notes.recovery-pending") : "";
+    const items = active.annotations || [];
     list.innerHTML = "";
     if (!items.length) { list.innerHTML = '<div class="empty"></div>'; $(".empty", list).textContent = t("ui.notes.empty"); return; }
     items.forEach(a => {
@@ -306,12 +480,18 @@ async function renderNotes(list) {
       row.className = "arow";
       row.innerHTML = '<span class="adot"></span><span class="abody"><span class="aloc"></span><span class="aex"></span><span class="anote"></span></span>';
       const color = a.color === "blue" ? "var(--hl-blue)" : a.color === "green" ? "var(--hl-green)" : "var(--hl-yellow)";
-      $(".adot", row).style.background = color;
-      $(".aloc", row).textContent = a.loc || (a.page ? t("ui.notes.page", a.page) : "");
-      $(".aex", row).textContent = a.text || a.exact || "";
+      $(".adot", row).style.background = a.kind === "highlight" ? color : "var(--mute)";
+      $(".aloc", row).textContent = a.page ? t("ui.notes.page", a.page) : (a.loc || "");
+      $(".aex", row).textContent = a.excerpt || a.text || "";
       $(".anote", row).textContent = a.note || "";
       list.appendChild(row);
     });
+    if (active.recoveryPending) {
+      const retry = document.createElement("button");
+      retry.className = "btn"; retry.textContent = t("ui.notes.retry-save");
+      retry.addEventListener("click", async () => { await saveAnnotations(); renderSide(); });
+      list.appendChild(retry);
+    }
   } catch (err) {
     $(".empty", list).textContent = t("ui.notes.empty");
     $("#sideFoot").textContent = "";
@@ -342,7 +522,9 @@ async function boot() {
   wire();
   if (e2e) {
     const gate = await post("/api/host/e2e", {});
-    if (gate.json && gate.json.enabled) runJourney();
+    if (gate.json && gate.json.enabled) {
+      if (params.get("stage") === "pdf") runPdfStage(); else runJourney();
+    }
   }
 }
 function wire() {
@@ -362,6 +544,27 @@ function wire() {
   $("#readTheme").addEventListener("change", e => setReadTheme(e.target.value));
   $("#fontMinus").addEventListener("click", () => setFont(-100));
   $("#fontPlus").addEventListener("click", () => setFont(100));
+  // S3 PDF surface
+  document.addEventListener("mouseup", () => setTimeout(onPdfSelect, 0));
+  $$("#selbar .swatch").forEach(sw => sw.addEventListener("click", () => addAnnotation(sw.dataset.color, "highlight")));
+  $$("#selbar .act[data-kind]").forEach(ac => ac.addEventListener("click", () => addAnnotation("", ac.dataset.kind)));
+  $("#selCopy").addEventListener("click", () => {
+    if (pendingSelection) navigator.clipboard && navigator.clipboard.writeText(pendingSelection.excerpt);
+    hideSelbar();
+  });
+  $("#pdfMenuBtn").addEventListener("click", () => {
+    $("#pdfMenuTitle").textContent = t("ui.viewer.page-status", active.page, active.pageCount);
+    $("#pdfMenu").showModal();
+  });
+  $("#pdfMenuClose").addEventListener("click", () => $("#pdfMenu").close());
+  $$("#pdfMenu [data-edit]").forEach(b => b.addEventListener("click", async () => {
+    $("#pdfMenu").close();
+    try { await applyEdit(b.dataset.edit); }
+    catch (err) { announce(t("ui.pages.edit-failed") + " " + err.message); }
+  }));
+  $("#editUndo").addEventListener("click", undoEdit);
+  $("#editDiscard").addEventListener("click", discardEdit);
+  $("#editSave").addEventListener("click", saveEdit);
 }
 
 // ---- S2 e2e journey (harness only; ?e2e=1 + BOOKLIGHT_E2E=1) --------------
@@ -383,11 +586,101 @@ async function runJourney() {
   await step("read-theme", async () => { await setReadTheme("sepia"); if (!$("#reader").classList.contains("sepia")) throw new Error("theme not applied"); return readTheme; });
   await step("font-scale", async () => { const before = fontPermille; await setFont(100); if (fontPermille !== before + 100) throw new Error("font not applied"); return fontPermille; });
   await step("open-pdf", async () => { await openPath(pdf); if (!active || active.kind !== "pdf") throw new Error("not pdf"); await new Promise(r => setTimeout(r, 500)); return active.pageCount; });
-  await step("pdf-canvas", () => { const c = $("#pdfCanvas"); if (!c || !c.width) throw new Error("no canvas"); const ctx = c.getContext("2d"); const d = ctx.getImageData(0, 0, c.width, c.height).data; let nonBlank = 0; for (let i = 3; i < d.length; i += 40) if (d[i] > 0) nonBlank++; if (!nonBlank) throw new Error("blank canvas"); return nonBlank; });
+  await step("pdf-canvas", () => { const c = $("#prose canvas"); if (!c || !c.width) throw new Error("no canvas"); const ctx = c.getContext("2d"); const d = ctx.getImageData(0, 0, c.width, c.height).data; let nonBlank = 0; for (let i = 3; i < d.length; i += 40) if (d[i] > 0) nonBlank++; if (!nonBlank) throw new Error("blank canvas"); return nonBlank; });
+  const selectSpans = (a, b) => {
+    const spans = active.shell.tl.querySelectorAll("span");
+    if (spans.length < 2) throw new Error("text layer <2 spans");
+    const range = document.createRange();
+    range.setStart(spans[a], 0); range.setEnd(spans[b], spans[b].childNodes.length || 1);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    onPdfSelect();
+    return sel;
+  };
+  await step("sel-highlight", async () => {
+    selectSpans(0, 1);
+    if (!pendingSelection) throw new Error("no pending selection");
+    await addAnnotation("yellow", "highlight");
+    if ((active.annotations || []).length !== 1) throw new Error("annotation not added");
+    return $$("#prose .hl-layer .hl").length;
+  });
+  await step("sel-underline", async () => {
+    selectSpans(1, Math.min(2, active.shell.tl.querySelectorAll("span").length - 1));
+    await addAnnotation("", "underline");
+    if (!active.annotations.some(a => a.kind === "underline")) throw new Error("underline missing");
+    return active.annotations.length;
+  });
+  await step("ann-persist", async () => {
+    const sidecar = !!(settings && settings.annotationSidecar);
+    const doc = await rpc("load-annotations", { pdfPath: active.path, sidecar });
+    const data = JSON.parse(b64ToText(doc.data));
+    if ((data.annotations || []).length < 2) throw new Error("not persisted");
+    return data.annotations.length;
+  });
+  await step("edit-rotate", async () => {
+    await applyEdit("rotate");
+    if (!active.dirty) throw new Error("not dirty");
+    if (active.shell.viewport.rotation !== 90) throw new Error("rotation " + active.shell.viewport.rotation);
+    return active.shell.viewport.rotation;
+  });
+  await step("edit-undo", async () => {
+    await undoEdit();
+    if (active.dirty) throw new Error("still dirty");
+    if (active.shell.viewport.rotation !== 0) throw new Error("rotation not restored");
+    return active.shell.viewport.rotation;
+  });
+  await step("edit-delete", async () => {
+    const before = active.pageCount;
+    await applyEdit("delete");
+    if (active.pageCount !== before - 1) throw new Error("page not deleted");
+    return active.pageCount;
+  });
+  await step("edit-save", async () => {
+    const sc = await post("/api/host/scratch", { data: bytesToB64(active.bytes) });
+    const dest = sc.json.path;
+    await post("/api/host/write", { path: dest, data: bytesToB64(active.bytes) });
+    const back = await post("/api/host/file", { path: dest });
+    if (b64ToBytes(back.json.data).length !== active.bytes.length) throw new Error("save roundtrip mismatch");
+    return active.bytes.length;
+  });
+  await step("edit-discard", async () => {
+    await discardEdit();
+    if (active.dirty) throw new Error("still dirty after discard");
+    if (active.bytes.length !== active.originalBytes.length) throw new Error("source not restored");
+    return active.bytes.length;
+  });
   await step("tabs", () => { const n = $$("#tabbar .doctab").length; if (n !== 2) throw new Error("tabs=" + n); return n; });
   await step("tab-close", async () => { const d = docs.find(x => x.kind === "pdf"); closeDoc(d); if (docs.length !== 1) throw new Error("close failed"); return docs.length; });
   const ok = Object.values(steps).every(s => s.ok);
   await post("/api/host/e2e_report", { payload: { phase: "done", ok, stepCount: Object.keys(steps).length, steps } });
+}
+
+// Pixel-evidence stage: leave the PDF surface on screen with highlight ink
+// and the pending-edit bar visible, then report (verify captures after).
+async function runPdfStage() {
+  const steps = {};
+  const step = async (id, fn) => {
+    try { const detail = await fn(); steps[id] = { ok: true, detail: String(detail ?? "") }; }
+    catch (err) { steps[id] = { ok: false, detail: err.message }; }
+  };
+  const fx = await post("/api/host/e2e_fixtures", {});
+  await step("open-pdf", async () => { await openPath(fx.json.pdf); return active.pageCount; });
+  await step("ink", async () => {
+    const spans = active.shell.tl.querySelectorAll("span");
+    const range = document.createRange();
+    range.setStart(spans[0], 0); range.setEnd(spans[1], spans[1].childNodes.length || 1);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    onPdfSelect(); await addAnnotation("yellow", "highlight");
+    const r2 = document.createRange();
+    r2.setStart(spans[1], 0); r2.setEnd(spans[Math.min(2, spans.length - 1)], 1);
+    sel.removeAllRanges(); sel.addRange(r2);
+    onPdfSelect(); await addAnnotation("", "underline");
+    window.getSelection().removeAllRanges();
+    return $$("#prose .hl-layer .hl").length;
+  });
+  await step("pending", async () => { await applyEdit("rotate"); return active.dirty; });
+  const ok = Object.values(steps).every(s => s.ok);
+  await post("/api/host/e2e_report", { payload: { phase: "done", ok, stepCount: Object.keys(steps).length, steps,
+    state: { readerHidden: $("#view-reader").hidden, libHidden: $("#view-library").hidden, active: active && active.kind, dirty: active && active.dirty, hl: $$("#prose .hl-layer .hl").length } } });
 }
 
 boot();
