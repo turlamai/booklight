@@ -17,6 +17,11 @@
   家族设计真源修订 `2026-11-20-minimal-family` 已核验；产品起始 SHA
   `93341981d2637340d645f3a366b0a6302ad30ffa`。EPUB CSS 契约与阅读主题 Keep；
   不变式 2（PDF 文字永不被产品重排）由 pdf.js 保留页面自身排版继续满足。
+- **已同步（2026-11-23，#75 S1）**：glaze 载体落地 `host/`（34 RPC 1:1 typed
+  路由，rivet/bridge 进程内 RVT1 + schema codec，上游提取 turlamai/rivet#493 /
+  glaze#159）；边界约定 Bytes=base64 字符串、enum=字符串、章节序号 1-based；
+  `glaze-schema.json` 为 glaze 面基线，`scripts/check-rpc-surface.py` 门禁；
+  S1 探针页仅 harness，产品 web UI 自 S2 起按原型渐进落地。
 
 ## 设计原则（HIG 内核 + 本产品特化）
 

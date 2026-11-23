@@ -1,0 +1,995 @@
+{
+  "format": "glaze-schema",
+  "format-version": 1,
+  "glz": 1,
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/api/rpc/initialize"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/get-settings"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/save-settings"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/save-reading-prefs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/set-locale"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/list-presets"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/save-api-key"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/test-connection"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/get-recents"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/update-recents"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/epub-open"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/epub-chapter-html"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/epub-chapter-text"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/epub-doc-text"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/split-paragraphs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/get-annotations"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/set-annotations"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/load-annotations"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/annotation-recovery-pending"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/export-annotations"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/edit-rotate-pages"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/edit-delete-pages"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/edit-extract-pages"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/edit-insert-blank-after"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/edit-append-doc"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/edit-bake-text"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/preview-ai-send"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/translate-text"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/summarize-text"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/chat"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/stop-stream"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/check-updates"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/start-download"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rpc/update-state"
+    },
+    {
+      "method": "POST",
+      "path": "/api/health"
+    },
+    {
+      "method": "POST",
+      "path": "/api/host/e2e"
+    },
+    {
+      "method": "POST",
+      "path": "/api/host/e2e_fixtures"
+    },
+    {
+      "method": "POST",
+      "path": "/api/host/e2e_report"
+    },
+    {
+      "method": "POST",
+      "path": "/api/host/e2e_report_get"
+    }
+  ],
+  "schema": {
+    "commands": [
+      {
+        "errors": [],
+        "name": "health",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "hostE2e",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "hostE2e_fixtures",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "hostE2e_report",
+        "parameters": [
+          {
+            "name": "payload",
+            "type": {
+              "kind": "scalar",
+              "name": "Value"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Bool"
+        }
+      },
+      {
+        "errors": [],
+        "name": "hostE2e_report_get",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcAnnotationRecoveryPending",
+        "parameters": [
+          {
+            "name": "pdfPath",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "sidecar",
+            "type": {
+              "kind": "scalar",
+              "name": "Bool"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Bool"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcChat",
+        "parameters": [
+          {
+            "name": "contextText",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "contextLabel",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "history",
+            "type": {
+              "kind": "scalar",
+              "name": "Value"
+            }
+          },
+          {
+            "name": "userMessage",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcCheckUpdates",
+        "parameters": [
+          {
+            "name": "force",
+            "type": {
+              "kind": "scalar",
+              "name": "Bool"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "String"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcEditAppendDoc",
+        "parameters": [
+          {
+            "name": "path",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "otherPath",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "String"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcEditBakeText",
+        "parameters": [
+          {
+            "name": "path",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "watermarkText",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "watermarkSize",
+            "type": {
+              "kind": "scalar",
+              "name": "Int64"
+            }
+          },
+          {
+            "name": "watermarkOpacityMilli",
+            "type": {
+              "kind": "scalar",
+              "name": "Int64"
+            }
+          },
+          {
+            "name": "boxes",
+            "type": {
+              "kind": "scalar",
+              "name": "Value"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "String"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcEditDeletePages",
+        "parameters": [
+          {
+            "name": "path",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "pages",
+            "type": {
+              "kind": "scalar",
+              "name": "Value"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "String"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcEditExtractPages",
+        "parameters": [
+          {
+            "name": "path",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "pages",
+            "type": {
+              "kind": "scalar",
+              "name": "Value"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "String"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcEditInsertBlankAfter",
+        "parameters": [
+          {
+            "name": "path",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "page",
+            "type": {
+              "kind": "scalar",
+              "name": "Int64"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "String"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcEditRotatePages",
+        "parameters": [
+          {
+            "name": "path",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "pages",
+            "type": {
+              "kind": "scalar",
+              "name": "Value"
+            }
+          },
+          {
+            "name": "delta",
+            "type": {
+              "kind": "scalar",
+              "name": "Int64"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "String"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcEpubChapterHtml",
+        "parameters": [
+          {
+            "name": "path",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "index",
+            "type": {
+              "kind": "scalar",
+              "name": "Int64"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "String"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcEpubChapterText",
+        "parameters": [
+          {
+            "name": "path",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "index",
+            "type": {
+              "kind": "scalar",
+              "name": "Int64"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "String"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcEpubDocText",
+        "parameters": [
+          {
+            "name": "path",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "maxChapters",
+            "type": {
+              "kind": "scalar",
+              "name": "Int64"
+            }
+          },
+          {
+            "name": "capChars",
+            "type": {
+              "kind": "scalar",
+              "name": "Int64"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "String"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcEpubOpen",
+        "parameters": [
+          {
+            "name": "path",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcExportAnnotations",
+        "parameters": [
+          {
+            "name": "data",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "title",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "String"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcGetAnnotations",
+        "parameters": [
+          {
+            "name": "pdfPath",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "sidecar",
+            "type": {
+              "kind": "scalar",
+              "name": "Bool"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "String"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcGetRecents",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcGetSettings",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcInitialize",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcListPresets",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcLoadAnnotations",
+        "parameters": [
+          {
+            "name": "pdfPath",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "sidecar",
+            "type": {
+              "kind": "scalar",
+              "name": "Bool"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcPreviewAiSend",
+        "parameters": [
+          {
+            "name": "action",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "scope",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "contentText",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "history",
+            "type": {
+              "kind": "scalar",
+              "name": "Value"
+            }
+          },
+          {
+            "name": "userMessage",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcSaveApiKey",
+        "parameters": [
+          {
+            "name": "key",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcSaveReadingPrefs",
+        "parameters": [
+          {
+            "name": "theme",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "fontScalePermille",
+            "type": {
+              "kind": "scalar",
+              "name": "Int64"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcSaveSettings",
+        "parameters": [
+          {
+            "name": "update",
+            "type": {
+              "kind": "scalar",
+              "name": "Value"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcSetAnnotations",
+        "parameters": [
+          {
+            "name": "pdfPath",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "sidecar",
+            "type": {
+              "kind": "scalar",
+              "name": "Bool"
+            }
+          },
+          {
+            "name": "data",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcSetLocale",
+        "parameters": [
+          {
+            "name": "code",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcSplitParagraphs",
+        "parameters": [
+          {
+            "name": "text",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcStartDownload",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcStopStream",
+        "parameters": [
+          {
+            "name": "requestId",
+            "type": {
+              "kind": "scalar",
+              "name": "Int64"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcSummarizeText",
+        "parameters": [
+          {
+            "name": "text",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "mode",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcTestConnection",
+        "parameters": [
+          {
+            "name": "baseUrl",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "apiKey",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "model",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcTranslateText",
+        "parameters": [
+          {
+            "name": "text",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "target",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcUpdateRecents",
+        "parameters": [
+          {
+            "name": "path",
+            "type": {
+              "kind": "scalar",
+              "name": "String"
+            }
+          },
+          {
+            "name": "page",
+            "type": {
+              "kind": "scalar",
+              "name": "Int64"
+            }
+          },
+          {
+            "name": "scrollRatioScaled",
+            "type": {
+              "kind": "scalar",
+              "name": "Int64"
+            }
+          }
+        ],
+        "result": {
+          "kind": "scalar",
+          "name": "Value"
+        }
+      },
+      {
+        "errors": [],
+        "name": "rpcUpdateState",
+        "parameters": [],
+        "result": {
+          "kind": "scalar",
+          "name": "String"
+        }
+      }
+    ],
+    "contract": 1,
+    "enums": [],
+    "events": [],
+    "id": "glaze-routes",
+    "records": [],
+    "revision": 1,
+    "states": []
+  }
+}
