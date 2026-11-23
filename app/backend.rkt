@@ -560,11 +560,12 @@
                                        (record-ref b 'size)))
                                boxes)))
 
-;; ---- online updates (rivet/distribution; app/updater.rkt owns mechanics) --
+;; ---- online updates (app/updater.rkt owns mechanics) ----
 
 ;; The Racket side verifies the Ed25519-signed channel manifest and streams
-;; the DMG on a background thread; the native host owns installation. The
-;; wire payloads are raw jsexpr bytes so hosts JSON-decode them (same shape
+;; the portable archive on a background thread; the glaze carrier's install
+;; path overlays the downloaded tarball/zip (docs/USER-GUIDE.md). The wire
+;; payloads are raw jsexpr bytes so the web UI JSON-decodes them (same shape
 ;; as the payback family surface).
 
 (define (jsexpr->bytes j)

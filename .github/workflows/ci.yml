@@ -4,8 +4,8 @@ on:
     branches: [main]
   pull_request:
 
-# Single source of truth for the rivet pin; every install step below
-# references this so a bump is one edit, not a grep-replace across jobs.
+# Single source of truth for the rivet pin the Racket engine tests against;
+# the glaze carrier pins live in host-ci.yml (single source there).
 env:
   RIVET_PIN: c1f0d921e2136c0cfb2c1c1f6d273f2b26222a19
 concurrency:
@@ -21,16 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify release version alignment (VERSION == rivet.rktd == updater)
+      - name: Verify release version alignment (VERSION == updater)
         run: bash scripts/check-release-version.sh
       - name: Release signing trust-root negative tests (no secrets)
         run: python3 -m unittest discover -s scripts/tests -p 'test_release_signing.py'
-      - name: Verify the WinUI i18n table matches shared/i18n
-        run: node scripts/gen-win-strings.mjs --check
-      - name: Verify the GTK i18n table matches shared/i18n
-        run: node scripts/gen-linux-strings.mjs --check
-      - name: Verify the macOS i18n table matches shared/i18n
-        run: node scripts/gen-swift-strings.mjs --check
       - name: Prevent book library / reading analytics regression
         run: node scripts/check-file-first.mjs
 
@@ -57,124 +51,3 @@ jobs:
           raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}' crypto
       - name: Domain core tests
         run: raco test racket/
-
-  windows-host:
-    name: Windows host (WinUI3 build)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Racket CS 9.3
-        uses: Bogdanp/setup-racket@v1.15
-        with:
-          architecture: x64
-          distribution: full
-          variant: CS
-          version: '9.3'
-      - name: Export trusted Mozilla CA roots for Windows Racket
-        shell: pwsh
-        run: |
-          # Racket 9.3's Windows ROOT-store reader throws X509*->C on some
-          # hosted runners. Node bundles Mozilla CA roots independently of
-          # Windows; export the roots, without disabling TLS verification.
-          $bundle = Join-Path $env:RUNNER_TEMP 'booklight-mozilla-roots.pem'
-          $js = 'const tls=require("node:tls"),fs=require("node:fs"); if(tls.rootCertificates.length<50) process.exit(2); fs.writeFileSync(process.argv[1],tls.rootCertificates.join("\n")+"\n",{flag:"wx"});'
-          node -e $js $bundle
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $bundle -PathType Leaf)) {
-            throw "Unable to export trusted CA roots; refusing insecure TLS fallback"
-          }
-          "BOOKLIGHT_CI_CA_BUNDLE=$bundle" >> $env:GITHUB_ENV
-      - name: Install pinned Rivet with verified TLS
-        shell: pwsh
-        run: racket scripts/ci-install-windows-deps.rkt
-      # The backend's pdf FFI (pdfdoc.rkt binds zlib) is instantiated while
-      # `raco rivet build` assembles the codegen contract, so zlib1.dll must
-      # be on PATH first; the same cache copy rides into the packaged stage.
-      - name: Locate zlib for the backend FFI
-        shell: pwsh
-        run: |
-          $out = powershell -NoProfile -ExecutionPolicy Bypass -File "windows\locate-zlib.ps1" -ProjectDir "windows"
-          $out | Write-Host
-          $dir = ($out | Select-String -Pattern 'ZLIBDIR=(.+)').Matches.Groups[1].Value
-          (Resolve-Path $dir).Path >> $env:GITHUB_PATH
-      # MSBuild + NuGet restore; fetch-pdfium.ps1 downloads the pinned
-      # PDFium binaries (sha256-verified) into the gitignored cache.
-      - name: Build host
-        shell: pwsh
-        run: raco rivet build
-      - name: Launch smoke
-        shell: pwsh
-        run: |
-          $p = Start-Process -FilePath ".rivet\stage\RivetHost.exe" -PassThru
-          Start-Sleep -Seconds 10
-          if ($p.HasExited) { Write-Error "RivetHost.exe exited during smoke"; exit 1 }
-          Stop-Process -Id $p.Id -Force
-
-  linux-host:
-    name: Linux host (${{ matrix.arch }} GTK4 build)
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { arch: x64, runner: ubuntu-latest, racket-arch: x64 }
-          - { arch: arm64, runner: ubuntu-24.04-arm, racket-arch: arm64 }
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v4
-      # Builds and caches the embeddable Racket CS runtime and exports
-      # RIVET_RACKET_* (rivet's own composite action, same as taskly).
-      # Keep the action ref in lockstep with RIVET_PIN above (and with
-      # release.yml's copy of this step) — it ships the runtime the pinned
-      # rivet expects.
-      - name: Set up embeddable Racket CS
-        uses: turlamai/rivet/.github/actions/setup-embed-racket@c1f0d921e2136c0cfb2c1c1f6d273f2b26222a19
-      # Installed after the embeddable runtime so the catalog dependency
-      # closure (cext-lib, crypto-lib, keel) resolves against the minimal
-      # build — it ships no packages of its own. crypto backs the updater.
-      - name: Install Rivet (catalog) and backend packages
-        run: |
-          # TEMP (upstream outage): see the racket-tests keel pin above.
-          raco pkg install --auto --no-docs 'https://github.com/turlamai/keel.git#e11aa621df48daaa319b17ec742ffce808274c81'
-          raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
-          raco pkg install --auto --no-docs crypto
-      - name: Install GTK4, WebKitGTK and packaging toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build pkg-config \
-            libgtk-4-dev libwebkitgtk-6.0-dev libjson-glib-dev \
-            libglib2.0-dev
-      - name: Toolchain doctor
-        run: raco rivet doctor --json
-      # Configures the host CMake, which fetches the pinned PDFium binaries
-      # (sha256-verified) and stages libpdfium.so beside the executable.
-      - name: Build host
-        run: raco rivet build
-      # Headless Wayland smoke: boot the app under weston and let the
-      # embedded backend come up (dbus session for GSettings). Runs under
-      # gdb so a crash prints a backtrace instead of failing silently.
-      - name: Headless Wayland smoke (weston)
-        run: |
-          sudo apt-get install -y at-spi2-core dbus-x11 weston gdb
-          export XDG_RUNTIME_DIR="$RUNNER_TEMP/wayland-smoke"
-          mkdir -p "$XDG_RUNTIME_DIR"
-          chmod 700 "$XDG_RUNTIME_DIR"
-          dbus-run-session -- bash -c '
-            set -uo pipefail
-            export XDG_RUNTIME_DIR
-            export WAYLAND_DISPLAY=booklight-smoke
-            export GDK_BACKEND=wayland
-            unset DISPLAY
-            weston --backend=headless-backend.so --socket="$WAYLAND_DISPLAY" \
-              --idle-time=0 &
-            sleep 2
-            timeout -s KILL 15 gdb -batch \
-              -ex run \
-              -ex "bt 25" \
-              --args ./.rivet/stage/RivetHost > smoke.log 2>&1
-            echo "=== smoke.log tail ==="
-            tail -60 smoke.log
-            if grep -qE "SIGSEGV|SIGABRT|SIGBUS" smoke.log; then
-              echo "::error::host crashed under weston"
-              exit 1
-            fi
-            exit 0
-          '

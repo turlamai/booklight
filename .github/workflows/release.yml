@@ -2,12 +2,8 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    tags: ["v*"]
 
-# Single source of truth for the rivet pin; every install step below
-# references this so a bump is one edit, not a grep-replace across jobs.
-env:
-  RIVET_PIN: c1f0d921e2136c0cfb2c1c1f6d273f2b26222a19
 permissions:
   contents: write
   id-token: write
@@ -17,36 +13,49 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+# The glaze pin lives in host-ci.yml (single source of truth); validate reads
+# it once and every build job consumes the output. The engine (racket/) still
+# tests against rivet in CI, but release packaging is glaze-only since #75
+# S6 retired the three native host legs.
 jobs:
   validate:
     name: Validate release tag
     runs-on: ubuntu-latest
+    outputs:
+      glaze-pin: ${{ steps.pin.outputs.glaze-pin }}
+      rivet-pin: ${{ steps.pin.outputs.rivet-pin }}
     steps:
       - uses: actions/checkout@v4
-      - name: Version preflight (VERSION == rivet.rktd == updater == tag)
+        with:
+          fetch-depth: 0
+      - name: Check tag matches VERSION and app/version.rkt
         run: bash scripts/check-release-version.sh "${{ github.ref_name }}"
-      - name: Check CHANGELOG has a section for this version
-        run: grep -q "^## \[${GITHUB_REF_NAME#v}\]" CHANGELOG.md
-
-      - name: Validate release signing key before starting platform builds
-        env:
-          UPDATE_ED25519_PRIVATE_KEY_B64: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY_B64 }}
-        shell: bash
+      - name: Check CHANGELOG
         run: |
-          set -euo pipefail
-          if [[ -z "${UPDATE_ED25519_PRIVATE_KEY_B64:-}" ]]; then
-            echo "::error::Missing Ed25519 release signing key; refusing unsigned update feed"
+          TAG="${GITHUB_REF_NAME#v}"
+          grep -q "^## \[$TAG\]" CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## [$TAG]' section"; exit 1; }
+      - name: Preflight mandatory signed-update key before platform builds
+        shell: bash
+        env:
+          UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
+        run: |
+          if [[ -z "${UPDATE_ED25519_PRIVATE_KEY:-}" ]]; then
+            echo "::error::UPDATE_ED25519_PRIVATE_KEY missing; skipping expensive platform builds rather than publishing without a signed feed"
             exit 1
           fi
-          umask 077
-          key="$(mktemp)"
-          trap 'rm -f "$key"' EXIT
-          printf '%s' "$UPDATE_ED25519_PRIVATE_KEY_B64" | base64 --decode > "$key"
-          python3 scripts/check-update-signing-key.py "$key"
+      - name: Read glaze + rivet pins from host-ci.yml
+        id: pin
+        run: |
+          pin="$(grep -m1 -E '^ *GLAZE_PIN:' .github/workflows/host-ci.yml | sed -E 's/.*GLAZE_PIN:[[:space:]]*//')"
+          test -n "$pin"
+          echo "glaze-pin=$pin" >> "$GITHUB_OUTPUT"
+          rpin="$(grep -m1 -E '^ *RIVET_PIN:' .github/workflows/host-ci.yml | sed -E 's/.*RIVET_PIN:[[:space:]]*//')"
+          test -n "$rpin"
+          echo "rivet-pin=$rpin" >> "$GITHUB_OUTPUT"
 
   macos:
+    name: macOS build (${{ matrix.arch }})
     needs: validate
-    name: macOS package (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -59,31 +68,20 @@ jobs:
             runner: macos-15-intel
             racket-arch: x64
     env:
-      # Production signing lights up as soon as the account-level secrets
-      # exist (Developer ID p12 + App Store Connect API key) and applies to
-      # every workflow run that has them. Credential contract:
-      # DEVELOPER_ID_P12_B64 / DEVELOPER_ID_P12_PASSWORD / ASC_KEY_ID /
-      # ASC_ISSUER_ID / ASC_KEY_P8_B64; see rivet docs/production-signing.md.
       MACOS_SIGNING_CONFIGURED: ${{ secrets.DEVELOPER_ID_P12_B64 != '' && secrets.ASC_KEY_P8_B64 != '' }}
-      # A tag push is a release: without credentials it must fail closed
-      # instead of silently shipping ad-hoc signed artifacts.
       IS_TAG_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Racket CS
+      - name: Install Racket (${{ matrix.racket-arch }})
         uses: Bogdanp/setup-racket@v1.15
         with:
-          # Each leg builds the architecture it will package (family
-          # release.yml macos matrix pattern).
-          architecture: ${{ matrix.racket-arch }}
+          version: stable
           distribution: full
-          variant: CS
-          version: '9.3'
-      - name: Install Rivet (pinned) and crypto (updater dependency)
-        run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}' crypto
-        shell: bash
-      - name: Version preflight (VERSION == rivet.rktd == updater == tag)
-        run: bash scripts/check-release-version.sh "${{ github.ref_name }}"
+          architecture: ${{ matrix.racket-arch }}
+      - name: Install Rivet + Glaze (catalog)
+        run: |
+          raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ needs.validate.outputs.rivet-pin }}'
+          raco pkg install --auto --no-docs 'https://github.com/turlamai/glaze.git#${{ needs.validate.outputs.glaze-pin }}'
       - name: Provision Developer ID certificate
         if: env.MACOS_SIGNING_CONFIGURED == 'true'
         env:
@@ -104,13 +102,7 @@ jobs:
           rm -f "$P12"
           IDENTITY_NAME="$(security find-identity -v -p codesigning "$KEYCHAIN" | grep 'Developer ID Application' | head -1 | sed -E 's/^[^"]*"(.*)"$/\1/')"
           test -n "$IDENTITY_NAME"
-          # rivet reads exactly these two (rivet docs/production-signing.md);
-          # they only take effect with the explicit --production package
-          # call below.
-          {
-            echo "RIVET_MACOS_SIGN_IDENTITY=$IDENTITY_NAME"
-            echo "RIVET_MACOS_NOTARY_PROFILE=ASC_NOTARY"
-          } >> "$GITHUB_ENV"
+          echo "MACOS_SIGN_IDENTITY=$IDENTITY_NAME" >> "$GITHUB_ENV"
       - name: Store notarytool keychain profile
         if: env.MACOS_SIGNING_CONFIGURED == 'true'
         env:
@@ -124,166 +116,230 @@ jobs:
           xcrun notarytool store-credentials ASC_NOTARY \
             --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --key "$P8"
           rm -f "$P8"
-      # `raco rivet package --production` is production packaging (rivet
-      # docs/production-signing.md): with the credentials exported above it
-      # Developer ID-signs, notarizes, staples, and re-verifies inside rivet
-      # itself, failing closed when they are absent.
-      - name: Package (Developer ID + notarized)
+      # The web UI is plain static files assembled at runtime by the carrier
+      # (host/web + shared.css + vendored pdf.js); no node build to stage.
+      - name: Reclaim disk before carrier build
+        run: df -h .
+      - name: Build (Developer ID + notarized)
         if: env.MACOS_SIGNING_CONFIGURED == 'true'
-        run: raco rivet package --production
-      - name: Package (ad-hoc dispatch smoke)
+        run: |
+          raco glaze build \
+            --name booklight \
+            --version "${GITHUB_REF_NAME#v}" \
+            --publisher "Turing Lambda" \
+            --identifier site.jrtx.booklight \
+            --entry host/main.rkt \
+            --installer \
+            --icon design/app-icon.icns \
+            --dmg-background design/dmg-background.png \
+            --sign "$MACOS_SIGN_IDENTITY" \
+            --notarize ASC_NOTARY
+      - name: Build (ad-hoc dispatch smoke)
         if: env.MACOS_SIGNING_CONFIGURED != 'true' && env.IS_TAG_RELEASE != 'true'
-        run: raco rivet package
-      - name: Package requires signing credentials
+        run: |
+          raco glaze build \
+            --name booklight \
+            --version "${GITHUB_REF_NAME#v}" \
+            --publisher "Turing Lambda" \
+            --identifier site.jrtx.booklight \
+            --entry host/main.rkt \
+            --installer \
+            --icon design/app-icon.icns \
+            --dmg-background design/dmg-background.png
+      - name: Build requires signing credentials
         if: env.MACOS_SIGNING_CONFIGURED != 'true' && env.IS_TAG_RELEASE == 'true'
         run: |
           echo "::error::Tag releases must be production-signed: set the macOS signing secrets (DEVELOPER_ID_P12_B64, DEVELOPER_ID_P12_PASSWORD, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8_B64) on this repository before tagging."
           exit 1
-      - name: Portable zip + checksum
+      - name: Update-feed zip + checksum
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          cd dist
-          zip -qry "booklight-${VERSION}-macos-${{ matrix.arch }}.zip" booklight.app
+          ditto -c -k --keepParent dist/booklight.app \
+            "booklight-${VERSION}-macos-${{ matrix.arch }}.zip"
           shasum -a 256 "booklight-${VERSION}-macos-${{ matrix.arch }}.zip" \
             > "booklight-${VERSION}-macos-${{ matrix.arch }}.zip.sha256"
-      - name: Human installer (DMG, drag to Applications)
+      - name: Human installer (DMG) + checksum
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          staging="$(mktemp -d)/dmg-stage"
-          mkdir -p "$staging"
-          cp -R dist/booklight.app "$staging/"
-          ln -s /Applications "$staging/Applications"
-          hdiutil create -volname "Booklight ${VERSION}" -srcfolder "$staging" -ov -format UDZO \
-            "dist/booklight-${VERSION}-macos-${{ matrix.arch }}.dmg"
-          hdiutil attach "dist/booklight-${VERSION}-macos-${{ matrix.arch }}.dmg" \
-            -mountpoint "$RUNNER_TEMP/dmg-verify" -readonly
-          test -d "$RUNNER_TEMP/dmg-verify/booklight.app"
-          hdiutil detach "$RUNNER_TEMP/dmg-verify"
-          cd dist
+          mv dist/booklight.dmg "booklight-${VERSION}-macos-${{ matrix.arch }}.dmg"
           shasum -a 256 "booklight-${VERSION}-macos-${{ matrix.arch }}.dmg" \
             > "booklight-${VERSION}-macos-${{ matrix.arch }}.dmg.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: macos-package-${{ matrix.arch }}
-          path: dist/booklight-*
+          name: macos-${{ matrix.arch }}
+          path: |
+            booklight-*-macos-*.dmg
+            booklight-*-macos-*.dmg.sha256
+            booklight-*-macos-*.zip
+            booklight-*-macos-*.zip.sha256
           if-no-files-found: error
 
   windows:
+    name: Windows MSI + portable zip
     needs: validate
-    name: Windows (MSI + portable zip)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Racket CS
+      - name: Install Racket
         uses: Bogdanp/setup-racket@v1.15
         with:
-          architecture: x64
+          version: stable
           distribution: full
-          variant: CS
-          version: '9.3'
-      - name: Install Rivet (catalog)
-        shell: bash
-        run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
-      - name: Install crypto (updater dependency)
+      - name: Export trusted Mozilla CA roots for Windows Racket
         shell: pwsh
-        run: raco pkg install --auto --no-docs crypto
-      - name: Install WiX (v5; rivet's MSI toolchain)
-        run: dotnet tool install --global wix --version 5.0.2
+        run: |
+          # Racket's Windows ROOT-store loader may throw X509*->C on hosted
+          # images. Node bundles independent Mozilla roots; never bypass TLS
+          # certificate or hostname verification.
+          $bundle = Join-Path $env:RUNNER_TEMP 'booklight-mozilla-roots.pem'
+          $js = 'const tls=require("node:tls"),fs=require("node:fs"); if(tls.rootCertificates.length<50) process.exit(2); fs.writeFileSync(process.argv[1],tls.rootCertificates.join("\n")+"\n",{flag:"wx"});'
+          node -e $js $bundle
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $bundle -PathType Leaf)) {
+            throw "Unable to export trusted CA roots; refusing insecure TLS fallback"
+          }
+          "BOOKLIGHT_CI_CA_BUNDLE=$bundle" >> $env:GITHUB_ENV
+      - name: Install Rivet + Glaze (pinned, verified TLS)
+        env:
+          RIVET_PIN: ${{ needs.validate.outputs.rivet-pin }}
+          GLAZE_PIN: ${{ needs.validate.outputs.glaze-pin }}
+        shell: pwsh
+        run: racket scripts/ci-install-windows-deps.rkt --glaze
+      - name: Install WiX (v5; v7 requires EULA acceptance, v5 runs the v4 schema)
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          echo "$USERPROFILE/.dotnet/tools" >> "$GITHUB_PATH"
         shell: bash
-      # Same zlib pre-step as ci.yml's windows-host job: the codegen
-      # instantiates the backend's pdf FFI, and CopyZlibDll ships the DLL in
-      # the MSI / portable zip so the launch smoke and end users find it.
+      # The backend pdf FFI (pdfdoc binds zlib) is instantiated while the
+      # carrier embeds the backend, so zlib1.dll must be on PATH first and
+      # ride into the distribution beside the executable.
       - name: Locate zlib for the backend FFI
         shell: pwsh
         run: |
-          $out = powershell -NoProfile -ExecutionPolicy Bypass -File "windows\locate-zlib.ps1" -ProjectDir "windows"
+          $out = powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\locate-zlib.ps1" -ProjectDir ".glaze"
           $out | Write-Host
           $dir = ($out | Select-String -Pattern 'ZLIBDIR=(.+)').Matches.Groups[1].Value
           (Resolve-Path $dir).Path >> $env:GITHUB_PATH
-      - name: Version preflight (VERSION == rivet.rktd == updater == tag)
-        shell: bash
-        run: bash scripts/check-release-version.sh "${{ github.ref_name }}"
-      # MSI + portable zip + SBOM + notices, launch smoke included (the
-      # taskly windows release shape). The portable zip is the update-feed
-      # entry; the publish job assembles and signs the merged manifest.
-      - name: Release (MSI + portable zip)
-        shell: pwsh
-        run: raco rivet release --without-updates --development
-      - name: Family naming + checksums
+          "BOOKLIGHT_ZLIB_DIR=$((Resolve-Path $dir).Path)" >> $env:GITHUB_ENV
+      - name: Build MSI + distribution
         shell: bash
         run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          cd dist
-          # rivet v0.11.0 names the MSI and the portable zip in family form
-          # already; only the SBOM/notices lack the platform segment.
-          mv sbom.cdx.json "booklight-${VERSION}-windows-x64.sbom.cdx.json"
-          mv THIRD_PARTY_NOTICES.txt "booklight-${VERSION}-windows-x64-THIRD_PARTY_NOTICES.txt"
-          for f in booklight-*; do
-            case "$f" in
-              *.sha256) ;;
-              # The sbom/notices/wixpdb bodies stay in the CI artifact only;
-              # a sidecar without its body on the release is a dangling
-              # reference (the taskly 1.4.0 leftover). Checksum what we upload.
-              *.sbom.cdx.json | *-THIRD_PARTY_NOTICES.txt | *.wixpdb) ;;
-              *) [ -f "$f.sha256" ] || sha256sum "$f" > "$f.sha256";;
-            esac
-          done
+          raco glaze build \
+            --name booklight \
+            --version "${GITHUB_REF_NAME#v}" \
+            --publisher "Turing Lambda" \
+            --identifier site.jrtx.booklight \
+            --entry host/main.rkt \
+            --installer \
+            --icon design/app-icon.ico \
+            --installer-license LICENSE \
+            --installer-banner design/wizard-banner.bmp \
+            --installer-dialog design/wizard-dialog.bmp
+          test -s dist/booklight.msi
+      - name: Collect MSI + portable zip + checksums
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = $env:GITHUB_REF_NAME.Substring(1)
+          Copy-Item (Join-Path $env:BOOKLIGHT_ZLIB_DIR 'zlib1.dll') dist\zlib1.dll -Force
+          $msi = "booklight-$version-windows-x64.msi"
+          Move-Item dist/booklight.msi $msi
+          $hash = (Get-FileHash -Algorithm SHA256 $msi).Hash.ToLowerInvariant()
+          "$hash  $msi" | Set-Content -Encoding ascii "$msi.sha256"
+          # Portable update payload: the whole distribution tree except the
+          # installer itself (exe + dlls + lib/).
+          $items = Get-ChildItem dist -Exclude *.msi, *.sha256
+          $zip = "booklight-$version-windows-x64.zip"
+          Compress-Archive -Path $items.FullName -DestinationPath $zip
+          $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+          "$hash  $zip" | Set-Content -Encoding ascii "$zip.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-package
-          path: dist/booklight-*
+          name: windows
+          path: |
+            booklight-*-windows-x64.msi
+            booklight-*-windows-x64.msi.sha256
+            booklight-*-windows-x64.zip
+            booklight-*-windows-x64.zip.sha256
           if-no-files-found: error
 
   linux:
+    name: Linux (${{ matrix.arch }})
     needs: validate
-    name: Linux package (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          # x64 is back on ubuntu-latest (issue #64): the release Rivet pin
-          # (33de65c) carries the RPM fixes for Ubuntu 26.04's rpm 4.19
-          # (buildroot location, rpmdb topdir, unquoted %files globs,
-          # unprivileged dbpath); the v0.12.0 tag run is the verification.
-          # arm64 stays on the native ubuntu-24.04-arm runner.
-          - { arch: x64, runner: ubuntu-latest, racket-arch: x64 }
-          - { arch: arm64, runner: ubuntu-24.04-arm, racket-arch: arm64 }
+          - arch: x64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-      # Keep the action ref in lockstep with RIVET_PIN above (and with
-      # ci.yml's copy of this step) — it ships the runtime the pinned rivet
-      # expects.
-      - name: Set up embeddable Racket CS
-        uses: turlamai/rivet/.github/actions/setup-embed-racket@c1f0d921e2136c0cfb2c1c1f6d273f2b26222a19
-      - name: Install Rivet (catalog) and backend packages
+      - name: Install Racket
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          version: stable
+          distribution: full
+          architecture: ${{ matrix.arch }}
+      - name: Install Rivet + Glaze (catalog)
         run: |
-          raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
-          raco pkg install --auto --no-docs crypto
-      - name: Install GTK4, WebKitGTK and packaging tooling
+          raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ needs.validate.outputs.rivet-pin }}'
+          raco pkg install --auto --no-docs 'https://github.com/turlamai/glaze.git#${{ needs.validate.outputs.glaze-pin }}'
+      - name: Install packaging tooling
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build pkg-config \
-            libgtk-4-dev libwebkitgtk-6.0-dev libjson-glib-dev \
-            libglib2.0-dev file rpm desktop-file-utils
-      - name: Version preflight (VERSION == rivet.rktd == updater == tag)
-        run: bash scripts/check-release-version.sh "${{ github.ref_name }}"
-      # tar.gz (the update-feed payload) + deb + rpm + AppImage + portable
-      # zip + SBOM, launch smoke included. The AppImage carries its own GTK
-      # dependency closure and libpdfium.so; APPIMAGE_EXTRACT_AND_RUN lets
-      # appimagetool run on the runner (taskly release.yml pattern).
-      - name: Release (tar.gz + deb + rpm + AppImage + portable zip)
+          sudo apt-get install --yes rpm desktop-file-utils file
+      - name: Fetch appimagetool (release CDN fallback)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          case "${{ matrix.arch }}" in
+            x64)
+              asset_arch=x86_64
+              digest=46fdd785094c7f6e545b61afcfb0f3d98d8eab243f644b4b17698c01d06083d1
+              ;;
+            arm64)
+              asset_arch=aarch64
+              digest=04f45ea45b5aa07bb2b071aed9dbf7a5185d3953b11b47358c1311f11ea94a96
+              ;;
+            *) echo "::error::unsupported Linux architecture"; exit 1 ;;
+          esac
+          dest="$RUNNER_TEMP/appimagetool-${asset_arch}.AppImage"
+          url="https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-${asset_arch}.AppImage"
+          if ! curl -fSL --retry 2 --retry-delay 2 -o "$dest" "$url"; then
+            asset_id="$(gh api repos/AppImage/appimagetool/releases/tags/1.9.0 \
+              --jq ".assets[] | select(.name==\"appimagetool-${asset_arch}.AppImage\") | .id")"
+            gh api -H 'Accept: application/octet-stream' \
+              "repos/AppImage/appimagetool/releases/assets/${asset_id}" > "$dest"
+          fi
+          actual="$(sha256sum "$dest" | awk '{print $1}')"
+          if [ "$actual" != "$digest" ]; then
+            echo "::error::appimagetool checksum mismatch (expected $digest, got $actual)"
+            exit 1
+          fi
+          chmod +x "$dest"
+          mkdir -p "$RUNNER_TEMP/bin"
+          cp "$dest" "$RUNNER_TEMP/bin/appimagetool"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Build (tar.gz tree + deb + rpm + AppImage)
         env:
           APPIMAGE_EXTRACT_AND_RUN: '1'
-        run: raco rivet release --without-updates --development
-      # Wraps the tar.gz payload into a Flatpak bundle from the flatpak/
-      # manifest template (family contract: deb+rpm+AppImage+Flatpak+tar.gz).
-      # The manifest's module closure covers the two NEEDED entries outside
-      # the GNOME Platform runtime (liblz4.so.1, libtinfo.so.6). Like
-      # deb/rpm, the flatpak install shape is manual-by-design and stays
-      # out of the signed update feed. Runs before Family naming so the
-      # bundle joins the checksum sweep.
+        run: |
+          set -euo pipefail
+          raco glaze build \
+            --name booklight \
+            --version "${GITHUB_REF_NAME#v}" \
+            --publisher "Turing Lambda" \
+            --identifier site.jrtx.booklight \
+            --entry host/main.rkt \
+            --installer \
+            --icon design/app-icon.png
+          test -s dist/booklight.deb
+          test -s dist/booklight.rpm
+          test -s dist/booklight.AppImage
       - name: Flatpak bundle
         run: |
           set -euo pipefail
@@ -291,191 +347,182 @@ jobs:
           ARCH="${{ matrix.arch }}"
           case "$ARCH" in x64) FPARCH=x86_64 ;; arm64) FPARCH=aarch64 ;; esac
           sudo apt-get install --yes flatpak flatpak-builder
-          # User-level everything: runner accounts install runtimes and
-          # build without root. GNOME 50 is the oldest supported platform
-          # runtime (48 went EOL 2026-03-24); its glibc covers the
-          # ubuntu-24.04-built payload.
           flatpak --user remote-add --if-not-exists flathub \
             https://flathub.org/repo/flathub.flatpakrepo
           flatpak --user install -y --noninteractive flathub \
             "org.gnome.Platform/${FPARCH}/50" "org.gnome.Sdk/${FPARCH}/50"
-          # The manifest template carries version/arch/sha placeholders so
-          # the archive source's checksum is exact per release.
-          cp "dist/booklight-${VERSION}-linux-${ARCH}.tar.gz" .
-          SHA="$(sha256sum "booklight-${VERSION}-linux-${ARCH}.tar.gz" | cut -d' ' -f1)"
-          sed -e "s/__VERSION__/${VERSION}/" -e "s/__ARCH__/${ARCH}/" \
-              -e "s/__SHA256__/${SHA}/" \
+          flatpak run --command=sh "org.gnome.Sdk/${FPARCH}/50" -c \
+            'ls /usr/lib/*/libwebkit2gtk-4.1.so* /usr/lib/*/libgtk-3.so*'
+          # The manifest template carries file-source path rewrites so the
+          # generated manifest at the repo root resolves them. The payload
+          # enters as a dir source staged from dist/ (bin/ + lib/): the
+          # carrier assembles its public tree at runtime from embedded
+          # runtime paths, so the bundle stays byte-identical to the tarball.
+          mkdir -p flatpak-src
+          cp -a dist/bin dist/lib flatpak-src/
+          sed -e 's|path: booklight.sh|path: flatpak/booklight.sh|' \
+              -e 's|path: site.jrtx.booklight.desktop|path: flatpak/site.jrtx.booklight.desktop|' \
+              -e 's|path: app.png|path: flatpak/icon-512.png|' \
               flatpak/site.jrtx.booklight.yml > site.jrtx.booklight.gen.yml
-          # --disable-rofiles-fuse: runners have no /dev/fuse.
           flatpak-builder --user --force-clean --disable-rofiles-fuse \
-            --repo=flatpak-repo flatpak-build site.jrtx.booklight.gen.yml
+            --default-branch=stable --repo=flatpak-repo flatpak-build site.jrtx.booklight.gen.yml
           flatpak build-bundle flatpak-repo \
             "booklight-${VERSION}-linux-${ARCH}.flatpak" site.jrtx.booklight stable
+          flatpak --user install -y --noninteractive \
+            "booklight-${VERSION}-linux-${ARCH}.flatpak"
+          flatpak run --command=sh site.jrtx.booklight -c \
+            'test -x /app/booklight/bin/booklight && test -f /app/share/icons/hicolor/512x512/apps/site.jrtx.booklight.png'
+          rm -rf flatpak-build flatpak-repo "booklight-${VERSION}-linux-${ARCH}.tar.gz"
           mv "booklight-${VERSION}-linux-${ARCH}.flatpak" dist/
-          rm -rf flatpak-build flatpak-repo \
-            "booklight-${VERSION}-linux-${ARCH}.tar.gz" site.jrtx.booklight.gen.yml
-          test -f "dist/booklight-${VERSION}-linux-${ARCH}.flatpak"
-      - name: Family naming + checksums
+          test -s "dist/booklight-${VERSION}-linux-${ARCH}.flatpak"
+      - name: Collect artifacts + checksums
         run: |
           set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCH="${{ matrix.arch }}"
+          case "$ARCH" in
+            x64) DEB_ARCH=amd64; RPM_ARCH=x86_64 ;;
+            arm64) DEB_ARCH=arm64; RPM_ARCH=aarch64 ;;
+          esac
+          raco glaze compliance --out dist
           cd dist
-          ls -1
-          # Every published asset ships with a detached checksum for manual
-          # verification; the updater verifies through the signed manifest.
+          mv booklight.deb "booklight-${VERSION}-linux-${DEB_ARCH}.deb"
+          mv booklight.rpm "booklight-${VERSION}-linux-${RPM_ARCH}.rpm"
+          mv booklight.AppImage "booklight-${VERSION}-linux-${RPM_ARCH}.AppImage"
+          # Portable update payload: the same tree the flatpak bundle wraps.
+          tar -czf "booklight-${VERSION}-linux-${ARCH}.tar.gz" bin lib
+          mv glaze-sbom.cdx.json "booklight-${VERSION}-linux-${ARCH}.sbom.cdx.json"
+          mv glaze-notices.txt "booklight-${VERSION}-linux-${ARCH}-THIRD_PARTY_NOTICES.txt"
           for f in booklight-*; do
             case "$f" in
               *.sha256) ;;
-              *.sbom.cdx.json | *-THIRD_PARTY_NOTICES.txt) ;;
-              *) [ -f "$f" ] || continue; [ -f "$f.sha256" ] || sha256sum "$f" > "$f.sha256" ;;
+              *) [ -f "$f.sha256" ] || sha256sum "$f" > "$f.sha256" ;;
             esac
           done
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-package-${{ matrix.arch }}
+          name: linux-${{ matrix.arch }}
           path: dist/booklight-*
           if-no-files-found: error
 
   release:
-    name: Publish
+    name: Sign manifest + publish
     needs: [macos, windows, linux]
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Racket CS
-        uses: Bogdanp/setup-racket@v1.15
-        with:
-          architecture: x64
-          distribution: full
-          variant: CS
-          version: '9.3'
-      - name: Install Rivet (pinned) and crypto (updater dependency)
-        run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}' crypto
+      - name: Require Ed25519 update signing key
         shell: bash
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-      - name: Gather artifacts
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          mv artifacts/macos-package-arm64/* artifacts/macos-package-x64/* dist/
-          mv artifacts/windows-package/* dist/
-          mv artifacts/linux-package-x64/* artifacts/linux-package-arm64/* dist/
-      - name: Sign the update feed over the final zips
         env:
-          UPDATE_ED25519_PRIVATE_KEY_B64: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY_B64 }}
+          UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
         run: |
-          set -euo pipefail
-          # Every supported host verifies the signed release feed for
-          # in-app updates; publishing an un-updatable release is a hard
-          # failure, not a warning (taskly release.yml pattern).
-          if [[ -z "${UPDATE_ED25519_PRIVATE_KEY_B64:-}" ]]; then
-            echo "::error::UPDATE_ED25519_PRIVATE_KEY_B64 is missing; refusing to publish without a signed update manifest"
+          if [[ -z "${UPDATE_ED25519_PRIVATE_KEY:-}" ]]; then
+            echo "::error::Missing UPDATE_ED25519_PRIVATE_KEY; refusing to publish without a signed update manifest"
             exit 1
           fi
-          KEY_DER="$RUNNER_TEMP/update-ed25519-private.der"
-          printf '%s' "$UPDATE_ED25519_PRIVATE_KEY_B64" | base64 -d > "$KEY_DER"
-          python3 scripts/check-update-signing-key.py "$KEY_DER"
-          scripts/make-update-manifest.sh "${{ github.ref_name }}" dist "$KEY_DER"
-          rm -f "$KEY_DER"
-          test -s dist/update-stable.json || {
-            echo "::error::Signed update manifest was not generated"
-            exit 1
-          }
-      - name: Notes = CHANGELOG section for this version
+      - name: Install Racket
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          version: stable
+          distribution: full
+      - name: Install Glaze (catalog; glaze/update signs and gates the feed)
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          awk -v header="## [${VERSION}]" '
-            index($0, header) == 1 {on=1; next}
-            on && /^## / {exit}
-            on {print}
-          ' CHANGELOG.md > /tmp/notes.md
-          head -3 /tmp/notes.md
-      - name: Verify and stage the exact public release
+          raco pkg install --auto --no-docs 'https://github.com/turlamai/glaze.git#${{ needs.validate.outputs.glaze-pin }}'
+      - name: Install OpenSSL 3
+        run: brew install openssl@3
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Flatten artifact dirs
+        run: |
+          find dist -mindepth 2 -maxdepth 2 -type f -exec mv {} dist/ \;
+          find dist -mindepth 1 -maxdepth 1 -type d -empty -delete
+          ls -la dist/
+      - name: Generate + sign update manifest
+        env:
+          UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          (cd dist && cat *.sha256 | sed 's/ \*/  /' | LC_ALL=C sort -k2 > SHA256SUMS)
-          (cd dist && sha256sum --check SHA256SUMS)
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-
-          v = os.environ["GITHUB_REF_NAME"].removeprefix("v")
-          prefix = f"booklight-{v}-"
-          required = {
-              prefix + suffix for suffix in (
-                  "macos-arm64.dmg", "macos-arm64.zip",
-                  "macos-x64.dmg", "macos-x64.zip",
-                  "windows-x64.msi", "windows-x64.zip",
-                  "linux-arm64.tar.gz", "linux-arm64.zip",
-                  "linux-x64.tar.gz", "linux-x64.zip",
-                  "linux-arm64.deb", "linux-amd64.deb",
-                  "linux-aarch64.AppImage", "linux-x86_64.AppImage",
-                  "linux-arm64.flatpak", "linux-x64.flatpak",
-              )
+          umask 077
+          KEY_FILE=$(mktemp)
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s\n' "$UPDATE_ED25519_PRIVATE_KEY" > "$KEY_FILE"
+          # A valid signature is insufficient if installed clients trust a different key.
+          OPENSSL3="$(brew --prefix openssl@3)/bin/openssl"
+          ACTUAL_PUB="$("$OPENSSL3" pkey -in "$KEY_FILE" -pubout -outform DER | tail -c 32 | base64 | tr -d '\r\n')"
+          BACKEND_PUB="$(grep -A1 'define update-public-key-b64' app/version.rkt | grep -oE '"[A-Za-z0-9+/=]+"' | head -1 | tr -d '"')"
+          if [[ -z "$ACTUAL_PUB" || "$ACTUAL_PUB" != "$BACKEND_PUB" ]]; then
+            echo "::error::Update signing key does not match the shipped client's pinned Ed25519 public key"
+            exit 1
+          fi
+          bash scripts/make-update-manifest.sh "${{ github.ref_name }}" dist "$KEY_FILE"
+          test -s dist/update-manifest.json || {
+            echo "::error::Missing signed update-manifest.json; refusing to publish"
+            exit 1
           }
-          rows = [line.split() for line in Path("dist/SHA256SUMS").read_text().splitlines()]
-          actual = [row[1] for row in rows if len(row) == 2]
-          # RPM release-number is a packaging revision, not app SemVer;
-          # enforce exactly one per CPU without hard-coding the revision.
-          import re
-          rpm_arches = ("aarch64", "x86_64")
-          rpm = [
-              name for name in actual
-              if re.fullmatch(re.escape(prefix) + r"[0-9]+-linux-(aarch64|x86_64)\.rpm", name)
-          ]
-          for arch in rpm_arches:
-              matching = [name for name in rpm if name.endswith(f"-linux-{arch}.rpm")]
-              if len(matching) != 1:
-                  raise SystemExit(f"Expected one RPM for {arch}, found {matching}")
-          required.update(rpm)
-          if len(rows) != len(actual) or len(actual) != len(required) or set(actual) != required:
-              raise SystemExit(
-                  f"Bad public asset matrix: missing={sorted(required - set(actual))}; "
-                  f"unexpected={sorted(set(actual) - required)}"
-              )
-          for name in actual:
-              path = Path("dist") / name
-              if not path.is_file() or path.stat().st_size == 0:
-                  raise SystemExit(f"Missing or empty installer: {name}")
-              # Every published body ships with its per-asset sidecar for
-              # manual verification; updates verify through the signed
-              # manifest, but a release whose sidecars did not make it to
-              # publish-assets is still an incomplete asset set.
-              sidecar = Path("dist") / (name + ".sha256")
-              if not sidecar.is_file() or sidecar.stat().st_size == 0:
-                  raise SystemExit(f"Missing checksum sidecar for published asset: {name}")
-          PY
-          mkdir -p publish-assets
-          while read -r _ name; do
-            cp "dist/$name" "publish-assets/$name"
-            [ -f "dist/$name.sha256" ] && cp "dist/$name.sha256" "publish-assets/$name.sha256"
-          done < dist/SHA256SUMS
-          cp dist/SHA256SUMS dist/update-stable.json dist/update-manifest.json publish-assets/
-          (cd publish-assets && sha256sum --check SHA256SUMS)
+      - name: Audit and stage public packages and license metadata
+        run: |
+          set -euo pipefail
+          VERSION="$(printf '%s' "$GITHUB_REF_NAME" | cut -c2-)"
+          mkdir -p public
+          for suffix in \
+            macos-arm64.dmg macos-arm64.zip macos-x64.dmg macos-x64.zip \
+            windows-x64.msi windows-x64.zip \
+            linux-arm64.tar.gz linux-x64.tar.gz \
+            linux-amd64.deb linux-arm64.deb \
+            linux-aarch64.AppImage linux-x86_64.AppImage \
+            linux-x64.flatpak linux-arm64.flatpak \
+            linux-arm64.sbom.cdx.json linux-x64.sbom.cdx.json \
+            linux-arm64-THIRD_PARTY_NOTICES.txt linux-x64-THIRD_PARTY_NOTICES.txt; do
+            name="booklight-$VERSION-$suffix"
+            test -s "dist/$name" || { echo "::error::Missing or empty $name"; exit 1; }
+            cp "dist/$name" "public/$name"
+          done
+          for arch in aarch64 x86_64; do
+            rpm="$(find dist -maxdepth 1 -type f -name "booklight-$VERSION-linux-$arch.rpm" -print -quit)"
+            test -s "$rpm" || { echo "::error::Missing $arch RPM"; exit 1; }
+            cp "$rpm" public/
+          done
+          cp dist/update-manifest.json public/
+          test -s public/update-manifest.json
+          cd public
+          shasum -a 256 booklight-* | LC_ALL=C sort -k2 > SHA256SUMS
+          shasum -a 256 --check SHA256SUMS
+          test "$(grep -c '^' SHA256SUMS)" -eq 20
+      - name: Gate signed feed against staged assets
+        run: |
+          set -euo pipefail
+          OPENSSL3="$(brew --prefix openssl@3)/bin/openssl"
+          KEY_FILE=$(mktemp)
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s\n' "$UPDATE_ED25519_PRIVATE_KEY" > "$KEY_FILE"
+          "$OPENSSL3" pkey -in "$KEY_FILE" -pubout -out "$RUNNER_TEMP/update-public.pem"
+          raco glaze verify-release-assets public/update-manifest.json public \
+            "$RUNNER_TEMP/update-public.pem" \
+            --base-url "https://github.com/turlamai/booklight/releases/download/${{ github.ref_name }}" \
+            --json
+        env:
+          UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          VERSION="$(printf '%s' "$GITHUB_REF_NAME" | cut -c2-)"
           if gh release view "$GITHUB_REF_NAME" -R turlamai/booklight >/dev/null 2>&1; then
-            gh release edit "$GITHUB_REF_NAME" --notes-file /tmp/notes.md -R turlamai/booklight
-            gh release upload "$GITHUB_REF_NAME" publish-assets/* --clobber -R turlamai/booklight
+            gh release upload "$GITHUB_REF_NAME" public/* --clobber -R turlamai/booklight
           else
-            gh release create "$GITHUB_REF_NAME" publish-assets/* \
+            gh release create "$GITHUB_REF_NAME" public/* \
               -R turlamai/booklight \
-              --title "Booklight $VERSION" \
-              --notes-file /tmp/notes.md
+              --title "Booklight $GITHUB_REF_NAME" \
+              --generate-notes
           fi
-          # Reruns must prune old sidecars, aliases, and build-only output.
           gh release view "$GITHUB_REF_NAME" -R turlamai/booklight --json assets --jq '.assets[].name' |
             while IFS= read -r name; do
-              if [ ! -f "publish-assets/$name" ]; then
+              if [ ! -f "public/$name" ]; then
                 gh release delete-asset "$GITHUB_REF_NAME" "$name" --yes -R turlamai/booklight
               fi
             done
-      - name: Attest public artifact provenance
-        uses: actions/attest-build-provenance@v1
+      - name: Attest public build provenance
+        uses: actions/attest-build-provenance@v4
         with:
-          subject-path: publish-assets/*
+          subject-path: public/*

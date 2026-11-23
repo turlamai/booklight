@@ -6,7 +6,7 @@
 
 [发布版本](https://github.com/turlamai/booklight/releases) · [CI](https://github.com/turlamai/booklight/actions/workflows/ci.yml) · [许可证](LICENSE)
 
-Booklight 是 macOS、Windows、Linux 原生 PDF / EPUB 阅读器与轻量 PDF 编辑器。它**不是 iBooks 式书库管理器**。文件留在原来的目录中；不建立应用私有书库、封面仓库或数据库，不记录阅读时长、目标和连续阅读天数。
+Booklight 是 macOS、Windows、Linux 上的 PDF / EPUB 阅读器与轻量 PDF 编辑器。它**不是 iBooks 式书库管理器**。文件留在原来的目录中；不建立应用私有书库、封面仓库或数据库，不记录阅读时长、目标和连续阅读天数。
 
 ## 从文件开始
 
@@ -25,22 +25,20 @@ Booklight 是 macOS、Windows、Linux 原生 PDF / EPUB 阅读器与轻量 PDF �
 
 [文件与恢复约定](shared/spec/DATA-FORMAT.md) · [中文使用指南](docs/USER-GUIDE.zh-CN.md) · [English guide](docs/USER-GUIDE.md)
 
-## 原生架构
+## 架构
 
-| 平台 | 技术栈 |
-|---|---|
-| macOS | SwiftUI、PDFKit |
-| Windows | WinUI 3、PDFium |
-| Linux | GTK4、PDFium、WebKitGTK |
+一份 web UI（`host/web/`）跑在 [glaze](https://github.com/turlamai/glaze) 载体
+（系统 WebView + 内嵌 Racket CS runtime）上，macOS、Windows、Linux 共用同一界面。
+PDF 渲染用 pdf.js；页级手术留在自研 Racket 读写器（`racket/booklight/pdfdoc.rkt`）。
 
-一份 Racket 领域核心经 [Rivet](https://github.com/turlamai/rivet) 类型化 RPC 连接三端原生宿主。RPC 契约只有一套：旧书库端点已移除，三端宿主全部使用当前 schema。
+一份 Racket 领域核心经类型化 RPC（RVT1）连接载体。RPC 契约只有一套
+（`glaze-schema.json`）：旧书库端点已移除，载体使用当前 schema。
 
 ```bash
-raco rivet doctor --json
-raco rivet schema check rivet-schema.json --json
+raco glaze schema check glaze-schema.json --json
 raco test racket/
-raco rivet build
-raco rivet acceptance --json
+raco glaze dev
+racket host/verify.rkt
 ```
 
 [文件优先产品决策与验收](docs/FILE-FIRST-DESIGN.md) · [工程指引](AGENTS.md)
@@ -54,7 +52,7 @@ raco rivet acceptance --json
 |---|---|---|
 | macOS 14+（Apple silicon / Intel） | `booklight-<version>-macos-arm64.dmg` · `-x64.dmg` | `booklight-<version>-macos-arm64.zip` · `-x64.zip` |
 | Windows 10+ x64 | `booklight-<version>-windows-x64.msi` | `booklight-<version>-windows-x64.zip` |
-| Linux x64 / arm64 | `booklight-<version>-linux-<arch>.deb` · `.rpm` · `.AppImage` · `-linux-<arch>.tar.gz` · `.flatpak`（app id `site.jrtx.booklight`；`flatpak --user install ./booklight-<version>-linux-<arch>.flatpak` 安装） | `booklight-<version>-linux-<arch>.zip` |
+| Linux x64 / arm64 | `booklight-<version>-linux-<arch>.deb` · `.rpm` · `.AppImage` · `.flatpak`（app id `site.jrtx.booklight`；`flatpak --user install ./booklight-<version>-linux-<arch>.flatpak` 安装） | `booklight-<version>-linux-<arch>.tar.gz` |
 
 每个版本都带校验过的 `SHA256SUMS`；应用内更新消费 Ed25519 签名的
 `update-manifest.json` feed（key id `booklight-2026-11`；Sigstore 溯源：

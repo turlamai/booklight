@@ -6,7 +6,7 @@
 
 [Releases](https://github.com/turlamai/booklight/releases) · [CI](https://github.com/turlamai/booklight/actions/workflows/ci.yml) · [License](LICENSE)
 
-Booklight is a native PDF / EPUB reader and light PDF editor for macOS, Windows and Linux. It is **not** an iBooks-style library manager. Your files stay in their original folders: there is no managed book catalog, cover library, reading-time tracking, goal, streak or database.
+Booklight is a PDF / EPUB reader and light PDF editor for macOS, Windows and Linux. It is **not** an iBooks-style library manager. Your files stay in their original folders: there is no managed book catalog, cover library, reading-time tracking, goal, streak or database.
 
 ## Start with a file
 
@@ -25,22 +25,22 @@ There is no book import step. New profiles prefer annotation sidecars next to th
 
 [Data and recovery contract](shared/spec/DATA-FORMAT.md) · [English user guide](docs/USER-GUIDE.md) · [中文使用指南](docs/USER-GUIDE.zh-CN.md)
 
-## Native architecture
+## Architecture
 
-| Host | Stack |
-|---|---|
-| macOS | SwiftUI, PDFKit |
-| Windows | WinUI 3, PDFium |
-| Linux | GTK4, PDFium, WebKitGTK |
+One web UI (`host/web/`) on the [glaze](https://github.com/turlamai/glaze)
+carrier (system WebView + embedded Racket CS runtime) serves macOS, Windows
+and Linux alike. PDF rendering uses pdf.js; page surgery stays in the
+self-contained Racket reader (`racket/booklight/pdfdoc.rkt`).
 
-One Racket core communicates through [Rivet](https://github.com/turlamai/rivet) typed RPC. The RPC surface is the single contract: the legacy shelf endpoints are gone and every host speaks the current schema.
+One Racket core communicates through typed RPC (RVT1). The RPC surface is
+the single contract (`glaze-schema.json`): the legacy shelf endpoints are
+gone and the carrier speaks the current schema.
 
 ```bash
-raco rivet doctor --json
-raco rivet schema check rivet-schema.json --json
+raco glaze schema check glaze-schema.json --json
 raco test racket/
-raco rivet build
-raco rivet acceptance --json
+raco glaze dev
+racket host/verify.rkt
 ```
 
 [Product decision and acceptance plan](docs/FILE-FIRST-DESIGN.md) · [Developer guide](AGENTS.md)
@@ -54,7 +54,7 @@ Assets follow `booklight-<version>-<os>-<arch>.<ext>`:
 |---|---|---|
 | macOS 14+ (Apple silicon / Intel) | `booklight-<version>-macos-arm64.dmg` · `-x64.dmg` | `booklight-<version>-macos-arm64.zip` · `-x64.zip` |
 | Windows 10+ x64 | `booklight-<version>-windows-x64.msi` | `booklight-<version>-windows-x64.zip` |
-| Linux x64 / arm64 | `booklight-<version>-linux-<arch>.deb` · `.rpm` · `.AppImage` · `-linux-<arch>.tar.gz` · `.flatpak` (app id `site.jrtx.booklight`; install with `flatpak --user install ./booklight-<version>-linux-<arch>.flatpak`) | `booklight-<version>-linux-<arch>.zip` |
+| Linux x64 / arm64 | `booklight-<version>-linux-<arch>.deb` · `.rpm` · `.AppImage` · `.flatpak` (app id `site.jrtx.booklight`; install with `flatpak --user install ./booklight-<version>-linux-<arch>.flatpak`) | `booklight-<version>-linux-<arch>.tar.gz` |
 
 Every release carries a checked `SHA256SUMS`, and the in-app updater
 consumes the Ed25519-signed `update-manifest.json` feed (key id
