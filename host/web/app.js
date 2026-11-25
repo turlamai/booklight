@@ -1361,7 +1361,13 @@ async function runDropStage() {
   });
   await step("drop-open", async () => {
     window.dispatchEvent(mkEvent("drop", true));
-    await new Promise(r => setTimeout(r, 600));
+    // The drop handler opens the file asynchronously (scratch, write, parse)
+    // and a DOM event cannot be awaited: poll for the result instead of
+    // sleeping a fixed interval, which failed on a loaded macOS runner.
+    const deadline = performance.now() + 8000;
+    while ((!active || active.kind !== "epub") && performance.now() < deadline) {
+      await new Promise(r => setTimeout(r, 100));
+    }
     if (!active || active.kind !== "epub") throw new Error("drop did not open");
     return active.title;
   });
