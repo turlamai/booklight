@@ -251,3 +251,9 @@ html[data-theme="dark"] .start-links a { color: var(--kit-accent); }
 /* ---------- Icon visibility per theme ---------- */
 html[data-theme="light"] .kit-icon-moon { display: none; }
 html[data-theme="dark"] .kit-icon-sun { display: none; }
+
+/* The nav download CTA overflows small phones (brand + icons + CTA exceed
+   the viewport); the download section stays reachable from the hero. */
+@media (max-width: 460px) {
+    .nav-cta { display: none; }
+}
