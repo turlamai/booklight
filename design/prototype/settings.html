@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Booklight — 设置</title>
 <link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="prototype.css">
 <style>
   /* ==== settings 专属：原生分组 Form 的纸面表达 ==== */
   .formwrap { flex: 1; overflow-y: auto; padding: 20px 0 56px; }
@@ -20,7 +21,7 @@
   .frow { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
   .frow + .frow { border-top: 1px solid var(--line); }
   .frow label.fl { width: 96px; flex: none; font-size: 13px; }
-  .frow .hint { font-size: 11px; color: var(--mute); margin-top: 4px; line-height: 1.6; }
+  .frow .hint { font-size: 12px; color: var(--mute); margin-top: 4px; line-height: 1.6; }
   .field {
     flex: 1; height: 30px; display: flex; align-items: center; padding: 0 10px;
     background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
@@ -29,15 +30,15 @@
   .field.mute { color: var(--mute); }
   .field .key { letter-spacing: 2px; color: var(--ink); }
   .select { position: relative; }
-  .select::after { content: "▾"; position: absolute; right: 10px; color: var(--mute); font-size: 11px; }
+  .select::after { content: "▾"; position: absolute; right: 10px; color: var(--mute); font-size: 12px; }
   .suggest { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-  .suggest .sg { font-size: 11px; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 2px 9px; cursor: pointer; }
+  .suggest .sg { font-size: 12px; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 2px 9px; cursor: pointer; }
   .segm { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-  .segm button { border: none; background: transparent; padding: 5px 12px; font-size: 12px; color: var(--mute); cursor: pointer; font-family: inherit; }
+  .segm button { border: none; background: transparent; padding: 5px 12px; min-height: 28px; font-size: 12px; color: var(--mute); cursor: pointer; font-family: inherit; }
   .segm button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
   .check {
     width: 16px; height: 16px; flex: none; border-radius: 4px; border: 1px solid var(--line);
-    background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 11px;
+    background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 12px;
   }
   .privacy { font-size: 12px; color: var(--mute); line-height: 1.8; padding: 12px 4px 0; }
   .saved { font-size: 12px; color: var(--success); font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
@@ -51,7 +52,7 @@
       <div class="sp"></div>
       <span class="saved">✓ 已保存</span>
       <button class="btn primary">保存设置</button>
-      <button class="iconbtn" id="themeBtn" title="切换亮暗主题">◐</button>
+      <button class="iconbtn" id="themeBtn" type="button" data-theme-toggle="#app" aria-label="切换深色主题" title="切换深色主题"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"></circle><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"></path></svg></button>
     </div>
     <div class="formwrap">
       <div class="formcol">
@@ -76,7 +77,7 @@
           </div>
           <div class="frow">
             <label class="fl">API Key</label>
-            <div class="field"><span class="key">••••••••••••••••</span><span style="margin-left: auto; font-size: 11px; color: var(--mute);">已保存（输入新 Key 覆盖）</span></div>
+            <div class="field"><span class="key">••••••••••••••••</span><span style="margin-left: auto; font-size: 12px; color: var(--mute); white-space: nowrap;">已保存（输入新 Key 覆盖）</span></div>
             <button class="btn">保存 Key</button>
           </div>
           <div class="frow">
@@ -102,7 +103,7 @@
           </div>
           <div class="frow">
             <label class="fl">语言</label>
-            <div class="field select" style="max-width: 180px;">跟随系统</div>
+            <div class="field select" style="max-width: 150px;">跟随系统</div>
             <div class="hint" style="flex: 1;">界面语言，重启 Booklight 后生效。</div>
           </div>
         </div>
@@ -121,13 +122,9 @@
     <div class="statusbar">
       <span>设置写入 settings.json；API Key 除外</span>
       <span class="sp"></span>
-      <span>原型 v0.1 · 按 ◐ 切换亮暗</span>
+      <span>原型 v0.1 · 按右上角按钮切换亮暗</span>
     </div>
   </div>
-  <script>
-    document.getElementById('themeBtn').addEventListener('click', () => {
-      document.getElementById('app').classList.toggle('dark');
-    });
-  </script>
+  <script src="theme.js"></script>
 </body>
 </html>

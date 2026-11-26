@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Booklight — AI 助手 inspector</title>
 <link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="prototype.css">
 <style>
   /* ==== ai 专属：外发永不过界 ==== */
   .docpane { flex: 1; display: grid; place-items: center; position: relative; min-width: 0; }
@@ -22,7 +23,7 @@
   .ipane { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-top: 1px solid var(--line); }
   .iscope { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--mute); }
   .iscope .seg2 { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-left: auto; }
-  .iscope .seg2 button { border: none; background: transparent; padding: 3px 9px; font-size: 12px; color: var(--mute); cursor: pointer; font-family: inherit; }
+  .iscope .seg2 button { border: none; background: transparent; padding: 3px 9px; min-height: 28px; font-size: 12px; color: var(--mute); cursor: pointer; font-family: inherit; }
   .iscope .seg2 button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
   .ichat { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 12px; }
   .who { font-size: 12px; font-weight: 600; color: var(--mute); letter-spacing: .5px; margin-bottom: 4px; }
@@ -62,11 +63,11 @@
   <div class="window" id="app">
     <div class="titlebar">
       <div class="lights"><i></i><i></i><i></i></div>
-      <button class="iconbtn" title="显示/隐藏侧栏">◧</button>
+      <button class="iconbtn" type="button" title="显示/隐藏侧栏" aria-label="显示/隐藏侧栏">◧</button>
       <div><div class="t">The Sample Book</div><div class="sub">EPUB · 第 2 / 5 章</div></div>
       <div class="sp"></div>
       <button class="btn primary" title="AI 助手">✦ AI 助手</button>
-      <button class="iconbtn" id="themeBtn" title="切换亮暗主题">◐</button>
+      <button class="iconbtn" id="themeBtn" type="button" data-theme-toggle="#app" aria-label="切换深色主题" title="切换深色主题"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"></circle><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"></path></svg></button>
     </div>
     <div class="body">
       <section class="docpane">
@@ -100,7 +101,7 @@
               </div>
             </div>
             <div class="think hidden" id="think">
-              <span class="spin"></span> 思考中… <button class="btn" style="margin-left: 6px; height: 24px;">停止</button>
+              <span class="spin"></span> 思考中… <button class="btn" style="margin-left: 6px;">停止</button>
             </div>
           </div>
           <div class="iinput">
@@ -140,10 +141,8 @@
       </div>
     </div>
   </div>
+  <script src="theme.js"></script>
   <script>
-    document.getElementById('themeBtn').addEventListener('click', () => {
-      document.getElementById('app').classList.toggle('dark');
-    });
     var seg = document.getElementById('stateSeg');
     seg.addEventListener('click', (e) => {
       var b = e.target.closest('button'); if (!b) return;

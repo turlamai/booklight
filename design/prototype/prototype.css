@@ -1,0 +1,296 @@
+/* ==== Booklight 原型专属层 — 只由原型页面加载；产品只读取 shared.css（token 与基础组件）==== */
+/* 1) 无障碍：reduced motion 与可见焦点（家族修订 2026-11-20-minimal-family）
+   2) 交互式 app 外壳（agent.html + app.js）：布局与组件，几何沿用 shared.css 与静态页，不新增 token
+   契约见 design/DESIGN.md */
+:root { color-scheme: light; }
+.dark { color-scheme: dark; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ==== 交互式 app 外壳（body.app-shell）==== */
+/* place-items is reset as well: shared.css centres the window stage, which would shrink the app to its content */
+body.app-shell { display: block; place-items: initial; min-height: 100vh; padding: 0; background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.5; }
+.app-shell > .app { width: 100%; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+/* class-level display must not defeat the hidden attribute */
+.app-shell [hidden] { display: none !important; }
+/* layout primitives used by the app markup */
+.app-shell .od-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.app-shell :is(.od-row, .od-cluster, .od-field) > * { min-width: 0; }
+.app-shell .od-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.app-shell .od-field { display: grid; gap: 2px; }
+.app-shell .od-field > * { display: block; }
+.app-shell .od-fill { flex: 1 1 0; }
+.app-shell .od-icon { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.app-shell .od-truncate { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.app-shell .od-clamp-3 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
+.app-shell .sp { flex: 1 1 0; min-width: 0; }
+/* headings receive focus after navigation: keep the focus ring on the text, not the full column */
+.app-shell :is(h1, h2, .docname)[tabindex="-1"] { width: fit-content; max-width: 100%; }
+
+/* 按钮：同 shared.css .btn 的几何（28 / 6 / 12·600），变体 text / primary / danger / active。
+   元素级规则放在 :where() 里，保持最低优先级，shared.css 的 .iconbtn 仍然生效 */
+:where(.app-shell) button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex-shrink: 0;
+  min-height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); color: var(--ink); font: inherit; font-size: 12px; font-weight: 600; line-height: 1.4;
+  white-space: nowrap; cursor: pointer;
+}
+:where(.app-shell) button:hover:not(:disabled) { background: var(--panel-alt); color: var(--ink); }
+:where(.app-shell) button:disabled { cursor: not-allowed; background: var(--panel-alt); border-color: transparent; color: var(--mute); }
+.app-shell .text { border-color: transparent; background: transparent; padding: 0 8px; font-weight: 500; }
+.app-shell .danger { color: var(--danger); border-color: var(--danger); background: transparent; }
+.app-shell .danger:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger); }
+.app-shell .text.danger { border-color: transparent; background: transparent; }
+.app-shell .text.danger:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger); }
+.app-shell .active { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.app-shell .active:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+.app-shell .primary { background: var(--accent); border-color: transparent; color: #fff; }
+.app-shell .primary:hover:not(:disabled) { background: var(--accent-hover); color: #fff; }
+.app-shell .primary:disabled { background: var(--accent); color: #fff; opacity: .5; }
+.app-shell .linklike { color: var(--accent); }
+
+/* 文字角色：辅助 12 / 标签 13 / 正文 14 / 分组标题 18 / 页面标题 24 */
+.app-shell small, .app-shell .tiny { font-size: 12px; line-height: 1.6; }
+.app-shell .muted { color: var(--mute); }
+.app-shell .eyebrow { font-size: 12px; font-weight: 600; line-height: 1.5; color: var(--mute); }
+.app-shell .local-label, .app-shell .agent-label { font-size: 12px; font-weight: 600; line-height: 1.5; color: var(--mute); background: var(--panel-alt); border-radius: 99px; padding: 1px 8px; white-space: nowrap; }
+.app-shell .save-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--success); vertical-align: middle; }
+.app-shell mark { border-radius: 2px; padding: 0 1px; }
+.app-shell mark.blue { background: var(--hl-blue); }
+.app-shell mark.green { background: var(--hl-green); }
+/* 表单字段：同静态页 .field / .qbox 的几何 */
+.app-shell input, .app-shell select, .app-shell textarea {
+  min-height: 32px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; line-height: 1.5;
+}
+.app-shell :is(input[type="checkbox"], input[type="radio"], input[type="range"], input[type="file"]) { min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; }
+.app-shell :is(input[type="checkbox"], input[type="radio"]) { width: 16px; height: 16px; margin: 3px 0 0; flex: none; accent-color: var(--accent); cursor: pointer; }
+.app-shell input[type="range"] { accent-color: var(--accent); }
+.app-shell textarea { display: block; width: 100%; min-height: 64px; resize: vertical; }
+.app-shell :is(input, select, textarea)::placeholder { color: var(--mute); }
+.app-shell .page-input { width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
+.app-shell label { font-size: 13px; }
+
+/* 应用顶栏：同 .titlebar 的几何（46 / sidebar / hairline） */
+.app-shell .topbar { flex: none; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 14px; background: var(--sidebar); border-bottom: 1px solid var(--line); }
+.app-shell .brand { height: 28px; padding: 0 8px 0 6px; border-color: transparent; background: transparent; font-size: 13px; }
+.app-shell .brand-dot { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); }
+.app-shell .topnav { display: flex; gap: 2px; }
+.app-shell .topnav button { height: 28px; padding: 0 10px; border-color: transparent; background: transparent; color: var(--mute); font-size: 13px; font-weight: 500; }
+.app-shell .topnav button:hover:not(:disabled) { background: var(--panel-alt); color: var(--ink); }
+.app-shell .global-actions { display: flex; align-items: center; gap: 6px; }
+.app-shell .agent-entry { border-color: transparent; background: transparent; }
+
+/* 通用骨架：滚动区、工作区、文档栏、状态栏 */
+.app-shell .view { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+.app-shell .reader-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+.app-shell .workspace { flex: 1; display: flex; min-height: 0; }
+.app-shell .workspace > * { min-width: 0; }
+.app-shell .docbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 40px; padding: 6px 14px; background: var(--sidebar); border-bottom: 1px solid var(--line); }
+.app-shell .docname { font-size: 13px; font-weight: 600; line-height: 1.4; }
+.app-shell .docsub { font-size: 12px; line-height: 1.4; color: var(--mute); }
+.app-shell .toolbar { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.app-shell .divider { flex: none; width: 1px; height: 16px; background: var(--line); }
+.app-shell .group-controls { display: flex; gap: 2px; }
+.app-shell .group-controls button { flex: 1; }
+.app-shell .notice { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 16px; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-size: 13px; line-height: 1.5; }
+.app-shell .notice p { flex: 1 1 200px; min-width: 0; }
+.app-shell .notice.error { background: var(--danger-soft); color: var(--danger); }
+.app-shell .empty { padding: 48px 24px; text-align: center; color: var(--mute); font-size: 14px; line-height: 1.7; }
+.app-shell .empty h2 { margin-bottom: 6px; color: var(--ink); font-size: 16px; font-weight: 600; }
+.app-shell .progress { position: relative; flex: none; height: 3px; border-radius: 2px; background: var(--accent-soft); overflow: hidden; }
+.app-shell .progress::after { content: ""; position: absolute; inset: 0; width: 40%; background: var(--accent); animation: app-progress 1.2s ease-in-out infinite alternate; }
+@keyframes app-progress { from { transform: translateX(-10%); } to { transform: translateX(260%); } }
+
+/* 侧栏：第二平面（232 / sidebar / padding 10），同 .sidebar */
+.app-shell .side { width: 232px; flex: none; display: flex; flex-direction: column; padding: 10px; background: var(--sidebar); border-right: 1px solid var(--line); }
+.app-shell .side-tabs { display: flex; gap: 4px; padding: 2px 2px 10px; }
+.app-shell .side-tabs button { flex: 1; height: 28px; padding: 0; border-color: transparent; background: transparent; color: var(--mute); }
+.app-shell .side-tabs button:hover:not(:disabled) { background: var(--panel-alt); color: var(--ink); }
+.app-shell .side-tabs button.active:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+.app-shell .side-head { display: flex; align-items: center; gap: 8px; padding: 2px 2px 10px; }
+.app-shell .side-head h2 { font-size: 13px; font-weight: 600; }
+.app-shell .side-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.app-shell .side > p { margin: 2px 2px 8px; }
+.app-shell .side-item { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 7px 8px; border: 1px solid transparent; border-radius: 6px; text-align: left; white-space: normal; font-size: 13px; font-weight: 400; line-height: 1.5; }
+.app-shell button.side-item { color: var(--ink); background: transparent; }
+.app-shell .side-item:hover { background: var(--panel-alt); }
+.app-shell button.side-item.active, .app-shell button.side-item.active:hover { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.app-shell .side-item > small { color: var(--mute); }
+.app-shell .side-item .od-row { justify-content: flex-end; }
+.app-shell .side-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: auto; padding: 10px 8px 2px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.6; color: var(--mute); }
+.app-shell .scope-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 4px; border-radius: 6px; font-size: 13px; line-height: 1.5; cursor: pointer; }
+.app-shell .scope-row:hover { background: var(--panel-alt); }
+.app-shell .scope-row small { color: var(--mute); }
+/* PDF 缩略图（页面示意 + 页码） */
+.app-shell .thumb { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; white-space: normal; padding: 8px 8px 6px; background: var(--panel); }
+.app-shell .thumb:hover:not(:disabled) { background: var(--panel-alt); }
+.app-shell .thumb.active { border-color: var(--accent); background: var(--panel); }
+.app-shell .thumb-paper { display: flex; flex-direction: column; gap: 3px; width: 76px; height: 100px; padding: 8px 6px; border-radius: 2px; background: var(--panel-alt); text-align: left; }
+.app-shell .thumb-paper b { font-size: 12px; font-weight: 600; line-height: 1.3; }
+.app-shell .thumb-paper i { height: 3px; border-radius: 2px; background: var(--line); }
+.app-shell .thumb-paper span { font-size: 12px; line-height: 1.3; color: var(--mute); }
+.app-shell .thumb small { color: var(--mute); }
+
+/* 欢迎页：编辑式两栏（同 welcome.html） */
+.app-shell .welcome { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+.app-shell .welcome > section:first-child { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 12px; padding: 48px 56px; border-right: 1px solid var(--line); }
+.app-shell .welcome h1 { margin: 4px 0 8px; font-size: 32px; font-weight: 600; line-height: 1.3; }
+.app-shell .intro { font-size: 16px; line-height: 1.6; color: var(--mute); }
+.app-shell .privacy-note { max-width: 380px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.7; color: var(--mute); }
+.app-shell .welcome > section:last-child { padding: 40px; }
+.app-shell .welcome h2 { margin-bottom: 14px; font-size: 13px; font-weight: 600; color: var(--mute); }
+.app-shell .recent { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.app-shell .recent:hover { background: var(--panel-alt); }
+.app-shell .type { display: grid; place-items: center; flex: none; width: 38px; height: 46px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel-alt); color: var(--mute); font-size: 12px; font-weight: 700; }
+.app-shell .recent button { flex: 1; justify-content: flex-start; height: auto; min-height: 0; padding: 0; border: 0; background: transparent; font-weight: 400; white-space: normal; text-align: left; }
+.app-shell .recent button:hover:not(:disabled) { background: transparent; color: var(--ink); }
+.app-shell .recent strong { font-size: 14px; font-weight: 600; }
+.app-shell .recent small { color: var(--mute); }
+.app-shell .recent .linklike { color: var(--accent); }
+.app-shell .recent > .od-icon { color: var(--mute); }
+
+/* EPUB 阅读：划词工具 + 版心（serif 栈、字号/行距/版心来自设置） */
+.app-shell .selection-tools { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.app-shell .reader-paper { background: var(--read-bg, var(--bg)); color: var(--read-ink, var(--ink)); }
+.app-shell .prose { max-width: var(--measure, 640px); margin: 0 auto; padding: 40px 24px 72px; font-family: Georgia, "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif; font-size: var(--body-size, 18px); line-height: var(--reader-line, 1.9); text-align: justify; overflow-wrap: anywhere; }
+.app-shell .prose h1 { margin-bottom: 22px; font-size: 24px; font-weight: 600; line-height: 1.4; text-align: start; }
+.app-shell .prose p { margin-bottom: 1em; }
+.app-shell .prose blockquote { margin: 1em 0; padding-left: 1em; border-left: 3px solid currentColor; font-size: 15px; line-height: 1.8; opacity: .88; }
+.app-shell .prose .chapter-no { margin-bottom: 12px; font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
+.app-shell .prose mark { border-radius: 2px; padding: 0 1px; }
+
+/* PDF：页面示意（随主题成对的纸面） */
+.app-shell .pdf-stage { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 18px; padding: 24px; }
+.app-shell .pdf-sheet { width: var(--page-width, 620px); flex: none; margin: 0 auto; padding: 26px 24px; border-radius: 4px; background: var(--panel); color: var(--ink); box-shadow: 0 1px 3px rgba(23,20,18,.12), 0 8px 22px rgba(23,20,18,.10); font-size: 14px; line-height: 1.7; }
+.app-shell .pdf-sheet.landscape { width: calc(var(--page-width, 620px) * 1.414); }
+.app-shell .pdf-sheet.selected { outline: 2px solid var(--accent); outline-offset: 3px; }
+.app-shell .pdf-sheet h2 { margin-bottom: 12px; font-size: 18px; font-weight: 700; line-height: 1.4; }
+.app-shell .pdf-sheet h3 { margin: 16px 0 8px; font-size: 14px; font-weight: 600; }
+.app-shell .pdf-sheet p { margin-bottom: 12px; }
+.app-shell .doc-diagram { display: block; width: 100%; height: auto; margin: 12px 0 8px; }
+.app-shell .pdf-sheet table { width: 100%; margin: 4px 0 12px; border-collapse: collapse; font-size: 13px; line-height: 1.5; }
+.app-shell .pdf-sheet :is(th, td) { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.app-shell .pdf-sheet th { font-weight: 600; }
+.app-shell .folio { display: flex; justify-content: space-between; margin-top: 20px; font-size: 12px; line-height: 1.5; color: var(--mute); font-variant-numeric: tabular-nums; }
+.app-shell .file-frame { display: block; width: 100%; height: 100%; border: 0; background: var(--panel); }
+.app-shell .agent-source-highlight { margin: 12px 0; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); }
+.app-shell .agent-source-highlight p { margin-top: 6px; }
+.app-shell .agent-page-note { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; line-height: 1.6; }
+.app-shell .agent-page-note p { margin-top: 4px; }
+
+/* 右侧 inspector：AI 助手 / 引用集 / 待核对修改（340 / sidebar / hairline） */
+.app-shell .inspector { width: 340px; flex: none; display: flex; flex-direction: column; min-height: 0; background: var(--sidebar); border-left: 1px solid var(--line); }
+.app-shell .inspector-head { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 12px 10px; border-bottom: 1px solid var(--line); }
+.app-shell .inspector-head h2 { font-size: 13px; font-weight: 700; }
+.app-shell .inspector-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.app-shell .composer { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; border-top: 1px solid var(--line); }
+.app-shell .composer label { font-weight: 600; }
+.app-shell .composer :is(label, textarea, p, .tiny, .od-cluster) { flex: 1 0 100%; }
+.app-shell .chat-item { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); font-size: 14px; line-height: 1.7; }
+.app-shell .chat-item.user { background: var(--panel-alt); }
+.app-shell .who { font-size: 12px; font-weight: 600; line-height: 1.5; color: var(--mute); }
+.app-shell .citation { justify-self: flex-start; align-self: flex-start; color: var(--accent); }
+.app-shell .cite-entry { padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); font-size: 13px; line-height: 1.7; }
+.app-shell .cite-entry > p { font-family: Georgia, "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif; font-size: 14px; line-height: 1.75; }
+.app-shell .cite-entry .linklike { padding: 0; justify-content: flex-start; }
+.app-shell .cite-entry .od-row { margin-top: 8px; }
+
+/* 研究工作台：检索 + 结果卡 + 引用集 */
+.app-shell .research-top { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 14px 20px 12px; border-bottom: 1px solid var(--line); }
+.app-shell .research-top .od-row { flex-wrap: wrap; }
+.app-shell .research-top h1 { font-size: 18px; font-weight: 600; line-height: 1.4; }
+.app-shell .searchrow { display: flex; gap: 10px; }
+.app-shell .searchrow input { flex: 1; min-width: 0; min-height: 36px; padding: 0 14px; border-radius: 10px; background: var(--panel); font-size: 14px; }
+.app-shell .searchrow button { height: 36px; min-height: 36px; }
+.app-shell .search-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 8px; font-size: 13px; line-height: 1.5; color: var(--mute); }
+.app-shell .search-meta label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.app-shell .result-list { display: flex; flex-direction: column; gap: 8px; padding: 4px 20px 20px; }
+.app-shell .result { padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.app-shell .result h2 { margin-bottom: 4px; font-size: 12px; font-weight: 700; line-height: 1.5; color: var(--mute); }
+.app-shell .result p { font-family: Georgia, "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif; font-size: 14px; line-height: 1.75; }
+.app-shell .result .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+
+/* 设置：原生分组 Form（608 / panel / radius 10） */
+.app-shell .settings { max-width: 608px; margin: 0 auto; padding: 20px 24px 56px; }
+.app-shell .settings h1 { font-size: 24px; font-weight: 600; line-height: 1.4; }
+.app-shell .settings-section { margin-bottom: 20px; padding: 0 16px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.app-shell .settings-section h2 { padding: 12px 0 4px; font-size: 13px; font-weight: 600; color: var(--mute); }
+.app-shell .settings-section > p { margin: 4px 0 8px; font-size: 13px; line-height: 1.6; }
+.app-shell .setting-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; font-size: 13px; line-height: 1.6; }
+.app-shell .setting-row + .setting-row { border-top: 1px solid var(--line); }
+.app-shell .setting-row > label { flex: none; width: 96px; }
+.app-shell .setting-row > :is(div, input, select) { flex: 1; }
+.app-shell .setting-row > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.app-shell .setting-row input[type="range"] { flex: 1 1 160px; min-width: 0; }
+.app-shell .setting-row small { color: var(--mute); }
+.app-shell .agent-grants { display: flex; flex-direction: column; gap: 2px; margin: 8px 0; }
+.app-shell .agent-fieldset { margin: 8px 0; padding: 4px 8px 8px; border: 1px solid var(--line); border-radius: 8px; }
+.app-shell .agent-fieldset legend { padding: 0 4px; font-size: 13px; font-weight: 600; }
+.app-shell .agent-error { margin: 8px 0; font-size: 13px; line-height: 1.5; color: var(--danger); }
+
+/* Agent 任务：表单与原则 / 任务头 + 阶段 + 证据与提案 */
+.app-shell .agent-intro { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 32px; max-width: 1040px; margin: 0 auto; padding: 40px 32px 56px; align-items: start; }
+.app-shell .agent-compose { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.app-shell .agent-compose h1 { margin: 4px 0 8px; font-size: 24px; font-weight: 600; line-height: 1.4; }
+.app-shell .agent-compose > label { margin-top: 8px; font-weight: 600; }
+.app-shell .agent-principles { display: flex; flex-direction: column; gap: 14px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.app-shell .agent-principles h2 { font-size: 18px; font-weight: 600; line-height: 1.4; }
+.app-shell .agent-principles h3 { margin-bottom: 2px; font-size: 14px; font-weight: 600; }
+.app-shell .agent-principles p { font-size: 13px; line-height: 1.6; color: var(--mute); }
+.app-shell .agent-connection { display: flex; align-items: center; gap: 2px; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.6; color: var(--mute); }
+.app-shell .agent-taskbar { flex: none; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+.app-shell .agent-taskbar h1 { font-size: 18px; font-weight: 600; line-height: 1.4; }
+.app-shell .agent-taskbar .od-cluster { flex: none; flex-wrap: nowrap; }
+.app-shell .agent-steps { flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; margin: 0; padding: 10px 20px; list-style: none; border-bottom: 1px solid var(--line); background: var(--sidebar); }
+.app-shell .agent-steps li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; align-items: center; font-size: 13px; line-height: 1.4; color: var(--mute); }
+.app-shell .agent-steps small { grid-column: 2; }
+.app-shell .agent-steps :is(li.current, li.done) { color: var(--ink); }
+.app-shell .step-number { display: grid; place-items: center; width: 20px; height: 20px; border: 1px solid var(--line); border-radius: 50%; background: var(--panel); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.app-shell .step-number .od-icon { width: 12px; height: 12px; }
+.app-shell .agent-steps li.current .step-number { border-color: transparent; background: var(--accent); color: #fff; }
+.app-shell .agent-steps li.done .step-number { background: var(--success-soft); color: var(--success); }
+.app-shell .agent-section-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+.app-shell .agent-section-head h2 { font-size: 13px; font-weight: 600; }
+.app-shell .agent-evidence-list { display: flex; flex-direction: column; gap: 10px; padding: 12px 20px 20px; }
+.app-shell .agent-evidence { padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); font-size: 14px; line-height: 1.7; }
+.app-shell .agent-evidence > p { margin: 6px 0; }
+.app-shell .agent-proposal-panel { width: 360px; }
+.app-shell .agent-proposal { padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); font-size: 13px; line-height: 1.6; }
+.app-shell .agent-proposal > p { margin: 4px 0; }
+.app-shell .proposal-quote { padding: 8px 10px; border-left: 3px solid var(--line); font-size: 14px; line-height: 1.7; }
+.app-shell .agent-proposal .od-cluster { margin-top: 8px; }
+.app-shell .agent-proposal textarea { margin-top: 4px; }
+.app-shell summary { padding: 2px 0; font-size: 13px; line-height: 1.5; color: var(--mute); cursor: pointer; }
+.app-shell .agent-audit { font-size: 12px; line-height: 1.6; color: var(--mute); }
+.app-shell .agent-audit ol { margin: 6px 0 0; padding-left: 20px; }
+
+/* 对话框与 toast：同 .sheet（radius 14 / 20 内边距 / 遮罩 .35） */
+.app-shell dialog { width: min(480px, calc(100vw - 48px)); max-width: none; max-height: calc(100vh - 48px); overflow: auto; padding: 20px 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink); font-size: 14px; line-height: 1.6; box-shadow: 0 16px 48px rgba(23,20,18,.28); }
+.app-shell dialog::backdrop { background: rgba(23,20,18,.35); }
+.app-shell dialog h2 { margin-bottom: 4px; font-size: 15px; font-weight: 700; line-height: 1.5; }
+.app-shell dialog p { margin-bottom: 10px; }
+.app-shell dialog dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 16px; margin: 12px 0; font-size: 13px; line-height: 1.6; }
+.app-shell dialog dt { color: var(--mute); }
+.app-shell dialog dd { margin: 0; overflow-wrap: anywhere; }
+.app-shell dialog ul { margin: 8px 0; padding-left: 20px; font-size: 13px; line-height: 1.7; }
+.app-shell dialog pre { margin-top: 8px; padding: 10px 12px; border-radius: 6px; background: var(--panel-alt); font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.app-shell dialog label { display: block; margin: 8px 0 4px; font-weight: 600; }
+.app-shell dialog summary { font-weight: 600; color: var(--ink); }
+.app-shell .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.app-shell .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.app-shell .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 9; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font-size: 12px; line-height: 1.5; box-shadow: 0 4px 14px rgba(23,20,18,.16); }
+
+@media (max-width: 900px) {
+  .app-shell .welcome { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .welcome > section:first-child { border-right: 0; border-bottom: 1px solid var(--line); padding: 32px 24px; }
+  .app-shell .welcome > section:last-child { padding: 24px; }
+  .app-shell .agent-intro { grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 24px 20px 48px; }
+}
