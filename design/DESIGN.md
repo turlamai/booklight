@@ -147,6 +147,8 @@ PendingEditBar（未保存编辑横幅 + 放弃需确认）语义。书库屏为
 
 原型分层（自本次起）：`design/index.html` 原型导航（按 `<title>` 列 12 页，链到本文件）；`prototype/shared.css` 与产品共用的 token 与基础组件；`prototype/prototype.css` 只由桌面原型加载的层（reduced motion、可见焦点、交互式 app 外壳 `agent.html` + `app.js`，此前该页没有任何样式表）；`prototype/theme.js` 静态页与导航页共用的主题切换（`app.js` 保留自己的状态切换）。
 
+**重建声明（待 owner 过目）**：`prototype/prototype.css` 的 app 外壳段是 2026-11-26 新写的重建，不是原始设计。仓库历史、产品源码（`host/web/app.css` 只覆盖壳类名的 12%，产品标记是另写的）与本机 OpenDesign 项目都没有这份样式表。重建只沿用现有 token 与静态页的几何，单独成文件，可整体删除。owner 接受之前，它只用于让 `agent.html` 可读，不作为实现契约。
+
 | 检查 | 结果 | 证据 / 限制 |
 |---|---|---|
 | R1 主题切换 | 通过 | 6 个静态页、导航页与 app 顶栏：`◐` 文字字形 → 内联 SVG 线性图标（16px / 1.7），图标 = 当前主题，`aria-label` 与 `title` = 点击后切到的主题（切换深色主题 / 切换浅色主题）；`.iconbtn` 改为安静图标按钮（28、透明底与边、hover 表面色）。`pdf.html` 的按钮缺 `id`，脚本报错并使同页其余脚本失效，已修 |
