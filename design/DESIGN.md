@@ -145,7 +145,7 @@ PendingEditBar（未保存编辑横幅 + 放弃需确认）语义。书库屏为
 
 起始 SHA `d2c86b781cb0482e8220b21663751318411be274`。只动 `design/`：token 值、强调色、信息架构、示例数据与产品行为不变；产品仍只读取 `shared.css`。
 
-原型分层（自本次起）：`design/index.html` 原型导航（按 `<title>` 列 12 页，链到本文件）；`prototype/shared.css` 与产品共用的 token 与基础组件；`prototype/prototype.css` 只由桌面原型加载的层（reduced motion、可见焦点、交互式 app 外壳 `agent.html` + `app.js`，此前该页没有任何样式表）；`prototype/theme.js` 静态页与导航页共用的主题切换（`app.js` 保留自己的状态切换）。
+原型分层（自本次起）：`design/index.html` 是本地评审用导航页（按 `<title>` 列 12 页，链到本文件），不提交；`prototype/shared.css` 与产品共用的 token 与基础组件；`prototype/prototype.css` 只由桌面原型加载的层（reduced motion、可见焦点、交互式 app 外壳 `agent.html` + `app.js`，此前该页没有任何样式表）；`prototype/theme.js` 静态页与导航页共用的主题切换（`app.js` 保留自己的状态切换）。
 
 **重建声明（待 owner 过目）**：`prototype/prototype.css` 的 app 外壳段是 2026-11-26 新写的重建，不是原始设计。仓库历史、产品源码（`host/web/app.css` 只覆盖壳类名的 12%，产品标记是另写的）与本机 OpenDesign 项目都没有这份样式表。重建只沿用现有 token 与静态页的几何，单独成文件，可整体删除。owner 接受之前，它只用于让 `agent.html` 可读，不作为实现契约。
 
@@ -154,7 +154,7 @@ PendingEditBar（未保存编辑横幅 + 放弃需确认）语义。书库屏为
 | R1 主题切换 | 通过 | 6 个静态页、导航页与 app 顶栏：`◐` 文字字形 → 内联 SVG 线性图标（16px / 1.7），图标 = 当前主题，`aria-label` 与 `title` = 点击后切到的主题（切换深色主题 / 切换浅色主题）；`.iconbtn` 改为安静图标按钮（28、透明底与边、hover 表面色）。`pdf.html` 的按钮缺 `id`，脚本报错并使同页其余脚本失效，已修 |
 | R2 12px 字号底线 | 通过，无例外 | 源扫描 sub-12px 声明 23 → 0；渲染 `small` 桌面 81→0、移动 10→0（每主题）。控件高度 ≥28（分段按钮、横幅与结果卡按钮、演示控件）；层级保持 12 / 13 / 14；`.m-cover` 放宽到 64×86、`.ficon` 38×46、设置「语言」下拉 150px 以容纳 12px |
 | R3 reduced motion 与焦点 | 通过 | `prototype.css`：家族标准片段 + `:focus-visible` 2px `--accent`；移动页沿用既有 `.mobile` 规则。未进 `shared.css`：产品的 `host/web/app.js` journey 无条件断言平滑滚动 |
-| R4 原型完整性 | 通过 | 新增 `design/index.html`，移动页 `../index.html` 链接不再悬空；本地 `href`/`src` 全部可解析；无远程资源。`agent.html` 亮暗均可读（暗色正文对比此前不可见）；`.dark mark` 深色墨保证暗色检索命中可读 |
+| R4 原型完整性 | 通过 | `design/index.html` 是本地评审用导航页，不提交（移动页的 `../index.html` 指向它，克隆后由 agent 本地生成）；本地 `href`/`src` 全部可解析；无远程资源。`agent.html` 亮暗均可读（暗色正文对比此前不可见）；`.dark mark` 深色墨保证暗色检索命中可读 |
 | R5 可访问名称 | 通过 | 渲染 `nameless` 0；静态页图标按钮（侧栏、书签、缩放、关闭标签页）补 `aria-label`，装饰 SVG `aria-hidden` |
 | R6 版式缺陷 | 通过（见开放项） | 1280×800：`overflowX` 0、`err`/`fail` 0。修正 `reading.html` 划词浮条压住所选段落首行、`research.html` 引用集出处「第 / 14 页」断行、演示控件遮挡 `ai.html` 发送按钮。app 外壳 6 屏 × 2 主题 × 1280 / 1024 / 768 无横向溢出与裁切 |
 | R7 契约同步 | 通过 | 本节；token 表只记语义，无值变更 |
