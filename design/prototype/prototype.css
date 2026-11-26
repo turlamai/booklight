@@ -51,9 +51,9 @@ body.app-shell { display: block; place-items: initial; min-height: 100vh; paddin
 .app-shell .text.danger:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger); }
 .app-shell .active { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
 .app-shell .active:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
-.app-shell .primary { background: var(--accent); border-color: transparent; color: #fff; }
-.app-shell .primary:hover:not(:disabled) { background: var(--accent-hover); color: #fff; }
-.app-shell .primary:disabled { background: var(--accent); color: #fff; opacity: .5; }
+.app-shell .primary { background: var(--accent); border-color: transparent; color: var(--accent-contrast); }
+.app-shell .primary:hover:not(:disabled) { background: var(--accent-hover); color: var(--accent-contrast); }
+.app-shell .primary:disabled { background: var(--accent); color: var(--accent-contrast); opacity: .5; }
 .app-shell .linklike { color: var(--accent); }
 
 /* 文字角色：辅助 12 / 标签 13 / 正文 14 / 分组标题 18 / 页面标题 24 */
@@ -255,7 +255,7 @@ body.app-shell { display: block; place-items: initial; min-height: 100vh; paddin
 .app-shell .agent-steps :is(li.current, li.done) { color: var(--ink); }
 .app-shell .step-number { display: grid; place-items: center; width: 20px; height: 20px; border: 1px solid var(--line); border-radius: 50%; background: var(--panel); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .app-shell .step-number .od-icon { width: 12px; height: 12px; }
-.app-shell .agent-steps li.current .step-number { border-color: transparent; background: var(--accent); color: #fff; }
+.app-shell .agent-steps li.current .step-number { border-color: transparent; background: var(--accent); color: var(--accent-contrast); }
 .app-shell .agent-steps li.done .step-number { background: var(--success-soft); color: var(--success); }
 .app-shell .agent-section-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
 .app-shell .agent-section-head h2 { font-size: 13px; font-weight: 600; }

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Booklight 原型评审入口</title>
+<style>
+  /* Self-contained: the entry page does not load the product stylesheets, so it cannot inherit layout rules. */
+  :root { color-scheme: light dark; --bg: #F7F4EF; --panel: #FFFDF9; --ink: #292524; --mute: #6B6660; --line: rgba(0,0,0,.12); }
+  @media (prefers-color-scheme: dark) { :root { --bg: #171412; --panel: #2A2521; --ink: #D6D3D1; --mute: #A39C92; --line: rgba(255,255,255,.14); } }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 24px 48px; background: var(--bg); color: var(--ink);
+    font: 14px/1.6 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; -webkit-font-smoothing: antialiased; }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { margin: 0; font-size: 24px; line-height: 1.3; font-weight: 600; }
+  h2 { margin: 24px 0 8px; font-size: 16px; font-weight: 600; }
+  p { margin: 8px 0 0; color: var(--mute); }
+  a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+  a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+  ul { margin: 0; padding: 0; list-style: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+  li:last-child { border-bottom: 0; }
+  li a { flex: 1 1 200px; font-weight: 500; text-decoration: none; }
+  li a:hover { text-decoration: underline; }
+  code { font: 12px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--mute); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Booklight 原型评审入口</h1>
+    <p>`design/` 下全部原型的导航页。视觉与交互契约见 <a href="DESIGN.md">DESIGN.md</a>。本页跟随系统外观。</p>
+  </header>
+    <section>
+      <h2>桌面原型</h2>
+      <ul>
+      <li><a href="prototype/agent.html">Agent 任务</a><code>prototype/agent.html</code></li>
+      <li><a href="prototype/ai.html">AI 助手 inspector</a><code>prototype/ai.html</code></li>
+      <li><a href="prototype/pdf.html">PDF 双页与页面编辑</a><code>prototype/pdf.html</code></li>
+      <li><a href="prototype/reading.html">EPUB 阅读（英雄屏）</a><code>prototype/reading.html</code></li>
+      <li><a href="prototype/research.html">研究工作台（付费层）</a><code>prototype/research.html</code></li>
+      <li><a href="prototype/settings.html">设置</a><code>prototype/settings.html</code></li>
+      <li><a href="prototype/welcome.html">欢迎与最近打开</a><code>prototype/welcome.html</code></li>
+      </ul>
+    </section>
+    <section>
+      <h2>移动端视图</h2>
+      <ul>
+      <li><a href="prototype/mobile-ai.html">AI 助手</a><code>prototype/mobile-ai.html</code></li>
+      <li><a href="prototype/mobile-library.html">书库与最近阅读</a><code>prototype/mobile-library.html</code></li>
+      <li><a href="prototype/mobile-pdf.html">PDF 阅读</a><code>prototype/mobile-pdf.html</code></li>
+      <li><a href="prototype/mobile-reading.html">EPUB 阅读</a><code>prototype/mobile-reading.html</code></li>
+      <li><a href="prototype/mobile-settings.html">设置</a><code>prototype/mobile-settings.html</code></li>
+      </ul>
+    </section>
+</main>
+</body>
+</html>

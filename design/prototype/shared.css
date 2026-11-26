@@ -1,20 +1,20 @@
 /* ==== Booklight 原型共享壳层 — tokens 与基础组件，见 design/DESIGN.md ==== */
-/* tokens 与 macos-host/Sources/RivetHost/Theme.swift 1:1；--mute/--line/--danger/--success 为宿主系统语义色的原型近似值 */
+/* tokens 与 macos-host/Sources/RivetHost/Theme.swift 1:1；--mute/--line/--danger/--success 为宿主系统语义色的原型近似值。--accent-contrast 为原型新增：accent 之上的文字色，暗色下 accent 偏亮，改用深墨。 */
 :root {
   --bg: #F7F4EF; --sidebar: #EFEBE4; --panel: #FFFDF9; --panel-alt: #F2EEE7;
   --ink: #292524; --mute: #6F6860;
   --line: rgba(0,0,0,.08);
-  --accent: #C4623E; --accent-hover: #AD5130; --accent-soft: rgba(196,98,62,.12);
-  --danger: #C73E2C; --danger-soft: rgba(199,62,44,.10);
-  --success: #2E7D4F; --success-soft: rgba(46,125,79,.12);
+  --accent: #94492E; --accent-hover: #89432A; --accent-contrast: #FFFFFF; --accent-soft: rgba(196,98,62,.12);
+  --danger: #AC3526; --danger-soft: rgba(199,62,44,.10);
+  --success: #2C774B; --success-soft: rgba(46,125,79,.12);
   --hl-yellow: rgba(255,213,0,.9); --hl-blue: rgba(86,156,255,.85); --hl-green: rgba(76,195,131,.85);
 }
 .dark {
   --bg: #171412; --sidebar: #211D1A; --panel: #2A2521; --panel-alt: #322C27;
   --ink: #D6D3D1; --mute: #A39C92;
   --line: rgba(255,255,255,.08);
-  --accent: #E8926A; --accent-hover: #F0A07C; --accent-soft: rgba(232,146,106,.12);
-  --danger: #E8665A; --danger-soft: rgba(232,102,90,.12);
+  --accent: #E8926A; --accent-hover: #F0A07C; --accent-contrast: #171412; --accent-soft: rgba(232,146,106,.12);
+  --danger: #EA7267; --danger-soft: rgba(232,102,90,.12);
   --success: #5FBF87; --success-soft: rgba(95,191,135,.14);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -86,7 +86,7 @@ body {
   cursor: pointer; transition: background .15s ease;
 }
 .btn:hover { background: var(--panel-alt); }
-.btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
+.btn.primary { background: var(--accent); border-color: transparent; color: var(--accent-contrast); }
 .btn.primary:hover { background: var(--accent-hover); }
 .btn.danger { color: var(--danger); border-color: var(--danger); background: transparent; }
 /* 状态横幅：进行/失败/恢复 */
