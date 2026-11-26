@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Booklight — PDF 双页与页面编辑</title>
 <link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="prototype.css">
 <style>
   /* ==== pdf 专属：页面保真 + 内存态编辑的显式出口 ==== */
   .tools {
@@ -13,12 +14,12 @@
   }
   .segm { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
   .segm button {
-    border: none; background: transparent; padding: 4px 11px; font-size: 12px; color: var(--mute);
+    border: none; background: transparent; padding: 4px 11px; min-height: 28px; font-size: 12px; color: var(--mute);
     cursor: pointer; font-family: inherit;
   }
   .segm button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
   .pagefield {
-    width: 64px; height: 26px; display: grid; place-items: center; font-size: 12px; font-variant-numeric: tabular-nums;
+    width: 64px; height: 28px; display: grid; place-items: center; font-size: 12px; font-variant-numeric: tabular-nums;
     background: var(--panel-alt); border: 1px solid var(--line); border-radius: 6px; color: var(--ink);
   }
   .pages { flex: 1; display: flex; gap: 18px; align-items: flex-start; justify-content: center; padding: 24px; overflow-y: auto; }
@@ -32,7 +33,7 @@
   .tl { height: 7px; border-radius: 3px; background: var(--panel-alt); margin-bottom: 9px; }
   .tl.w60 { width: 60%; } .tl.w80 { width: 80%; } .tl.w40 { width: 40%; }
   .pg .rot {
-    position: absolute; top: 8px; right: 8px; font-size: 10px; font-weight: 600;
+    position: absolute; top: 8px; right: 8px; font-size: 12px; font-weight: 600;
     color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 2px 8px;
   }
   .pg .pnum { text-align: center; font-size: 12px; color: var(--mute); margin-top: 14px; font-variant-numeric: tabular-nums; }
@@ -42,7 +43,7 @@
     background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px;
     box-shadow: 0 8px 26px rgba(23,20,18,.18);
   }
-  .pemenu .ph { font-size: 11px; color: var(--mute); padding: 6px 10px 4px; }
+  .pemenu .ph { font-size: 12px; color: var(--mute); padding: 6px 10px 4px; }
   .pemenu .pi { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; font-size: 13px; }
   .pemenu .pi:hover { background: var(--panel-alt); }
   .pemenu .pi.danger { color: var(--danger); }
@@ -53,18 +54,18 @@
     cursor: default; position: relative;
   }
   .thumb.current { border-color: var(--accent); border-width: 2px; }
-  .thumb .tn { text-align: center; font-size: 10px; color: var(--mute); margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .thumb .tn { text-align: center; font-size: 12px; color: var(--mute); margin-top: 6px; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
   <div class="window" id="app">
     <div class="titlebar">
       <div class="lights"><i></i><i></i><i></i></div>
-      <button class="iconbtn" title="显示/隐藏侧栏">◧</button>
+      <button class="iconbtn" type="button" title="显示/隐藏侧栏" aria-label="显示/隐藏侧栏">◧</button>
       <div><div class="t">激光干涉仪设计手册.pdf</div><div class="sub">PDF · 12 页 · 有未保存修改</div></div>
       <div class="sp"></div>
       <button class="btn" title="页面编辑" id="peBtn">⚒ 页面</button>
-      <button class="iconbtn" title="切换亮暗主题">◐</button>
+      <button class="iconbtn" id="themeBtn" type="button" data-theme-toggle="#app" aria-label="切换深色主题" title="切换深色主题"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"></circle><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"></path></svg></button>
     </div>
     <div class="body">
       <aside class="sidebar">
@@ -93,9 +94,9 @@
             <button title="实际大小">1:1</button>
             <button title="适应宽度">⇔ 适应宽度</button>
           </div>
-          <button class="iconbtn" title="缩小">−</button>
+          <button class="iconbtn" type="button" title="缩小" aria-label="缩小">−</button>
           <div class="pagefield">100%</div>
-          <button class="iconbtn" title="放大">＋</button>
+          <button class="iconbtn" type="button" title="放大" aria-label="放大">＋</button>
         </div>
         <div class="banner warn" id="pendingBar" style="margin: 10px 20px;">
           <span>⚠</span>
@@ -146,10 +147,8 @@
       </div>
     </div>
   </div>
+  <script src="theme.js"></script>
   <script>
-    document.getElementById('themeBtn').addEventListener('click', () => {
-      document.getElementById('app').classList.toggle('dark');
-    });
     document.getElementById('peBtn').addEventListener('click', () => {
       document.getElementById('peMenu').classList.toggle('hidden');
     });

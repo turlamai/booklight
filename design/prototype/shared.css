@@ -39,13 +39,16 @@ body {
 .lights { display: flex; gap: 8px; }
 .lights i { width: 12px; height: 12px; border-radius: 50%; }
 .lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+/* Quiet icon button: no chrome at rest, surface tint on hover; inline SVG line icons at 16px */
 .iconbtn {
-  width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel);
+  width: 28px; height: 28px; border-radius: 6px; border: 1px solid transparent; background: transparent;
   color: var(--mute); display: grid; place-items: center; cursor: pointer; font-size: 13px;
 }
 .iconbtn:hover { background: var(--panel-alt); color: var(--ink); }
+.iconbtn:disabled { cursor: default; background: transparent; color: var(--mute); opacity: .5; }
+.iconbtn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .titlebar .t { font-size: 13px; font-weight: 600; }
-.titlebar .sub { font-size: 11px; color: var(--mute); margin-top: 1px; }
+.titlebar .sub { font-size: 12px; color: var(--mute); margin-top: 1px; }
 .titlebar .sp { flex: 1; }
 .body { flex: 1; display: flex; min-height: 0; }
 /* 侧栏：第二平面 */
@@ -55,13 +58,13 @@ body {
 }
 .vswitch { display: flex; gap: 4px; padding: 2px 2px 10px; }
 .vswitch .v {
-  flex: 1; height: 28px; border-radius: 6px; display: grid; place-items: center; gap: 2px;
-  font-size: 11px; color: var(--mute); cursor: default; user-select: none;
+  flex: 1; min-height: 28px; border-radius: 6px; display: grid; place-items: center; gap: 2px;
+  font-size: 12px; color: var(--mute); cursor: default; user-select: none;
 }
 .vswitch .v:hover { background: var(--panel-alt); }
 .vswitch .v.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .vswitch .v svg { display: block; }
-.sect { font-size: 11px; font-weight: 600; letter-spacing: .6px; color: var(--mute); padding: 10px 8px 6px; }
+.sect { font-size: 12px; font-weight: 600; letter-spacing: .6px; color: var(--mute); padding: 10px 8px 6px; }
 .item {
   display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
   font-size: 13px; cursor: default; user-select: none; transition: background .15s ease;
@@ -69,10 +72,10 @@ body {
 .item:hover { background: var(--panel-alt); }
 .item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .item .pill {
-  margin-left: auto; font-size: 10px; font-weight: 600; color: var(--accent);
-  background: var(--accent-soft); border-radius: 99px; padding: 1px 7px;
+  margin-left: auto; font-size: 12px; font-weight: 600; color: var(--accent);
+  background: var(--accent-soft); border-radius: 99px; padding: 2px 8px;
 }
-.sidebar .foot { margin-top: auto; padding: 10px 8px 2px; border-top: 1px solid var(--line); font-size: 11px; color: var(--mute); }
+.sidebar .foot { margin-top: auto; padding: 10px 8px 2px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.5; color: var(--mute); }
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .head { flex: none; display: flex; align-items: center; gap: 10px; padding: 12px 20px; }
 .head h1 { font-size: 16px; font-weight: 700; }
@@ -89,7 +92,7 @@ body {
 /* 状态横幅：进行/失败/恢复 */
 .banner {
   flex: none; display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 8px;
-  font-size: 12px; font-weight: 500;
+  font-size: 12px; font-weight: 500; line-height: 1.5;
 }
 .banner .go { margin-left: auto; display: flex; gap: 6px; }
 .banner.busy { background: var(--accent-soft); color: var(--accent); }
@@ -108,19 +111,21 @@ body {
 }
 .statusbar .sp { flex: 1; }
 kbd {
-  font-family: inherit; font-size: 10px; color: var(--mute);
+  font-family: inherit; font-size: 12px; color: var(--mute);
   background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;
 }
 mark { background: var(--hl-yellow); color: inherit; border-radius: 2px; padding: 0 1px; }
-/* 原型演示控件：亮暗与状态切换 */
+/* Dark theme: the yellow highlight ink keeps dark text so the match stays legible */
+.dark mark { color: #171412; }
+/* 原型演示控件：亮暗与状态切换（停靠在状态栏右端，不遮挡其上方的界面） */
 .demo {
-  position: absolute; right: 14px; bottom: 8px; display: flex; gap: 8px; align-items: center;
-  font-size: 11px; color: var(--mute);
+  position: absolute; right: 14px; bottom: 0; display: flex; gap: 8px; align-items: center;
+  font-size: 12px; color: var(--mute);
   background: var(--sidebar); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px;
 }
 .demo .seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--panel); }
 .demo .seg button {
-  border: none; background: transparent; padding: 3px 9px; font-size: 11px; color: var(--mute); cursor: pointer; font-family: inherit;
+  border: none; background: transparent; padding: 4px 9px; min-height: 28px; font-size: 12px; line-height: 20px; color: var(--mute); cursor: pointer; font-family: inherit;
 }
 .demo .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .hidden { display: none !important; }
@@ -180,7 +185,7 @@ body.mobile { display:block; min-height:100dvh; padding:0; background:var(--side
 .mobile .m-content { padding:16px; }
 .mobile .m-section { margin:0 0 32px; }
 .mobile .m-book { display:flex; gap:16px; align-items:center; width:100%; padding:16px 0; text-decoration:none; color:var(--ink); border-top:1px solid var(--line); min-height:var(--mobile-touch); }
-.mobile .m-cover { display:flex; flex-direction:column; justify-content:space-between; width:56px; height:76px; flex:none; padding:8px; background:var(--panel-alt); border:1px solid var(--line); border-radius:4px; color:var(--mute); font-size:10px; line-height:1.5; }
+.mobile .m-cover { display:flex; flex-direction:column; justify-content:space-between; width:64px; height:86px; flex:none; padding:6px; background:var(--panel-alt); border:1px solid var(--line); border-radius:4px; color:var(--mute); font-size:12px; line-height:1.5; }
 .mobile .m-cover.large { width:80px; height:108px; padding:12px; }
 .mobile .m-cover span { display:block; }
 .mobile .m-book-title { display:block; font-size:16px; font-weight:500; overflow-wrap:anywhere; margin-bottom:4px; }

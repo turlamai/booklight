@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Booklight — EPUB 阅读（英雄屏）</title>
 <link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="prototype.css">
 <style>
   /* ==== reading 专属：正文排版是产品资产 ==== */
   .reader { flex: 1; overflow-y: auto; position: relative; }
@@ -21,11 +22,11 @@
   }
   .hl-y { background: var(--hl-yellow); border-radius: 2px; padding: 0 1px; }
   .ul-u { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 4px; text-decoration-thickness: 2px; }
-  .selzone { position: relative; }
+  .selzone { position: relative; margin-top: 40px; }
   .selzone .seltext { background: var(--accent-soft); }
   /* 划词浮条：直接操纵 */
   .selbar {
-    position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+    position: absolute; top: -34px; left: 50%; transform: translateX(-50%);
     display: flex; align-items: center; gap: 4px; padding: 5px 7px; border-radius: 8px;
     background: var(--panel); border: 1px solid var(--line);
     box-shadow: 0 4px 14px rgba(23,20,18,.16); z-index: 3;
@@ -51,7 +52,7 @@
   .arow:hover { background: var(--panel-alt); }
   .adot { width: 9px; height: 9px; border-radius: 50%; flex: none; margin-top: 5px; }
   .arow .abody { flex: 1; min-width: 0; }
-  .arow .aloc { font-size: 11px; color: var(--mute); margin-bottom: 3px; font-variant-numeric: tabular-nums; }
+  .arow .aloc { font-size: 12px; color: var(--mute); margin-bottom: 3px; font-variant-numeric: tabular-nums; }
   .arow .aex { font-size: 13px; line-height: 1.55; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .arow .anote { font-size: 12px; color: var(--mute); line-height: 1.55; margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
   .arow .amenu { flex: none; color: var(--mute); font-size: 13px; visibility: hidden; }
@@ -62,16 +63,16 @@
   <div class="window" id="app">
     <div class="titlebar">
       <div class="lights"><i></i><i></i><i></i></div>
-      <button class="iconbtn" title="显示/隐藏侧栏">◧</button>
+      <button class="iconbtn" type="button" title="显示/隐藏侧栏" aria-label="显示/隐藏侧栏">◧</button>
       <div><div class="t">The Sample Book</div><div class="sub">EPUB · 第 2 / 5 章</div></div>
       <div class="sp"></div>
       <button class="btn" title="AI 助手">✦ AI 助手</button>
-      <button class="iconbtn" title="书签当前页（⌘B）"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
-      <button class="iconbtn" id="themeBtn" title="切换亮暗主题">◐</button>
+      <button class="iconbtn" type="button" title="书签当前页（⌘B）" aria-label="书签当前页（⌘B）"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
+      <button class="iconbtn" id="themeBtn" type="button" data-theme-toggle="#app" aria-label="切换深色主题" title="切换深色主题"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"></circle><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"></path></svg></button>
     </div>
     <div class="tabbar">
-      <div class="doctab active"><span>The Sample Book</span><button class="x" title="关闭标签页">✕</button></div>
-      <div class="doctab"><span>光学实验记录.pdf</span><button class="x" title="关闭标签页">✕</button></div>
+      <div class="doctab active"><span>The Sample Book</span><button class="x" type="button" title="关闭标签页" aria-label="关闭标签页">✕</button></div>
+      <div class="doctab"><span>光学实验记录.pdf</span><button class="x" type="button" title="关闭标签页" aria-label="关闭标签页">✕</button></div>
     </div>
     <div class="body">
       <aside class="sidebar">
@@ -112,7 +113,7 @@
         <!-- 保存状态横幅：演示「失败恢复」态（原型演示区可切进行态） -->
         <div class="banner warn" id="saveState" style="margin: 12px 4px 8px; flex-direction: column; align-items: stretch;">
           <span style="line-height: 1.6;">⚠ 批注尚未保存，恢复副本已保留在本机。</span>
-          <span class="go" style="margin-top: 7px;"><button class="btn" style="height: 24px;">重试保存</button><button class="btn" style="height: 24px;">导出批注…</button></span>
+          <span class="go" style="margin-top: 7px;"><button class="btn">重试保存</button><button class="btn">导出批注…</button></span>
         </div>
         <div class="foot">批注保存到文档旁（.booklight.json）</div>
       </aside>
@@ -163,10 +164,8 @@
       </div>
     </div>
   </div>
+  <script src="theme.js"></script>
   <script>
-    document.getElementById('themeBtn').addEventListener('click', () => {
-      document.getElementById('app').classList.toggle('dark');
-    });
     var names = { paper: '纸张', sepia: '深纸', night: '夜间' };
     var rseg = document.getElementById('rThemeSeg');
     rseg.addEventListener('click', (e) => {
@@ -186,7 +185,7 @@
         s.innerHTML = '<span style="display:flex; align-items:center; gap:8px;"><span class="spin"></span>正在保存批注…</span>';
       } else {
         s.className = 'banner warn';
-        s.innerHTML = '<span style="line-height:1.6;">⚠ 批注尚未保存，恢复副本已保留在本机。</span><span class="go" style="margin-top:7px;"><button class="btn" style="height:24px;">重试保存</button><button class="btn" style="height:24px;">导出批注…</button></span>';
+        s.innerHTML = '<span style="line-height:1.6;">⚠ 批注尚未保存，恢复副本已保留在本机。</span><span class="go" style="margin-top:7px;"><button class="btn">重试保存</button><button class="btn">导出批注…</button></span>';
       }
     });
   </script>

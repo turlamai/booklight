@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Booklight — 原型导航</title>
+<link rel="stylesheet" href="prototype/shared.css">
+<link rel="stylesheet" href="prototype/prototype.css">
+<style>
+  /* ==== 原型导航：按 <title> 列出全部原型页；覆盖 shared.css 的窗口舞台 body ==== */
+  body { display: block; place-items: initial; min-height: 100vh; padding: 24px 24px 48px; background: var(--bg); font-size: 14px; line-height: 1.5; }
+  main { max-width: 880px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 16px; padding: 8px 0 16px; border-bottom: 1px solid var(--line); }
+  header .eyebrow { flex: 1; font-size: 13px; color: var(--mute); }
+  h1 { margin: 24px 0 8px; font-size: 24px; font-weight: 600; line-height: 1.4; }
+  .lede { margin: 0 0 32px; color: var(--mute); }
+  .groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px 48px; }
+  h2 { margin-bottom: 4px; font-size: 18px; font-weight: 600; line-height: 1.4; }
+  .hint { margin: 0 0 12px; font-size: 12px; color: var(--mute); }
+  ul { list-style: none; }
+  li { border-top: 1px solid var(--line); }
+  li:last-child { border-bottom: 1px solid var(--line); }
+  a { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 36px; padding: 8px 0; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+  a:hover { color: var(--accent); text-decoration: underline; }
+  a .arrow { flex: none; color: var(--mute); }
+  footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.6; color: var(--mute); }
+  footer a { display: inline-flex; min-height: 28px; padding: 0; font-size: 14px; }
+  footer p { margin-top: 8px; }
+  @media (max-width: 640px) { .groups { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+  <main>
+    <header>
+      <span class="eyebrow">BOOKLIGHT / 原型导航</span>
+      <button class="iconbtn" type="button" id="themeBtn" data-theme-toggle="html" aria-label="切换深色主题" title="切换深色主题"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"></circle><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"></path></svg></button>
+    </header>
+    <h1>Booklight 原型</h1>
+    <p class="lede">按页面 &lt;title&gt; 列出全部原型页。各桌面页右上角的按钮切换亮暗；演示控件停在窗口右下角。</p>
+    <div class="groups">
+      <section aria-labelledby="desktop">
+        <h2 id="desktop">桌面端</h2>
+        <p class="hint">1180px 窗口 · 亮 / 暗</p>
+        <ul>
+          <li><a href="prototype/welcome.html"><span>Booklight — 欢迎与最近打开</span><span class="arrow" aria-hidden="true">→</span></a></li>
+          <li><a href="prototype/reading.html"><span>Booklight — EPUB 阅读（英雄屏）</span><span class="arrow" aria-hidden="true">→</span></a></li>
+          <li><a href="prototype/pdf.html"><span>Booklight — PDF 双页与页面编辑</span><span class="arrow" aria-hidden="true">→</span></a></li>
+          <li><a href="prototype/ai.html"><span>Booklight — AI 助手 inspector</span><span class="arrow" aria-hidden="true">→</span></a></li>
+          <li><a href="prototype/research.html"><span>Booklight — 研究工作台（付费层）</span><span class="arrow" aria-hidden="true">→</span></a></li>
+          <li><a href="prototype/settings.html"><span>Booklight — 设置</span><span class="arrow" aria-hidden="true">→</span></a></li>
+          <li><a href="prototype/agent.html"><span>Booklight — Agent 任务</span><span class="arrow" aria-hidden="true">→</span></a></li>
+        </ul>
+        <p class="hint">agent.html 为可交互原型，顶栏可在阅读、研究、设置与 Agent 任务之间切换。</p>
+      </section>
+      <section aria-labelledby="mobile">
+        <h2 id="mobile">移动端</h2>
+        <p class="hint">390px 内容画布 · 无设备外壳 · 亮 / 暗</p>
+        <ul>
+          <li><a href="prototype/mobile-library.html"><span>Booklight — 书库与最近阅读（移动端）</span><span class="arrow" aria-hidden="true">→</span></a></li>
+          <li><a href="prototype/mobile-reading.html"><span>Booklight — EPUB 阅读（移动端）</span><span class="arrow" aria-hidden="true">→</span></a></li>
+          <li><a href="prototype/mobile-pdf.html"><span>Booklight — PDF 阅读（移动端）</span><span class="arrow" aria-hidden="true">→</span></a></li>
+          <li><a href="prototype/mobile-ai.html"><span>Booklight — AI 助手（移动端）</span><span class="arrow" aria-hidden="true">→</span></a></li>
+          <li><a href="prototype/mobile-settings.html"><span>Booklight — 设置（移动端）</span><span class="arrow" aria-hidden="true">→</span></a></li>
+        </ul>
+      </section>
+    </div>
+    <footer>
+      <a href="DESIGN.md">视觉与交互契约 · DESIGN.md</a>
+      <p>Token 真源：<code>prototype/shared.css</code>（与产品共用）；<code>prototype/prototype.css</code> 只由原型加载。</p>
+    </footer>
+  </main>
+  <script src="prototype/theme.js"></script>
+</body>
+</html>
