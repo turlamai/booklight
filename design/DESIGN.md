@@ -145,7 +145,7 @@ PendingEditBar（未保存编辑横幅 + 放弃需确认）语义。书库屏为
 
 起始 SHA `d2c86b781cb0482e8220b21663751318411be274`。只动 `design/`：token 值、强调色、信息架构、示例数据与产品行为不变；产品仍只读取 `shared.css`。
 
-原型分层（自本次起）：`design/index.html` 是本地评审用导航页（按 `<title>` 列 12 页，链到本文件），不提交；`prototype/shared.css` 与产品共用的 token 与基础组件；`prototype/prototype.css` 只由桌面原型加载的层（reduced motion、可见焦点、交互式 app 外壳 `agent.html` + `app.js`，此前该页没有任何样式表）；`prototype/theme.js` 静态页与导航页共用的主题切换（`app.js` 保留自己的状态切换）。
+原型分层（自本次起）：`design/index.html` 是评审入口导航页（按 `<title>` 列出全部页面，链到本文件；提交状态见下方「对比度落地」一节）；`prototype/shared.css` 与产品共用的 token 与基础组件；`prototype/prototype.css` 只由桌面原型加载的层（reduced motion、可见焦点、交互式 app 外壳 `agent.html` + `app.js`，此前该页没有任何样式表）；`prototype/theme.js` 静态页与导航页共用的主题切换（`app.js` 保留自己的状态切换）。
 
 **重建声明（待 owner 过目）**：`prototype/prototype.css` 的 app 外壳段是 2026-11-26 新写的重建，不是原始设计。仓库历史、产品源码（`host/web/app.css` 只覆盖壳类名的 12%，产品标记是另写的）与本机 OpenDesign 项目都没有这份样式表。重建只沿用现有 token 与静态页的几何，单独成文件，可整体删除。owner 接受之前，它只用于让 `agent.html` 可读，不作为实现契约。
 
@@ -154,7 +154,7 @@ PendingEditBar（未保存编辑横幅 + 放弃需确认）语义。书库屏为
 | R1 主题切换 | 通过 | 6 个静态页、导航页与 app 顶栏：`◐` 文字字形 → 内联 SVG 线性图标（16px / 1.7），图标 = 当前主题，`aria-label` 与 `title` = 点击后切到的主题（切换深色主题 / 切换浅色主题）；`.iconbtn` 改为安静图标按钮（28、透明底与边、hover 表面色）。`pdf.html` 的按钮缺 `id`，脚本报错并使同页其余脚本失效，已修 |
 | R2 12px 字号底线 | 通过，无例外 | 源扫描 sub-12px 声明 23 → 0；渲染 `small` 桌面 81→0、移动 10→0（每主题）。控件高度 ≥28（分段按钮、横幅与结果卡按钮、演示控件）；层级保持 12 / 13 / 14；`.m-cover` 放宽到 64×86、`.ficon` 38×46、设置「语言」下拉 150px 以容纳 12px |
 | R3 reduced motion 与焦点 | 通过 | `prototype.css`：家族标准片段 + `:focus-visible` 2px `--accent`；移动页沿用既有 `.mobile` 规则。未进 `shared.css`：产品的 `host/web/app.js` journey 无条件断言平滑滚动 |
-| R4 原型完整性 | 通过 | `design/index.html` 是本地评审用导航页，不提交（移动页的 `../index.html` 指向它，克隆后由 agent 本地生成）；本地 `href`/`src` 全部可解析；无远程资源。`agent.html` 亮暗均可读（暗色正文对比此前不可见）；`.dark mark` 深色墨保证暗色检索命中可读 |
+| R4 原型完整性 | 通过 | `design/index.html` 是评审入口导航页（本次未提交，移动页的 `../index.html` 指向它；提交状态见下方「对比度落地」一节）；本地 `href`/`src` 全部可解析；无远程资源。`agent.html` 亮暗均可读（暗色正文对比此前不可见）；`.dark mark` 深色墨保证暗色检索命中可读 |
 | R5 可访问名称 | 通过 | 渲染 `nameless` 0；静态页图标按钮（侧栏、书签、缩放、关闭标签页）补 `aria-label`，装饰 SVG `aria-hidden` |
 | R6 版式缺陷 | 通过（见开放项） | 1280×800：`overflowX` 0、`err`/`fail` 0。修正 `reading.html` 划词浮条压住所选段落首行、`research.html` 引用集出处「第 / 14 页」断行、演示控件遮挡 `ai.html` 发送按钮。app 外壳 6 屏 × 2 主题 × 1280 / 1024 / 768 无横向溢出与裁切 |
 | R7 契约同步 | 通过 | 本节；token 表只记语义，无值变更 |
@@ -162,4 +162,27 @@ PendingEditBar（未保存编辑横幅 + 放弃需确认）语义。书库屏为
 
 记录的例外：无。
 
-仍开放（需产品决定，未改）：`--accent` 文字与主按钮白字对比 2.4–4.1:1（token 级，各页既有）；`research.html` 标题与「付费层」胶囊、`AGENT-INTERFACE.md` 的商业化表述已过期；`app.js` 阅读默认值 18px / 640px 与本契约 17px / 608px 不一致；静态页是固定 1180px 窗口示意，窄视口横向滚动，且视图切换、划词浮条为不可聚焦的 div/span；产品侧待同步（`host/web/app.css` 仍含 sub-12px 规则，`#themeBtn` 仍为 `◐` 文本，尚无 reduced motion / `:focus-visible`）。
+仍开放（需产品决定，未改）：~~`--accent` 文字与主按钮白字对比 2.4–4.1:1（token 级，各页既有）~~（已落地，见下一节）；`research.html` 标题与「付费层」胶囊、`AGENT-INTERFACE.md` 的商业化表述已过期；`app.js` 阅读默认值 18px / 640px 与本契约 17px / 608px 不一致；静态页是固定 1180px 窗口示意，窄视口横向滚动，且视图切换、划词浮条为不可聚焦的 div/span；产品侧待同步（`host/web/app.css` 仍含 sub-12px 规则，`#themeBtn` 仍为 `◐` 文本，尚无 reduced motion / `:focus-visible`）。
+
+## 2026-11-26 对比度落地（`2026-11-20-minimal-family`）
+
+起始 SHA `64be1e8`。只动 `design/`：按家族规范 §4（普通文字 ≥ 4.5:1）把强调色与语义色落到达标值，色相不变；信息架构、示例数据与产品行为不变。
+
+| token | 亮色 | 暗色 | 说明 |
+|---|---|---|---|
+| `--accent` | `#C4623E` → `#94492E` | `#E8926A`（不变） | 取最浅的落点定值：`--accent-soft` 压在侧栏 / 标题栏上的选中态与进行态横幅 |
+| `--accent-hover` | `#AD5130` → `#89432A` | `#F0A07C`（不变） | 相对 `--accent` 再深一档 |
+| `--accent-contrast`（新增） | `#FFFFFF` | `#171412` | accent 之上的文字。暗色 accent 偏亮，白字只有 2.4:1，改用深墨 |
+| `--danger` | `#C73E2C` → `#AC3526` | `#E8665A` → `#EA7267` | 失败横幅压在 `--danger-soft` × 侧栏上 4.0 / 4.4 |
+| `--success` | `#2E7D4F` → `#2C774B` | `#5FBF87`（不变） | 恢复横幅在侧栏上 4.25 |
+
+改用 `--accent-contrast` 的规则：`.btn.primary`（`shared.css`）、`.app-shell .primary` 三态与 `.agent-steps li.current .step-number`（`prototype.css`）、欢迎页 `.open-cta`（`welcome.html`）。高亮三色（`--hl-*`）是内容墨色，未动；`.dark mark` 的深墨规则保留。
+
+**评审入口**：`design/index.html` 自本次起提交。它是自包含的导航页（内联样式、不加载产品样式表、跟随系统外观），按 `<title>` 列出桌面 7 页与移动 5 页；此前它不入库，而 5 个移动页的返回链接指向它，克隆后是悬空链接。
+
+验证（无头 Edge，1280×800，桌面 7 + 移动 5，亮 / 暗）：文字对比不足 8 / 9 → 0 / 0；sub-12px 0；横向溢出 0；无可访问名称的图标按钮 0；脚本错误 0。移动页暗色由 `html.dark` 触发，与应用内「深色」选项同一机制。未覆盖：阅读纸张主题（`data-read-theme`）的各个取值、非文字对比（图标、控件边界 3:1）。
+
+仍开放（记为待办，未改）：
+
+- 尺度对齐：圆角现为 6 / 10 / 14（家族 4 / 8 / 12），`.head h1` 字重 700（家族 400 / 500 / 600），间距有 6 / 7 / 9 / 10 / 14（家族 4 基准）。盲改会牵动全部静态页几何，留待逐屏处理。
+- 产品侧同步（漂移）：`shared.css` 文件头声明 token 与 `macos-host/Sources/RivetHost/Theme.swift` 1:1，本次只改原型镜像；宿主落地时需同步 `--accent` / `--danger` / `--success` 并补 `--accent-contrast`。
