@@ -1,0 +1,88 @@
+name: Gate VERSION bump and dispatch tagged release
+
+# Only an explicitly approved version bump can mint a production tag.
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: version-release-main
+  cancel-in-progress: false
+
+jobs:
+  tag-after-green:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate approval, version and signing configuration
+        env:
+          RELEASE_APPROVED: ${{ vars.BOOKLIGHT_STABLE_RELEASE_APPROVED }}
+          DEVELOPER_ID_P12_B64: ${{ secrets.DEVELOPER_ID_P12_B64 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8_B64: ${{ secrets.ASC_KEY_P8_B64 }}
+          UPDATE_ED25519_PRIVATE_KEY_B64: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY_B64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_APPROVED" == true ]] || { echo "::error::BOOKLIGHT_STABLE_RELEASE_APPROVED must be true"; exit 1; }
+          for name in DEVELOPER_ID_P12_B64 DEVELOPER_ID_P12_PASSWORD ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8_B64 UPDATE_ED25519_PRIVATE_KEY_B64; do
+            [[ -n "${!name:-}" ]] || { echo "::error::$name is missing"; exit 1; }
+          done
+          bash scripts/check-release-version.sh
+          umask 077
+          key="$(mktemp)"
+          trap 'rm -f "$key"' EXIT
+          printf '%s' "$UPDATE_ED25519_PRIVATE_KEY_B64" | base64 -d > "$key"
+          python3 scripts/check-update-signing-key.py "$key"
+      - name: Await exact-commit engine, carrier and PDF checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for workflow in ci.yml host-ci.yml spike-pdfjs.yml; do
+            completed=0
+            for attempt in $(seq 1 150); do
+              info="$(gh api "repos/$GH_REPO/actions/workflows/$workflow/runs?event=push&head_sha=$GITHUB_SHA&per_page=20" --jq '[.workflow_runs[0].status // "waiting", .workflow_runs[0].conclusion // "pending"] | @tsv')"
+              IFS=$'\t' read -r status conclusion <<< "$info"
+              if [[ "$status" == completed ]]; then
+                [[ "$conclusion" == success ]] || { echo "::error::$workflow failed for $GITHUB_SHA"; exit 1; }
+                completed=1
+                break
+              fi
+              sleep 20
+            done
+            [[ "$completed" == 1 ]] || { echo "::error::Timed out waiting for $workflow"; exit 1; }
+          done
+      - name: Create annotated tag and dispatch release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Stable version required"; exit 1; }
+          tag="v$version"
+          git fetch origin main --tags
+          [[ "$(git rev-parse origin/main)" == "$GITHUB_SHA" ]] || { echo "::error::Main advanced; refusing stale release"; exit 1; }
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            echo "::error::Tag already exists; refusing to replace it"
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "$tag" "$GITHUB_SHA" -m "Booklight $tag"
+          git push origin "refs/tags/$tag"
+          gh workflow run release.yml --ref "$tag" --repo "$GH_REPO"
