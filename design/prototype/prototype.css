@@ -164,7 +164,7 @@ body.app-shell { display: block; place-items: initial; min-height: 100vh; paddin
 .app-shell .prose h1 { margin-bottom: 22px; font-size: 24px; font-weight: 600; line-height: 1.4; text-align: start; }
 .app-shell .prose p { margin-bottom: 1em; }
 .app-shell .prose blockquote { margin: 1em 0; padding-left: 1em; border-left: 3px solid currentColor; font-size: 15px; line-height: 1.8; opacity: .88; }
-.app-shell .prose .chapter-no { margin-bottom: 12px; font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
+.app-shell .prose .chapter-no { margin-bottom: 12px; font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
 .app-shell .prose mark { border-radius: 2px; padding: 0 1px; }
 
 /* PDF：页面示意（随主题成对的纸面） */
@@ -281,7 +281,7 @@ body.app-shell { display: block; place-items: initial; min-height: 100vh; paddin
 .app-shell dialog dt { color: var(--mute); }
 .app-shell dialog dd { margin: 0; overflow-wrap: anywhere; }
 .app-shell dialog ul { margin: 8px 0; padding-left: 20px; font-size: 13px; line-height: 1.7; }
-.app-shell dialog pre { margin-top: 8px; padding: 10px 12px; border-radius: 6px; background: var(--panel-alt); font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.app-shell dialog pre { margin-top: 8px; padding: 10px 12px; border-radius: 6px; background: var(--panel-alt); font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", "Noto Sans Mono CJK SC", "Noto Sans CJK SC", "Microsoft YaHei", monospace; font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .app-shell dialog label { display: block; margin: 8px 0 4px; font-weight: 600; }
 .app-shell dialog summary { font-weight: 600; color: var(--ink); }
 .app-shell .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
