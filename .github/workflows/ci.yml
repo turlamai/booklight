@@ -7,7 +7,7 @@ on:
 # Single source of truth for the rivet pin the Racket engine tests against;
 # the glaze carrier pins live in host-ci.yml (single source there).
 env:
-  RIVET_PIN: c1f0d921e2136c0cfb2c1c1f6d273f2b26222a19
+  RIVET_PIN: 0db8b76396f70dde6d0a9c7935a0bd91d8c066f3
 concurrency:
   # GitHub retains at most one pending job per concurrency group.
   # Every main push needs its own evidence; only newer revisions of the

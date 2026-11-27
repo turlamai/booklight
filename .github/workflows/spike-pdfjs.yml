@@ -9,11 +9,11 @@ on:
     branches: [main]
 
 env:
-  GLAZE_PIN: df0c98efc66a53029e17eef15ebda2212c507aa0
-  GLAZE_RIVET_PIN: bf7a62b9a3331bd5d6df48d1b7fe77be0cfed90d
+  GLAZE_PIN: f23a4049621565b838e6183e83da9f7c526d1aba
+  GLAZE_RIVET_PIN: 0db8b76396f70dde6d0a9c7935a0bd91d8c066f3
   # The Windows verified-TLS installer reads RIVET_PIN; the spike pins the
   # rivet revision glaze itself is built against (same pairing as podlens).
-  RIVET_PIN: bf7a62b9a3331bd5d6df48d1b7fe77be0cfed90d
+  RIVET_PIN: 0db8b76396f70dde6d0a9c7935a0bd91d8c066f3
   # GPU-less hosted runners have no DRI3 device; WebKitGTK must fall back
   # to the software path or webview startup crashes (glaze docs/ci.md).
   WEBKIT_DISABLE_DMABUF_RENDERER: '1'
